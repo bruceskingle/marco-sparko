@@ -95,7 +95,7 @@ struct Token {
 }
 
 pub struct TokenManager {
-    gql_client:     Rc<crate::gql::client::Client>,
+    gql_client:     Rc<crate::gql::Client>,
     authenticator:  ObtainJSONWebTokenInput,
     token:          Option<Token>
 }
@@ -105,7 +105,7 @@ impl TokenManager{
         TokenManagerBuilder::new()
     }
 
-    fn new(gql_client: Rc<crate::gql::client::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
+    fn new(gql_client: Rc<crate::gql::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
         TokenManager {
             gql_client,
             authenticator,
@@ -186,7 +186,7 @@ impl TokenManager{
 }
 
 pub struct TokenManagerBuilder {
-    gql_client:         Option<Rc<crate::gql::client::Client>>,
+    gql_client:         Option<Rc<crate::gql::Client>>,
     authenticator:      Option<ObtainJSONWebTokenInput>,
 
 }
@@ -199,7 +199,7 @@ impl TokenManagerBuilder{
         }
     }
     
-    pub fn with_gql_client(mut self, gql_client: Rc<crate::gql::client::Client>) -> TokenManagerBuilder {
+    pub fn with_gql_client(mut self, gql_client: Rc<crate::gql::Client>) -> TokenManagerBuilder {
         self.gql_client = Some(gql_client);
         self
     }

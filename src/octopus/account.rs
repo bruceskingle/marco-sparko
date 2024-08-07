@@ -58,7 +58,7 @@ impl AccountInterface {
     //     }
     // }
 
-    pub async fn get_account( gql_client: &Rc<crate::gql::client::Client>,
+    pub async fn get_account( gql_client: &Rc<crate::gql::Client>,
         token_manager:  &mut TokenManager)  -> Result<AccountInterface, Error> {
 
         let operation_name = "getAccount";

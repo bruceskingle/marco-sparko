@@ -23,4 +23,123 @@ SOFTWARE.
 ******************************************************************************/
 
 pub mod error;
-pub mod client;
+
+use std::collections::HashMap;
+
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
+
+use error::{Error, GraphQLJsonError};
+
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Request<'a, T>
+    where T: Serialize
+{
+    query:          &'a str,
+    variables:      T,
+    operation_name:  &'a str,
+}
+
+
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GraphQLResponse {
+   errors: Option<Vec<GraphQLJsonError>>,
+   data:   HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug)]
+pub struct Client {
+    reqwest_client: reqwest::Client,
+    url: String,
+}
+
+impl Client {
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::new()
+    }
+
+    pub fn new(url: String) -> Client {
+        Client {
+            reqwest_client: reqwest::Client::new(),
+            url,
+        }
+    }
+
+    pub async fn call<'h, T>(&self, operation_name: &str, query: &str, variables: &T, headers: Option<&'h HashMap<&'h str, &String>>) -> Result<HashMap<String, serde_json::Value>, Error>
+    where T: Serialize
+    {
+        let payload = Request {
+            query,
+            variables,
+            operation_name,
+        };
+
+        let serialized = serde_json::to_string(&payload).unwrap();
+
+        println!("payload {}", &serialized);
+
+            let mut request = self.reqwest_client.post(&self.url)
+                .header("Content-Type", "application/json");
+
+            if let Some(map) = headers {
+                
+                for (key, value) in map {
+                    request = request.header(*key, *value);
+                }
+            }
+            
+            let response = request
+                .body(serialized)
+                .send()
+                .await?;
+
+            println!("\nStatus:   {:?}", &response.status());
+
+            if &response.status() != &StatusCode::OK {
+                let status = response.status();
+                let text = &(response).text().await;
+                println!("ERROR {}", text.as_ref().expect("No Response Body"));
+                return Err(Error::HttpError(status));
+            }
+
+            let graphql_response:  GraphQLResponse = response
+                .json()
+                .await?;
+
+            if let Some(errors) = graphql_response.errors {
+                
+                println!("\nerrors:   {:?}", errors);
+
+                return Err(Error::GraphQLError(errors));
+            }
+            
+            
+            Ok(graphql_response.data)               
+    }
+}
+
+#[derive(Debug)]
+pub struct ClientBuilder {
+    url:                Option<String>
+}
+
+impl ClientBuilder {
+
+    pub fn new() -> ClientBuilder {
+        ClientBuilder {
+            url: None,
+        }
+    }
+    pub fn with_url(&mut self, url: String) -> &mut ClientBuilder {
+        self.url = Some(url);
+        self
+    }
+
+    pub fn build(self) -> Client {
+        Client::new(self.url.unwrap())
+    }
+}

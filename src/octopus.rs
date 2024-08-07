@@ -37,7 +37,7 @@ mod account;
 
 // #[derive(Debug)]
 pub struct Client{
-    gql_client:     Rc<crate::gql::client::Client>,
+    gql_client:     Rc<crate::gql::Client>,
     token_manager:  TokenManager,
 }
 
@@ -47,7 +47,7 @@ impl Client {
         ClientBuilder::new()
     }
 
-    fn new(gql_client: Rc<crate::gql::client::Client>, token_manager: TokenManager) -> Client {        
+    fn new(gql_client: Rc<crate::gql::Client>, token_manager: TokenManager) -> Client {        
         Client {
             gql_client,
             token_manager
@@ -57,82 +57,11 @@ impl Client {
     pub async fn get_account(&mut self)  -> Result<AccountInterface, Error> {
         AccountInterface::get_account(&self.gql_client, &mut self.token_manager).await
     }
-
-    //     let operation_name = "getAccount";
-    //     let query = format!(r#"query {}($accountNumber: String!)
-    //                         {{
-    //                             account(accountNumber: $accountNumber)
-    //                             {{
-    //                                 brand,
-    //                                 overdueBalance,
-    //                                 billingName,
-    //                                 billingSubName,
-    //                                 billingEmail,
-    //                             }}
-    //                         }}"#, operation_name);
-
-    //     println!("QUERY {}", query);
-
-    //     let mut headers = HashMap::new();
-    //     // let token = String::from(self.get_authenticator().await?);
-    //     let token = &*self.token_manager.get_authenticator().await?;
-    //     headers.insert("Authorization", token);
-
-    //     let href = Some(&headers);
-
-    //     let variables = account::GetAccountVar {
-    //         accountNumber: "A-B3D8B29D",
-    //     };
-
-    //     let mut response = 
-    //     self.gql_client.call(
-    //         operation_name, 
-    //         &query, 
-    //         &variables, 
-    //         href
-    //     )
-    //     .await?;
-
-    //     if let Some(result_json) = response.remove("account") {
-    //         let account: AccountInterface = serde_json::from_value(result_json)?;
-
-    //         Ok(account)
-
-
-    //     } else {
-    //         return Err(Error::InternalError("No result found"))
-    //     }
-
-    //     // let parse = true;
-            
-    //     //     if parse {
-    //     //         println!("\n\nHERE1\n\n");
-    //     //         let result: HashMap<String, HashMap<String, AccountInterface>> = response.json().await?;
-
-    //     //         println!("\n\nHERE2\n\n");
-    //     //         println!("result {:?}", result);
-
-    //     //     } else {
-    //     //         let string_value = &response.text().await?;
-            
-    //     //         println!("\nstring_value:   {:?}", string_value);
-
-    //     //         // let obj = serde_json::from_str(string_value).unwrap();
-    //     //         let obj: HashMap<String, HashMap<String,Value>> = serde_json::from_str(string_value).unwrap();
-    //     //         println!("\n JSON {}", serde_json::to_string_pretty(&obj).unwrap());
-    //     //     }
-    //     //     println!("\n\nHERE3\n\n");
-    //     //     Ok(())
-
-    //     // let input = r#""
-    //     // {\"query\":\"mutation obtainKrakenToken($input: ObtainJSONWebTokenInput!) {\\n  obtainKrakenToken(input: $input) {\\n    refreshToken\\n    refreshExpiresIn\\n    token\\n  }\\n}\",\"variables\":{\"input\":{\"APIKey\":\"SECRET\"}},\"operationName\":\"obtainKrakenToken\"}
-    //     // "#;
-    // }
 }
 
 
 pub struct ClientBuilder {
-    gql_client_builder:         crate::gql::client::ClientBuilder,
+    gql_client_builder:         crate::gql::ClientBuilder,
     token_manager_builder:      TokenManagerBuilder,
 }
 
@@ -140,7 +69,7 @@ impl ClientBuilder {
 
     pub fn new() -> ClientBuilder {
         ClientBuilder {
-            gql_client_builder:     crate::gql::client::Client::builder(),
+            gql_client_builder:     crate::gql::Client::builder(),
             token_manager_builder:  TokenManager::builder()
         }
     }
