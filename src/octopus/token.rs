@@ -1,0 +1,242 @@
+/*****************************************************************************
+ MIT License
+
+Copyright (c) 2024 Bruce Skingle
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+******************************************************************************/
+
+use std::{rc::Rc, time::{SystemTime, UNIX_EPOCH}};
+
+use serde::{Deserialize, Serialize};
+
+use super::error::Error;
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ObtainKrakenJSONWebToken {
+    // "The body payload of the Kraken Token. The same information can be obtained by using JWT decoding tools on the value of the token field."
+    //payload: GenericScalar,
+    // errors: Option<Vec<PossibleErrorType>>,
+    // "A token that can be used in a subsequent call to obtainKrakenToken to get a new Kraken Token with the same access conditions after the previous one has expired."
+    refresh_token: Option<String>,
+    // "A Unix timestamp representing the point in time at which the refresh token will expire."
+    refresh_expires_in: Option<u32>,
+    // "The Kraken Token. Can be used in the Authorization header for subsequent calls to the API to access protected resources."
+    token: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ObtainKrakenJSONWebTokenWrapper {
+    obtain_kraken_token: Option<ObtainKrakenJSONWebToken>
+}
+
+// #[derive(Serialize, Deserialize, Debug)]
+// #[serde(rename_all = "camelCase")]
+// struct ObtainKrakenJSONWebTokenResponse {
+//     errors: Option<Vec<PossibleErrorType>>,
+//     data:   ObtainKrakenJSONWebTokenWrapper,
+// }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObtainJSONWebTokenInput {
+    // "API key of the account user. Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "APIKey")]
+    api_key: Option<String>,
+    // "Email address of the account user. Use with 'password' field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+    // // "Live secret key of an third-party organization. Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    organization_secret_key: Option<String>,
+    // // "Password of the account user. Use with 'email' field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    password: Option<String>,
+    // // "Short-lived, temporary key (that's pre-signed). Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pre_signed_key: Option<String>,
+    // // "The refresh token that can be used to extend the expiry claim of a Kraken token. Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    refresh_token: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Variables<'a> {
+   input:  &'a ObtainJSONWebTokenInput,
+}
+
+const GRACE_PERIOD: u32 = 300;
+// 60*60*24*10;
+
+struct Token {
+    token_expires:  u32,
+    token:          Rc<String>,
+    refresh_token:  ObtainJSONWebTokenInput,
+}
+
+pub struct TokenManager {
+    gql_client:     Rc<crate::gql::client::Client>,
+    authenticator:  ObtainJSONWebTokenInput,
+    token:          Option<Token>
+}
+
+impl TokenManager{
+    pub fn builder() -> TokenManagerBuilder {
+        TokenManagerBuilder::new()
+    }
+
+    fn new(gql_client: Rc<crate::gql::client::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
+        TokenManager {
+            gql_client,
+            authenticator,
+            token:  None,
+
+        }
+    }
+
+    pub async fn get_authenticator(&mut self)  -> Result<Rc<String>, Error> {
+        let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32;
+        println!("now {}", now);
+
+        if let Some(token) = &self.token {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32;
+
+            if token.token_expires - GRACE_PERIOD > now {
+                Ok(token.token.clone())
+            }
+            else {
+
+                self.authenticate().await
+            }
+        } else {
+            self.authenticate().await
+        }
+    }
+
+    pub async fn authenticate(&mut self)  -> Result<Rc<String>, Error> {
+        let query_name = "obtainKrakenToken";
+        let query = format!(r#"mutation {}($input: ObtainJSONWebTokenInput!) {{
+                obtainKrakenToken(input: $input) {{
+                    refreshToken
+                    refreshExpiresIn
+                    token
+    }}
+    }}"#, query_name);
+
+        println!("QUERY {}", query);
+
+        let variables = Variables {
+            input: if let Some(token) = &self.token { &token.refresh_token } else { &self.authenticator }
+        };
+
+        let mut response = self.gql_client.call(query_name, &query, &variables, None).await?;
+
+        if let Some(result_json) = response.remove(query_name) {
+            let token: ObtainKrakenJSONWebToken = serde_json::from_value(result_json)?;
+
+                // let token = result.remove("data").unwrap().remove("obtainKrakenToken").unwrap();
+
+                self.token = Some(Token {
+                    token_expires: token.refresh_expires_in.unwrap(),
+                    token:          Rc::new(token.token),
+                    refresh_token:  ObtainJSONWebTokenInput {
+                        api_key: None,
+                        email: None,
+                        organization_secret_key: None,
+                        password: None,
+                        pre_signed_key: None,
+                        refresh_token: Some(token.refresh_token.unwrap()),
+                    }
+                });
+        } else {
+            return Err(Error::InternalError("No result found"));
+        }
+
+        let r = &self.token.as_ref().unwrap().token;
+
+        Ok(r.clone())
+    }
+
+}
+
+pub struct TokenManagerBuilder {
+    gql_client:         Option<Rc<crate::gql::client::Client>>,
+    authenticator:      Option<ObtainJSONWebTokenInput>,
+
+}
+
+impl TokenManagerBuilder{
+    fn new() -> TokenManagerBuilder {
+        TokenManagerBuilder {
+            gql_client:     None,
+            authenticator:  None
+        }
+    }
+    
+    pub fn with_gql_client(mut self, gql_client: Rc<crate::gql::client::Client>) -> TokenManagerBuilder {
+        self.gql_client = Some(gql_client);
+        self
+    }
+
+    pub fn with_api_key(mut self, api_key: String) -> TokenManagerBuilder {
+        self.authenticator = 
+            Some(ObtainJSONWebTokenInput {
+                api_key: Some(api_key),
+                email: None,
+                organization_secret_key: None,
+                password: None,
+                pre_signed_key: None,
+                refresh_token: None,
+            });
+            // Some(Authenticator::ApiKey { key: api_key });
+        self
+    }
+
+    pub fn with_password(mut self, email: String, password: String) -> TokenManagerBuilder {
+        self.authenticator = 
+            Some(ObtainJSONWebTokenInput {
+                api_key: None,
+                email: Some(email),
+                organization_secret_key: None,
+                password: Some(password),
+                pre_signed_key: None,
+                refresh_token: None,
+            });
+        // Some(Authenticator::EmailPassword { email: email, password: password });
+        self
+    }
+
+    pub fn build(self) -> Result<TokenManager, Error> {
+
+        Ok(TokenManager::new(
+            self.gql_client.ok_or(Error::CallerError("GQL Client must be provided"))?, 
+            self.authenticator.ok_or(Error::CallerError("Credentials must be specified"))?)
+        )
+    }
+}
