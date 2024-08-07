@@ -23,6 +23,7 @@ SOFTWARE.
 ******************************************************************************/
 
 use std::rc::Rc;
+use std::io::{self, Write};
 
 use account::AccountInterface;
 use error::Error;
@@ -144,19 +145,41 @@ impl ClientBuilder {
         }
     }
     
-    pub fn with_url(mut self, url: String) -> ClientBuilder {
+    
+    pub fn authenticate(self) -> Result<ClientBuilder, Error> {
+        if let Ok(api_key) = std::env::var("OCTOPUS_API_KEY") {
+            self.with_api_key(api_key)
+        }
+        else {
+            println!("Octopus API Authentication (set OCTOPUS_API_KEY to avoid this)");
+            print!("email: ");
+
+            std::io::stdout().flush()?;
+
+            let mut email = String::new();
+            
+            std::io::stdin().read_line(&mut email)?;
+
+            let password = rpassword::prompt_password("password: ").expect("Failed to read password");
+
+            self.with_password(email.trim_end().to_string(), password)
+
+        }
+    }
+
+    pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
         self.gql_client_builder.with_url(url);
-        self
+        Ok(self)
     }
 
-    pub fn with_api_key(mut self, api_key: String) -> ClientBuilder {
+    pub fn with_api_key(mut self, api_key: String) -> Result<ClientBuilder, Error> {
         self.token_manager_builder = self.token_manager_builder.with_api_key(api_key);
-        self
+        Ok(self)
     }
 
-    pub fn with_password(mut self, email: String, password: String) -> ClientBuilder {
+    pub fn with_password(mut self, email: String, password: String) -> Result<ClientBuilder, Error> {
         self.token_manager_builder = self.token_manager_builder.with_password(email, password);
-        self
+        Ok(self)
     }
 
     pub fn build(self) -> Result<Client, Error> {

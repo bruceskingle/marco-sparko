@@ -29,11 +29,11 @@ use marco_sparko::octopus::{error::Error, Client};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let api_key = std::env::var("OCTOPUS_API_KEY").expect("Missing OCTOPUS_API_KEY env var");
+    // let api_key = std::env::var("OCTOPUS_API_KEY").expect("Missing OCTOPUS_API_KEY env var");
 
     let mut octopus_client = Client::builder()
-        .with_url(String::from("https://api.octopus.energy/v1/graphql/"))
-        .with_api_key(String::from(api_key))
+        .with_url(String::from("https://api.octopus.energy/v1/graphql/"))?
+        .authenticate()?
         .build()?;
 
 
@@ -46,8 +46,6 @@ async fn main() -> Result<(), Error> {
             Err(e) => println!("\n==============================================\n\nError {:?}\n\n==============================================\n", e),
             
         }
-
-        let _ = octopus_client.get_account().await;
     
     Ok(())
 }

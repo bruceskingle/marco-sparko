@@ -25,7 +25,7 @@ SOFTWARE.
 #[derive(Debug)]
 pub enum Error {
     GraphQLError(crate::gql::error::Error),
-    // IOError(reqwest::Error),
+    IOError(std::io::Error),
     JsonError(serde_json::Error),
     InternalError(&'static str),
     CallerError(&'static str)
@@ -41,5 +41,12 @@ impl From<crate::gql::error::Error> for Error {
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Error {
         Error::JsonError(err)
+    }
+}
+
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Error {
+        Error::IOError(err)
     }
 }
