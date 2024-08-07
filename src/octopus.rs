@@ -23,7 +23,7 @@ SOFTWARE.
 ******************************************************************************/
 
 use std::rc::Rc;
-use std::io::{self, Write};
+use std::io::Write;
 
 use account::AccountInterface;
 use error::Error;
