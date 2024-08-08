@@ -22,30 +22,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use marco_sparko::octopus::{error::Error, Client};
+use marco_sparko::{Error, MarcoSparkoManager};
 
 
 
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // let api_key = std::env::var("OCTOPUS_API_KEY").expect("Missing OCTOPUS_API_KEY env var");
+    let mut marco_sparko = MarcoSparkoManager::new_cli()?;
 
-    let mut octopus_client = Client::builder()
-        .with_url(String::from("https://api.octopus.energy/v1/graphql/"))?
-        .authenticate()?
-        .build()?;
-
-
-
-        let result = octopus_client.get_account().await;
-
-
-        match result {
-            Ok(account) => println!("That was OK {:?}", account),
-            Err(e) => println!("\n==============================================\n\nError {:?}\n\n==============================================\n", e),
-            
-        }
+    marco_sparko.run().await?;
     
     Ok(())
 }

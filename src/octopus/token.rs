@@ -22,18 +22,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use std::{rc::Rc, time::{SystemTime, UNIX_EPOCH}};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::io::Write;
 
 use serde::{Deserialize, Serialize};
 
-use super::error::Error;
+use super::{error::Error, PossibleErrorType};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct ObtainKrakenJSONWebToken {
     // "The body payload of the Kraken Token. The same information can be obtained by using JWT decoding tools on the value of the token field."
     //payload: GenericScalar,
-    // errors: Option<Vec<PossibleErrorType>>,
+    errors: Option<Vec<PossibleErrorType>>,
     // "A token that can be used in a subsequent call to obtainKrakenToken to get a new Kraken Token with the same access conditions after the previous one has expired."
     refresh_token: Option<String>,
     // "A Unix timestamp representing the point in time at which the refresh token will expire."
@@ -90,12 +92,12 @@ const GRACE_PERIOD: u32 = 300;
 
 struct Token {
     token_expires:  u32,
-    token:          Rc<String>,
+    token:          Arc<String>,
     refresh_token:  ObtainJSONWebTokenInput,
 }
 
 pub struct TokenManager {
-    gql_client:     Rc<crate::gql::Client>,
+    gql_client:     Arc<crate::gql::Client>,
     authenticator:  ObtainJSONWebTokenInput,
     token:          Option<Token>
 }
@@ -105,7 +107,7 @@ impl TokenManager{
         TokenManagerBuilder::new()
     }
 
-    fn new(gql_client: Rc<crate::gql::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
+    fn new(gql_client: Arc<crate::gql::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
         TokenManager {
             gql_client,
             authenticator,
@@ -114,7 +116,7 @@ impl TokenManager{
         }
     }
 
-    pub async fn get_authenticator(&mut self)  -> Result<Rc<String>, Error> {
+    pub async fn get_authenticator(&mut self)  -> Result<Arc<String>, Error> {
         let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -139,7 +141,7 @@ impl TokenManager{
         }
     }
 
-    pub async fn authenticate(&mut self)  -> Result<Rc<String>, Error> {
+    pub async fn authenticate(&mut self)  -> Result<Arc<String>, Error> {
         let query_name = "obtainKrakenToken";
         let query = format!(r#"mutation {}($input: ObtainJSONWebTokenInput!) {{
                 obtainKrakenToken(input: $input) {{
@@ -160,11 +162,13 @@ impl TokenManager{
         if let Some(result_json) = response.remove(query_name) {
             let token: ObtainKrakenJSONWebToken = serde_json::from_value(result_json)?;
 
-                // let token = result.remove("data").unwrap().remove("obtainKrakenToken").unwrap();
+                if let Some(errors) = token.errors {
+                    return Err(Error::StringError(PossibleErrorType::to_string(errors)))
+                }
 
                 self.token = Some(Token {
                     token_expires: token.refresh_expires_in.unwrap(),
-                    token:          Rc::new(token.token),
+                    token:          Arc::new(token.token),
                     refresh_token:  ObtainJSONWebTokenInput {
                         api_key: None,
                         email: None,
@@ -186,7 +190,7 @@ impl TokenManager{
 }
 
 pub struct TokenManagerBuilder {
-    gql_client:         Option<Rc<crate::gql::Client>>,
+    gql_client:         Option<Arc<crate::gql::Client>>,
     authenticator:      Option<ObtainJSONWebTokenInput>,
 
 }
@@ -199,7 +203,7 @@ impl TokenManagerBuilder{
         }
     }
     
-    pub fn with_gql_client(mut self, gql_client: Rc<crate::gql::Client>) -> TokenManagerBuilder {
+    pub fn with_gql_client(mut self, gql_client: Arc<crate::gql::Client>) -> TokenManagerBuilder {
         self.gql_client = Some(gql_client);
         self
     }
@@ -232,11 +236,202 @@ impl TokenManagerBuilder{
         self
     }
 
-    pub fn build(self) -> Result<TokenManager, Error> {
+    pub fn build(mut self, init: bool) -> Result<TokenManager, Error> {
+
+        if let None = self.authenticator {
+            if init {
+                println!("Octopus API Authentication (set OCTOPUS_API_KEY to avoid this)");
+                print!("email: ");
+
+                std::io::stdout().flush()?;
+
+                let mut email = String::new();
+                
+                std::io::stdin().read_line(&mut email)?;
+
+                let password = rpassword::prompt_password("password: ").expect("Failed to read password");
+
+                self = self.with_password(email.trim_end().to_string(), password);
+            }
+            else {
+                return Err(Error::StringError("No Octopus authentication credentials given, did you mean to specify --init?".to_string()))
+            }
+        }
 
         Ok(TokenManager::new(
             self.gql_client.ok_or(Error::CallerError("GQL Client must be provided"))?, 
             self.authenticator.ok_or(Error::CallerError("Credentials must be specified"))?)
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invalid_api_key() {
+        if let Err(octopus_error) = test_api_key("foo".to_string()) {
+
+            println!("result {:?}", octopus_error);
+            if let Error::GraphQLError(gql_error) = octopus_error {
+
+                if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
+                    let x = json_errors.get(0).unwrap();
+                    let y = &x.extensions;
+                    let x = &y.error_code;
+
+                    assert_eq!(x, "KT-CT-1139");
+                }
+                else {
+                    panic!("Expected GraphQLError KT-CT-1139 got <{:?}>", &gql_error);
+                }
+            }
+            else {
+                panic!("Expected GraphQLError KT-CT-1139 got <{:?}>", octopus_error);
+            }
+            // match error {
+            //     Error::GraphQLError(_) => todo!(),
+            //     Error::IOError(_) => todo!(),
+            //     Error::JsonError(_) => todo!(),
+            //     Error::InternalError(_) => todo!(),
+            //     Error::CallerError(_) => todo!(),
+            //     Error::StringError(_) => todo!(),
+            // };
+            // assert_eq!(error., 4);
+        }
+        else {
+            panic!("Expected error, got token");
+        }
+        
+    }
+
+    fn test_api_key(api_key: String)  -> Result<Arc<std::string::String>, Error> {
+        let mut octopus_client = crate::octopus::ClientBuilder::new_test()
+            .with_api_key(api_key)?
+            .do_build(false)?;
+        
+        tokio_test::block_on(octopus_client.token_manager.authenticate())
+    }
+
+    #[test]
+    fn test_invalid_refresh() {
+        if let Err(octopus_error) = test_refresh_token("invalid_refresh_token".to_string()) {
+
+            println!("result {:?}", octopus_error);
+            if let Error::GraphQLError(gql_error) = octopus_error {
+
+                if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
+                    let x = json_errors.get(0).unwrap();
+                    let y = &x.extensions;
+                    let x = &y.error_code;
+
+                    assert_eq!(x, "KT-CT-1135");
+                }
+                else {
+                    panic!("Expected GraphQLError KT-CT-1139 got <{:?}>", &gql_error);
+                }
+            }
+            else {
+                panic!("Expected GraphQLError KT-CT-1139 got <{:?}>", octopus_error);
+            }
+            // match error {
+            //     Error::GraphQLError(_) => todo!(),
+            //     Error::IOError(_) => todo!(),
+            //     Error::JsonError(_) => todo!(),
+            //     Error::InternalError(_) => todo!(),
+            //     Error::CallerError(_) => todo!(),
+            //     Error::StringError(_) => todo!(),
+            // };
+            // assert_eq!(error., 4);
+        }
+        else {
+            panic!("Expected error, got token");
+        }
+        
+    }
+
+    #[test]
+    fn test_expired_refresh() {
+
+        /*
+
+    Need to fix this once this test refresh token has exired in a week.
+        {
+  "data": {
+    "obtainKrakenToken": {
+      "token": "<JWT>",
+      "possibleErrors": [
+        {
+          "code": "KT-CT-1135",
+          "type": "VALIDATION",
+          "message": "Invalid data.",
+          "description": "Please make sure the refresh token is correct."
+        },
+        {
+          "code": "KT-CT-1134",
+          "type": "VALIDATION",
+          "message": "Invalid data.",
+          "description": "The refresh token has expired."
+        }
+      ]
+    }
+  }
+}
+         */
+        if let Err(octopus_error) = test_refresh_token("1645431dbd92cd2f804fdbba89eaa52e07efe3cabfce41e590ef70a42c96f5ca".to_string()) {
+
+            println!("result {:?}", octopus_error);
+            if let Error::GraphQLError(gql_error) = octopus_error {
+
+                if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
+                    let x = json_errors.get(0).unwrap();
+                    let y = &x.extensions;
+                    let x = &y.error_code;
+
+                    assert_eq!(x, "KT-CT-1135");
+                }
+                else {
+                    panic!("Expected GraphQLError KT-CT-1139 got <{:?}>", &gql_error);
+                }
+            }
+            else {
+                panic!("Expected GraphQLError KT-CT-1139 got <{:?}>", octopus_error);
+            }
+            // match error {
+            //     Error::GraphQLError(_) => todo!(),
+            //     Error::IOError(_) => todo!(),
+            //     Error::JsonError(_) => todo!(),
+            //     Error::InternalError(_) => todo!(),
+            //     Error::CallerError(_) => todo!(),
+            //     Error::StringError(_) => todo!(),
+            // };
+            // assert_eq!(error., 4);
+        }
+        else {
+            panic!("Expected error, got token");
+        }
+        
+    }
+
+    fn test_refresh_token(refresh_token: String)  -> Result<Arc<std::string::String>, Error> {
+        let mut octopus_client = crate::octopus::ClientBuilder::new_test()
+            .with_api_key("dummy_api_key_to_prevent_password_prompt".to_string())?
+            .do_build(false)?;
+
+    octopus_client.token_manager.token = Some(Token {
+        token_expires: 0,
+        token:          Arc::new("dummy_token".to_string()),
+        refresh_token:  ObtainJSONWebTokenInput {
+            api_key: None,
+            email: None,
+            organization_secret_key: None,
+            password: None,
+            pre_signed_key: None,
+            refresh_token: Some(refresh_token),
+        }
+    });
+        
+        tokio_test::block_on(octopus_client.token_manager.authenticate())
     }
 }

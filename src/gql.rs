@@ -1,5 +1,5 @@
 /*****************************************************************************
- MIT License
+MIT License
 
 Copyright (c) 2024 Bruce Skingle
 
@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use error::{Error, GraphQLJsonError};
+pub use error::{Error, GraphQLJsonError};
 
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -134,12 +134,19 @@ impl ClientBuilder {
             url: None,
         }
     }
-    pub fn with_url(&mut self, url: String) -> &mut ClientBuilder {
+    pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
         self.url = Some(url);
-        self
+        Ok(self)
+    }
+    
+    pub fn with_url_if_not_set(mut self, url: String) -> Result<ClientBuilder, Error> {
+        if self.url == None {
+            self.url = Some(url);
+        }
+        Ok(self)
     }
 
-    pub fn build(self) -> Client {
-        Client::new(self.url.unwrap())
+    pub fn build(self) -> Result<Client, Error> {
+        Ok(Client::new(self.url.unwrap()))
     }
 }

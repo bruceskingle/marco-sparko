@@ -33,7 +33,6 @@ pub enum Error {
     IOError(reqwest::Error),
     JsonError(serde_json::Error),
     HttpError(StatusCode),
-    NoData,
 }
 
 impl From<reqwest::Error> for Error {
@@ -41,7 +40,6 @@ impl From<reqwest::Error> for Error {
         Error::IOError(err)
     }
 }
-
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Error {
@@ -52,35 +50,35 @@ impl From<serde_json::Error> for Error {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct Location {
-   line: i32,
-   column: i32,
+pub struct Location {
+    pub line: i32,
+    pub column: i32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct ValidationError {
-       message: String,
-       input_path: Vec<String>
+pub struct ValidationError {
+       pub message: String,
+       pub input_path: Vec<String>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct Extensions {
-   error_type: String,
-   error_code: String,
-   error_description: String,
-   error_class: String,
-   validation_errors: Vec<ValidationError>
+pub struct Extensions {
+    pub error_type: String,
+    pub error_code: String,
+    pub error_description: String,
+    pub error_class: String,
+    pub validation_errors: Vec<ValidationError>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphQLJsonError {
-   message: Option<String>,
-   locations: Vec<Location>,
-   path: Vec<String>,
-   extensions: Extensions,
+    pub message: Option<String>,
+    pub locations: Vec<Location>,
+    pub path: Vec<String>,
+    pub extensions: Extensions,
 }
 
 // #[derive(Serialize, Deserialize, Debug)]

@@ -1,5 +1,5 @@
 /*****************************************************************************
- MIT License
+MIT License
 
 Copyright (c) 2024 Bruce Skingle
 
@@ -24,11 +24,12 @@ SOFTWARE.
 
 #[derive(Debug)]
 pub enum Error {
-    GraphQLError(crate::gql::error::Error),
+    GraphQLError(crate::gql::Error),
     IOError(std::io::Error),
     JsonError(serde_json::Error),
     InternalError(&'static str),
-    CallerError(&'static str)
+    CallerError(&'static str),
+    StringError(String)
 }
 
 impl From<crate::gql::error::Error> for Error {
@@ -48,5 +49,11 @@ impl From<serde_json::Error> for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
         Error::IOError(err)
+    }
+}
+
+impl From<crate::Error> for Error {
+    fn from(err: crate::Error) -> Error {
+        Error::StringError(format!("{:?}", err))
     }
 }
