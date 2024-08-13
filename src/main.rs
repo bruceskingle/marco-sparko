@@ -22,14 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use marco_sparko::{Error, MarcoSparkoManager};
+use marco_sparko::{Error, MarcoSparko};
 
 
 
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut marco_sparko = MarcoSparkoManager::new_cli()?;
+    let mut marco_sparko = MarcoSparko::new_cli()?;
 
     marco_sparko.run().await?;
     

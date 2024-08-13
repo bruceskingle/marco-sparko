@@ -127,15 +127,15 @@ pub trait ModuleBuilder {
 
 type ModuleConstructor = dyn Fn(Box<&Context>, Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder>, Error>;
 
-pub struct MarcoSparkoManager {
+pub struct MarcoSparko {
     marco_sparko: Context,
     module_registrations: HashMap<String, Box<ModuleConstructor>>,
     modules: HashMap<String, Box<dyn Module>>,
 }
 
-impl MarcoSparkoManager {
-    fn new(marco_sparko: MarcoSparko) -> Result<MarcoSparkoManager, Error> {
-        let mut marco_sparko_manager = MarcoSparkoManager {
+impl MarcoSparko {
+    fn new(marco_sparko: ContextImpl) -> Result<MarcoSparko, Error> {
+        let mut marco_sparko_manager = MarcoSparko {
             marco_sparko: Context::new(Arc::new(marco_sparko)),
             module_registrations: HashMap::new(),
             modules: HashMap::new()
@@ -178,12 +178,12 @@ impl MarcoSparkoManager {
        Ok(marco_sparko_manager)
     }
 
-    pub fn new_config() -> Result<MarcoSparkoManager, Error> {
-        MarcoSparkoManager::new(MarcoSparko::load()?)
+    pub fn new_config() -> Result<MarcoSparko, Error> {
+        MarcoSparko::new(ContextImpl::load()?)
     }
 
-    pub fn new_cli() -> Result<MarcoSparkoManager, Error> {
-        MarcoSparkoManager::new(MarcoSparko::load_cli()?)
+    pub fn new_cli() -> Result<MarcoSparko, Error> {
+        MarcoSparko::new(ContextImpl::load_cli()?)
     }
 
     fn get_module_list(&self) -> Vec<String> {
@@ -242,11 +242,11 @@ impl MarcoSparkoManager {
 
 #[derive(Clone)]
 pub struct Context {
-    marco_sparko: Arc<MarcoSparko>,
+    marco_sparko: Arc<ContextImpl>,
 }
 
 impl Context {
-    pub fn new(marco_sparko: Arc<MarcoSparko>) -> Context {
+    pub fn new(marco_sparko: Arc<ContextImpl>) -> Context {
         Context {
             marco_sparko
         }
@@ -254,7 +254,7 @@ impl Context {
 
     pub fn new_test() -> Context {
         Context {
-            marco_sparko: Arc::new(MarcoSparko::new(None))
+            marco_sparko: Arc::new(ContextImpl::new(None))
         }
     }
 
@@ -275,7 +275,7 @@ impl Context {
 }
 
 #[derive(Debug)]
-pub struct MarcoSparko {
+struct ContextImpl {
     pub args: Option<Args>,
     before_profiles: Vec<Profile>,
     active_profile: Option<Profile>,
@@ -283,10 +283,10 @@ pub struct MarcoSparko {
     updated_profile: Mutex<Profile>,
 }
 
-impl MarcoSparko {
-    fn new(args: Option<Args>) -> MarcoSparko {
+impl ContextImpl {
+    fn new(args: Option<Args>) -> ContextImpl {
         
-        MarcoSparko{
+        ContextImpl{
             args,
             before_profiles: Vec::new(),
             active_profile: None,
@@ -321,14 +321,14 @@ impl MarcoSparko {
             profiles.push(&updated_profile);
             profiles.extend(&self.after_profiles);
             
-            serde_json::to_writer_pretty(fs::File::create(MarcoSparko::get_file_path()?)?, &profiles)?;
+            serde_json::to_writer_pretty(fs::File::create(ContextImpl::get_file_path()?)?, &profiles)?;
             
             return Ok(())
         }
     }
 
-    fn load_cli() -> Result<MarcoSparko, Error> {
-        Ok(MarcoSparko::do_load(Some(Args::parse()))?)
+    fn load_cli() -> Result<ContextImpl, Error> {
+        Ok(ContextImpl::do_load(Some(Args::parse()))?)
     }
 
 
@@ -379,17 +379,17 @@ impl MarcoSparko {
     }
 
 
-    pub fn load() -> Result<MarcoSparko, Error> {
-        MarcoSparko::do_load(None)
+    pub fn load() -> Result<ContextImpl, Error> {
+        ContextImpl::do_load(None)
     }
 
 
-    fn do_load(args: Option<Args>) -> Result<MarcoSparko, Error> {
+    fn do_load(args: Option<Args>) -> Result<ContextImpl, Error> {
 
-        if let Ok(file)= fs::File::open(MarcoSparko::get_file_path()?) {
+        if let Ok(file)= fs::File::open(ContextImpl::get_file_path()?) {
             let profiles: Vec<Profile> = serde_json::from_reader(file)?;
             
-            let (before_profiles, active_profile, after_profiles) = MarcoSparko::remove_active_profile(&args, profiles)?;
+            let (before_profiles, active_profile, after_profiles) = ContextImpl::remove_active_profile(&args, profiles)?;
 
             let profile_name = if let Some(existing_profile) = &active_profile {
                 existing_profile.name.clone()
@@ -398,7 +398,7 @@ impl MarcoSparko {
                 DEFAULT_PROFILE.to_string()
             };
 
-            return Ok(MarcoSparko {
+            return Ok(ContextImpl {
                 args, 
                 before_profiles,
                 active_profile,
@@ -410,7 +410,7 @@ impl MarcoSparko {
              })
         }
         else {
-            Ok(MarcoSparko::new(args))
+            Ok(ContextImpl::new(args))
         }
 
     }
