@@ -200,8 +200,8 @@ impl Client {
     //     self.token_manager.authenticate().await
     // }
 
-    pub async fn get_account(&mut self)  -> Result<AccountInterface, Error> {
-        AccountInterface::get_account(&self.gql_client, &mut self.token_manager).await
+    pub async fn get_account(&mut self, account_number: &str)  -> Result<AccountInterface, Error> {
+        AccountInterface::get_account(&self.gql_client, &mut self.token_manager, account_number).await
     }
 
     pub async fn get_account_user(&mut self)  -> Result<AccountUser, Error> {

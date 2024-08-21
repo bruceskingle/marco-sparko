@@ -122,7 +122,7 @@ pub struct AccountUser {
   }
 
   impl AccountUser {
-    pub fn get_field_names(accout_field_names: &str) -> String {
+    pub fn get_field_names(account_field_names: &str) -> String {
         format!(r#"id
 accounts {{
 {}
@@ -142,7 +142,7 @@ preferredName
 alternativePhoneNumbers
 hasFamilyIssues
 isInHardship
-isOptedInToWof"#, accout_field_names)
+isOptedInToWof"#, account_field_names)
     }
 
     pub async fn get_account_user(
@@ -260,6 +260,7 @@ pub struct GetAccountVar<'a> {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInterface {
+    pub number: Option<String>,
     pub brand: Option<String>,
     pub overdue_balance: Option<i32>,
     pub billing_name: Option<String>,
@@ -274,6 +275,7 @@ pub struct AccountInterface {
 impl AccountInterface {
     pub fn get_field_names() -> &'static str {
         r#"
+number,
 brand,
 overdueBalance,
 billingName,
@@ -290,6 +292,7 @@ billingEmail
     pub async fn get_account(
         gql_client: &Arc<crate::gql::Client>,
         token_manager: &mut TokenManager,
+        account_number: &str
     ) -> Result<AccountInterface, Error> {
         let operation_name = "getAccount";
         let query = format!(
@@ -313,7 +316,7 @@ billingEmail
         let href = Some(&headers);
 
         let variables = GetAccountVar {
-            account_number: "A-B3D8B29D",
+            account_number,
         };
 
         let mut response = gql_client

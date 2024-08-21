@@ -24,6 +24,7 @@ SOFTWARE.
 
 pub mod gql;
 pub mod octopus;
+pub mod system;
 
 
 use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
@@ -62,7 +63,7 @@ impl From<std::io::Error> for Error {
 
 impl<T> From<std::sync::PoisonError<T>> for Error {
     fn from(err: std::sync::PoisonError<T>) -> Error {
-        Error::InternalError(format!("Mutex posison error {:?}", err))
+        Error::InternalError(format!("Mutex poison error {:?}", err))
     }
 }
 
@@ -246,7 +247,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(marco_sparko: Arc<ContextImpl>) -> Context {
+    fn new(marco_sparko: Arc<ContextImpl>) -> Context {
         Context {
             marco_sparko
         }
@@ -332,9 +333,9 @@ impl ContextImpl {
     }
 
 
-    pub fn get_args(&self) -> Result<&Option<Args>, Error> {
-        Ok(&self.args)
-    }
+    // pub fn get_args(&self) -> Result<&Option<Args>, Error> {
+    //     Ok(&self.args)
+    // }
 
     fn remove_active_profile(args: &Option<Args>, mut profiles: Vec<Profile>) -> 
         Result<(Vec<Profile>, Option<Profile>, Vec<Profile>), Error> {
