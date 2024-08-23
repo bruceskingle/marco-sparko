@@ -10,4 +10,6 @@ The following plugins are currently supported as part of the core Marco Sparko d
 
 [GraphQL Playground HowTo](GraphQL.md) Provides an introduction to GraphQL and shows how to use the GraphQL Playground UI to make interactive queries.
 
+[Chrome Browser Inspector HowTo](ChromeInspector.md) Provides an introduction to using the Chrome browser inspector to observe API calls made by web pages.
+
 [GraphQL Playground HowTo >](GraphQL.md)

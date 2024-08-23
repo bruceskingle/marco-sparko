@@ -7,7 +7,7 @@ This section describes the queries made by the Octopus Web UI [https://octopus.e
 The [Chrome Inspector](../ChromeInspector.md) page describes how you can use the Inspector function of the Chrome browser to observe these queries for yourself.
 
  ## Redaction
- Some of the values in the examples below, such as account numbers and meter IDs have been redacted. Characters which appear to be alpha or alpha-numeric have been replaced with `A`, characters which appear to be numeric have been replaced with `9`. In some cases there is documentary evidence of what the actual type of the returned values are (e.g. the GraphQL schema defines the `number` attribute of `AccountInterface` to be `String` (interestingly not `String!` although one imagines that this is not an optional attribute)), in other cases there is not. There *appears* to be further structure in some values, e.g. Account numbers appear to have a hyphen in the second character. In order to aid recognition when comparing examples here to actual returned values some of this apparent structure may be represented in the redaction, so a redacted account number may be shown as `A-AAAAAAAA`. This apparent structure *cannot* be relied upon, when writing code you should code against the official schema so an account number should be stored as an unbounded optional (nullable) string value despite the fact that all observed values appear to be of fixed length with some internal structure.
+ Some of the values in the examples below, such as account numbers and meter IDs have been redacted. Characters which appear to be alpha or alpha-numeric have been replaced with `A`, characters which appear to be numeric have been replaced with `9`. In some cases there is documentary evidence of what the actual type of the returned values are (e.g. the GraphQL schema defines the `number` attribute of `AccountInterface` to be `String` (interestingly not `String!` although one imagines that this is not an optional attribute)), in other cases there is not. There *appears* to be further structure in some values, e.g. Account numbers appear to have a hyphen in the second character. In order to aid recognition when comparing examples here to actual returned values some of this apparent structure may be represented in the redaction, so a redacted account number may be shown as `A-B3D8B29D`. This apparent structure *cannot* be relied upon, when writing code you should code against the official schema so an account number should be stored as an unbounded optional (nullable) string value despite the fact that all observed values appear to be of fixed length with some internal structure.
 
 ## Trying These Calls For Yourself
 For each call in the following section we show the `Query` and `Variables`, these values can be copied and pasted into https://api.octopus.energy/v1/graphql-playground to execute the query interactively. The official API documentation contains a link to https://api.octopus.energy/v1/graphql which is another very similar, but apparently older, version of the same thing.
@@ -38,9 +38,9 @@ mutation obtainKrakenToken($input: ObtainJSONWebTokenInput!) {
 Now click on `QUERY VARIABLES` at the bottom and paste the following into the panel which opens below, replacing the APIKey placeholder with your key:
 ```gql
 {
-    "input": {
-        "APIKey": "sk_XXXX_XXXXXXXXXXXXXXXXXXXXXXXX"
-    }
+  "input": {
+    "APIKey": "redacted_api_key_AAAAAAAAAAAAAAA"
+  }
 }
 ```
 
@@ -50,27 +50,19 @@ Now click the big play button in the centre and on the right hand side you shoul
 {
   "data": {
     "obtainKrakenToken": {
+      "refreshToken": "redacted_refresh_token_pZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtp",
+      "refreshExpiresIn": 1725024454,
       "payload": {
-        "sub": "kraken|account-user:9999999",
+        "sub": "kraken|account-user:3235447",
         "gty": "API-KEY",
-        "email": "you@your.domain",
+        "email": "dan@archer.org",
         "tokenUse": "access",
         "iss": "https://api.octopus.energy/v1/graphql/",
         "iat": 1724155372,
         "exp": 1724158972,
         "origIat": 1724155372
       },
-      "token": 
-      "qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop12345678
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop1234567890qwertyuiop123456789
-      qwertyuiop1234567890qwertyuiop1234567890qwert"
+      "token": "reacted_jwt_token_3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZW"
     }
   }
 }
@@ -89,7 +81,7 @@ Once you have a token, click on the `HTTP HEADERS` tab at the bottom left of the
 
 ```gql
 {
-  "Authorization":	"qwertyuiop1234567890"
+  "Authorization": "reacted_jwt_token_3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InF3ZW"
 }
 ```
 
@@ -101,13 +93,13 @@ This section describes the initial sequence of HTTP requests which I have observ
 In the examples here I had previously logged in, if you are not authenticated you will be redirected to the login page and there will be more calls not shown here before the sequence below will follow.
 
 ### GET https://octopus.energy/dashboard/
-This is a simple HTTP GET request which the results in a `302 Found` response. This is a simple HTTP redirect to `/dashboard/accounts/A-AAAAAAAA/` (where the last element is your actual account number) which you can see in the `Location` response header.
+This is a simple HTTP GET request which the results in a `302 Found` response. This is a simple HTTP redirect to `/dashboard/accounts/A-B3D8B29D/` (where the last element is your actual account number) which you can see in the `Location` response header.
 
 The actual web dashboard application obviously knows the user's account number by this point, our GraphQL application will not.
 
 There are then several other redirects eventually getting to
 
-### GET https://octopus.energy/dashboard/new/accounts/A-AAAAAAAA/
+### GET https://octopus.energy/dashboard/new/accounts/A-B3D8B29D/
 This is the actual HTML for the web UI.
 
 ## Observed API calls - GraphQL Queries
@@ -137,7 +129,7 @@ query getOctoplusEligibilityandFeatureFlags($accountNumber: String!) {
 
 #### Variables
 ```gql
-{"accountNumber":"A-AAAAAAAA"}
+{"accountNumber":"A-B1C2D34E"}
 ```
 
 #### Example Response
@@ -188,7 +180,7 @@ query getAccountInfo($accountNumber: String!) {
 
 #### Variables
 ```gql
-{"accountNumber":"A-AAAAAAAA"}
+{"accountNumber":"A-B1C2D34E"}
 ```
 
 #### Example Response
@@ -237,7 +229,7 @@ query getLoggedInUser {
         "viewer": {
             "accounts": [
                 {
-                    "number": "A-AAAAAAAA",
+                    "number": "A-B1C2D34E",
                     "__typename": "AccountType"
                 }
             ],
@@ -341,7 +333,7 @@ query getLoggedInUser {
 {
   "data": {
     "viewer": {
-      "preferredName": "Bruce"
+      "preferredName": "Dan"
     }
   }
 }
@@ -363,7 +355,7 @@ query getWHDEligibility($accountNumber: String!) {
 #### Variables
 ```json
 {
-    "accountNumber":"A-AAAAAAAA"
+    "accountNumber":"A-B1C2D34E"
 }
 ```
 
@@ -371,14 +363,10 @@ query getWHDEligibility($accountNumber: String!) {
 ```json
 {
     "data": {
-        "viewer": {
-            "accounts": [
-                {
-                    "number": "A-AAAAAAAA",
-                    "__typename": "AccountType"
-                }
-            ],
-            "__typename": "AccountUserType"
+        "account": {
+            "eligibilityForWarmHomeDiscount": {
+                "isEligible": false
+            }
         }
     }
 }
@@ -399,8 +387,11 @@ query getPropertiesMeterPoints($accountNumber: String!, $propertiesActiveFrom: D
           id
           smartDevices {
             deviceId
+            __typename
           }
+          __typename
         }
+        __typename
       }
       gasMeterPoints {
         id
@@ -408,10 +399,15 @@ query getPropertiesMeterPoints($accountNumber: String!, $propertiesActiveFrom: D
           id
           smartDevices {
             deviceId
+            __typename
           }
+          __typename
         }
+        __typename
       }
+      __typename
     }
+    __typename
   }
 }
 ```
@@ -419,7 +415,7 @@ query getPropertiesMeterPoints($accountNumber: String!, $propertiesActiveFrom: D
 #### Variables
 ```json
 {
-    "accountNumber":"A-AAAAAAAA",
+    "accountNumber":"A-B1C2D34E",
     "propertiesActiveFrom":"2024-08-12T23:00:00.000Z"
 }
 ```
@@ -431,52 +427,63 @@ query getPropertiesMeterPoints($accountNumber: String!, $propertiesActiveFrom: D
         "account": {
             "properties": [
                 {
-                    "id": "999999",
+                    "id": "2930512",
                     "electricityMeterPoints": [
                         {
-                            "id": "999999",
+                            "id": "2875805",
                             "meters": [
                                 {
-                                    "id": "999999",
+                                    "id": "3657465",
                                     "smartDevices": [
                                         {
-                                            "deviceId": "AA-AA-AA-AA-AA-AA-AA-AA"
+                                            "deviceId": "01-01-01-01-01-01-01-01",
+                                            "__typename": "SmartMeterDeviceType"
                                         }
-                                    ]
+                                    ],
+                                    "__typename": "ElectricityMeterType"
                                 }
-                            ]
+                            ],
+                            "__typename": "ElectricityMeterPointType"
                         },
                         {
-                            "id": "999999",
+                            "id": "3347939",
                             "meters": [
                                 {
-                                    "id": "999999",
+                                    "id": "3839934",
                                     "smartDevices": [
                                         {
-                                            "deviceId": "AA-AA-AA-AA-AA-AA-AA-AA"
+                                            "deviceId": "01-01-01-01-01-01-01-01",
+                                            "__typename": "SmartMeterDeviceType"
                                         }
-                                    ]
+                                    ],
+                                    "__typename": "ElectricityMeterType"
                                 }
-                            ]
+                            ],
+                            "__typename": "ElectricityMeterPointType"
                         }
                     ],
                     "gasMeterPoints": [
                         {
-                            "id": "999999",
+                            "id": "2383770",
                             "meters": [
                                 {
-                                    "id": "999999",
+                                    "id": "3274816",
                                     "smartDevices": [
                                         {
-                                            "deviceId": "AA-AA-AA-AA-AA-AA-AA-AA"
+                                            "deviceId": "02-02-02-02-02-02-02-02",
+                                            "__typename": "SmartMeterDeviceType"
                                         }
-                                    ]
+                                    ],
+                                    "__typename": "GasMeterType"
                                 }
-                            ]
+                            ],
+                            "__typename": "GasMeterPointType"
                         }
-                    ]
+                    ],
+                    "__typename": "PropertyType"
                 }
-            ]
+            ],
+            "__typename": "AccountType"
         }
     }
 }
@@ -624,7 +631,7 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
 #### Variables
 ```json
 {
-    "accountNumber":"A-AAAAAAAA",
+    "accountNumber":"A-B1C2D34E",
     "propertiesActiveFrom":"2024-08-12T23:00:00.000Z"
 }
 ```
@@ -639,9 +646,12 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                     {
                         "node": {
                             "salesSubchannel": "",
+                            "__typename": "AccountApplicationType"
                         },
+                        "__typename": "AccountApplicationConnectionTypeEdge"
                     }
                 ],
+                "__typename": "AccountApplicationConnectionTypeConnection"
             },
             "accountType": "DOMESTIC",
             "brand": "OCTOPUS_ENERGY",
@@ -649,16 +659,20 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                 {
                     "tariff": {
                         "productCode": "OUTGOING-FIX-12M-19-05-13",
+                        "__typename": "StandardTariff"
                     },
+                    "__typename": "ElectricityAgreementType"
                 },
                 {
                     "tariff": {
                         "productCode": "INTELLI-VAR-22-10-14",
+                        "__typename": "HalfHourlyTariff"
                     },
+                    "__typename": "ElectricityAgreementType"
                 }
             ],
             "status": "ACTIVE",
-            "number": "A-AAAAAAAA",
+            "number": "A-B1C2D34E",
             "balance": 44333,
             "canRenewTariff": false,
             "recommendedBalanceAdjustment": null,
@@ -668,136 +682,165 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                 "edges": [
                     {
                         "node": {
-                            "id": "9999999",
+                            "id": "7991077",
+                            "__typename": "DirectDebitInstructionType"
                         },
+                        "__typename": "DirectDebitInstructionConnectionTypeEdge"
                     }
                 ],
+                "__typename": "DirectDebitInstructionConnectionTypeConnection"
             },
             "campaigns": [
                 {
                     "name": "Octoplus",
+                    "__typename": "AccountCampaignType"
                 },
                 {
                     "name": "Octoplus Saving Sessions",
+                    "__typename": "AccountCampaignType"
                 },
                 {
                     "name": "Power-Ups UKPN",
+                    "__typename": "AccountCampaignType"
                 },
                 {
                     "name": "SMETS2_CALL_LIST",
+                    "__typename": "AccountCampaignType"
                 }
             ],
             "properties": [
                 {
-                    "id": "9999999",
+                    "id": "2930512",
                     "occupancyPeriods": [
                         {
                             "effectiveTo": null,
+                            "__typename": "OccupancyPeriodType"
                         }
                     ],
                     "electricityMeterPoints": [
                         {
-                            "id": "9999999",
-                            "mpan": "9999999999999",
-                            "smartStartDate": "9999-99-99",
+                            "__typename": "ElectricityMeterPointType",
+                            "id": "2875805",
+                            "mpan": "1111111111111",
+                            "smartStartDate": "2021-08-26",
                             "profileClass": 1,
                             "meters": [
                                 {
                                     "hasAndAllowsHhReadings": true,
-                                    "serialNumber": "99A9999999",
+                                    "serialNumber": "21E1111111",
                                     "isTradPrepay": false,
                                     "smartDevices": [
                                         {
                                             "paymentMode": "CREDIT",
-                                            "deviceId": "AA-AA-AA-AA-AA-AA-AA-AA",
+                                            "deviceId": "01-01-01-01-01-01-01-01",
+                                            "__typename": "SmartMeterDeviceType"
                                         }
                                     ],
                                     "isReadyForTopup": false,
+                                    "__typename": "ElectricityMeterType"
                                 }
                             ]
                         },
                         {
-                            "id": "9999999",
-                            "mpan": "9999999999999",
-                            "smartStartDate": "9999-99-99",
+                            "__typename": "ElectricityMeterPointType",
+                            "id": "3347939",
+                            "mpan": "2222222222222",
+                            "smartStartDate": "2021-08-26",
                             "profileClass": 8,
                             "meters": [
                                 {
                                     "hasAndAllowsHhReadings": true,
-                                    "serialNumber": "99A9999999",
+                                    "serialNumber": "21E1111111",
                                     "isTradPrepay": false,
                                     "smartDevices": [
                                         {
                                             "paymentMode": "CREDIT",
-                                            "deviceId": "AA-AA-AA-AA-AA-AA-AA-AA",
+                                            "deviceId": "01-01-01-01-01-01-01-01",
+                                            "__typename": "SmartMeterDeviceType"
                                         }
                                     ],
                                     "isReadyForTopup": false,
+                                    "__typename": "ElectricityMeterType"
                                 }
                             ]
                         }
                     ],
                     "gasMeterPoints": [
                         {
-                            "id": "9999999",
-                            "mprn": "9999999999",
-                            "smartStartDate": "9999-99-99",
+                            "__typename": "GasMeterPointType",
+                            "id": "2383770",
+                            "mprn": "3333333333",
+                            "smartStartDate": "2021-08-25",
                             "meters": [
                                 {
                                     "hasAndAllowsHhReadings": true,
-                                    "serialNumber": "A9A99999999999",
+                                    "serialNumber": "E6S22222222222",
                                     "isTradPrepay": false,
                                     "smartDevices": [
                                         {
                                             "paymentMode": "CREDIT",
-                                            "deviceId": "AA-AA-AA-AA-AA-AA-AA-AA",
+                                            "deviceId": "02-02-02-02-02-02-02-02",
+                                            "__typename": "SmartMeterDeviceType"
                                         }
                                     ],
                                     "isReadyForTopup": false,
+                                    "__typename": "GasMeterType"
                                 }
                             ]
                         }
                     ],
                     "isSmets2InstallationAllowed": false,
+                    "__typename": "PropertyType"
                 }
             ],
             "bills": {
                 "edges": [
                     {
                         "node": {
-                            "issuedDate": "9999-99-99",
+                            "issuedDate": "2024-07-22",
+                            "__typename": "StatementType"
                         },
+                        "__typename": "BillConnectionTypeEdge"
                     }
                 ],
+                "__typename": "BillConnectionTypeConnection"
             },
             "transactions": {
                 "edges": [
                     {
                         "node": {
-                            "id": "-999999999",
+                            "id": "-1896251302",
                             "amount": 502,
-                            "postedDate": "9999-99-99",
+                            "postedDate": "2024-08-14",
                             "isHeld": false,
                             "isIssued": false,
                             "title": "Powerups Reward",
-                            "statementId": "999999999",
+                            "statementId": "236646425",
+                            "__typename": "Credit"
                         },
+                        "__typename": "TransactionConnectionTypeEdge"
                     }
                 ],
+                "__typename": "TransactionConnectionTypeConnection"
             },
             "repayments": {
                 "edges": [],
+                "__typename": "AccountRepaymentConnectionTypeConnection"
             },
+            "__typename": "AccountType"
         },
         "fanClubStatus": [],
         "balanceForecast": {
             "isAvailable": false,
+            "__typename": "BalanceForecastType"
         },
         "viewer": {
             "preferences": {
                 "isOptedInToUpdateMessages": false,
                 "isOptedInToOfferMessages": false,
+                "__typename": "AccountUserCommsPreferences"
             },
+            "__typename": "AccountUserType"
         }
     }
 }
@@ -888,7 +931,7 @@ query getSmartMeterInstallationEligibility($accountNumber: String!) {
 #### Variables
 ```json
 {
-    "accountNumber":"A-AAAAAAAA"
+    "accountNumber":"A-B1C2D34E"
 }
 ```
 
@@ -981,7 +1024,7 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
 #### Variables
 ```json
 {
-    "accountNumber":"A-AAAAAAAA",
+    "accountNumber":"A-B1C2D34E",
     "propertiesActiveFrom":"2024-08-12T23:00:00.000Z"
 }
 ```
@@ -994,33 +1037,38 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
             "cotReadingWindowDays": 2,
             "properties": [
                 {
-                    "id": "9999999",
-                    "address": "AAAAAAAAA, AAAAAAAAAAAA, AAAAAAAAAAAAAAAAA, AAAAAAAAAAAAAA, AAAA AAA",
+                    "id": "2930512",
+                    "address": "Brookfield Farm, Ambridge, Bortchester, Borsetshire, BB12 3AM",
                     "occupancyPeriods": [
                         {
-                            "effectiveTo": null
+                            "effectiveTo": null,
+                            "__typename": "OccupancyPeriodType"
                         }
                     ],
                     "electricityMeterPoints": [
                         {
-                            "id": "9999999",
+                            "__typename": "ElectricityMeterPointType",
+                            "id": "2875805",
                             "meters": [
                                 {
-                                    "id": "9999999",
-                                    "serialNumber": "99A9999999",
-                                    "requiresCotFinalReading": false
+                                    "id": "3657465",
+                                    "serialNumber": "21E1111111",
+                                    "requiresCotFinalReading": false,
+                                    "__typename": "ElectricityMeterType"
                                 }
                             ],
                             "enrolment": null,
                             "status": "ON_SUPPLY"
                         },
                         {
-                            "id": "9999999",
+                            "__typename": "ElectricityMeterPointType",
+                            "id": "3347939",
                             "meters": [
                                 {
-                                    "id": "9999999",
-                                    "serialNumber": "99A9999999",
-                                    "requiresCotFinalReading": false
+                                    "id": "3839934",
+                                    "serialNumber": "21E1111111",
+                                    "requiresCotFinalReading": false,
+                                    "__typename": "ElectricityMeterType"
                                 }
                             ],
                             "enrolment": null,
@@ -1029,20 +1077,24 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                     ],
                     "gasMeterPoints": [
                         {
-                            "id": "9999999",
+                            "__typename": "GasMeterPointType",
+                            "id": "2383770",
                             "meters": [
                                 {
-                                    "id": "9999999",
-                                    "serialNumber": "A9A99999999999",
-                                    "requiresCotFinalReading": false
+                                    "id": "3274816",
+                                    "serialNumber": "E6S22222222222",
+                                    "requiresCotFinalReading": false,
+                                    "__typename": "GasMeterType"
                                 }
                             ],
                             "enrolment": null,
                             "status": "ON_SUPPLY"
                         }
-                    ]
+                    ],
+                    "__typename": "PropertyType"
                 }
-            ]
+            ],
+            "__typename": "AccountType"
         }
     }
 }
@@ -1087,7 +1139,7 @@ query paymentSchedules($accountNumber: String!, $statuses: [DirectDebitInstructi
 #### Variables
 ```json
 {
-    "accountNumber":"A-AAAAAAAA",
+    "accountNumber":"A-B1C2D34E",
     "statuses":["ACTIVE","PROVISIONAL"]}
 ```
 
@@ -1182,7 +1234,7 @@ query getLedgers($accountNumber: String!) {
 #### Variables
 ```json
 {
-    "accountNumber":"A-AAAAAAAA"
+    "accountNumber":"A-B1C2D34E"
 }
 ```
 
