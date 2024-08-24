@@ -1,4 +1,4 @@
-[< Octopus Energy Plugin](index.md)
+[< My Account Page GraphQL Queries](webUiQueriesDashboard.md)
 
 # Observed API calls - My Energy Page GraphQL Queries
 
@@ -1764,4 +1764,4 @@ query
 ```
 Description
 
-[Prototype Queries >](prototypeQueries.md)
+[My Energy Page - Get Your Geek >](webUiQueriesGetYourGeek.md)

@@ -31,6 +31,7 @@ The following inline fragment may be used to access these in a query, but you wi
 The following pages provide further details about this plugin.
 
 [Web UI Queries](webUiQueries.md) shows details of the queries made to the GraphQL API by the Octopus Energy Account Dashboard application.
+
 [Prototype Queries](prototypeQueries.md)
 shows details of some queries which might form the basis of a GraphQL application.
 

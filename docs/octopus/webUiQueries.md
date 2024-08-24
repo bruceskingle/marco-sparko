@@ -88,4 +88,4 @@ For each of the queries shown below you can try for yourself by pasting the `Que
 
 
 
-[My Energy Page Queries >](webUiQueriesDashboard.md)
+[My Account Page Queries >](webUiQueriesDashboard.md)
