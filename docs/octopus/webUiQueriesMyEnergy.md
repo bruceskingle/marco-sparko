@@ -234,7 +234,9 @@ query meterAgreements($nodeId: ID!, $validAfter: DateTime) {
 
 ### Variables
 ```json
-{"nodeId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==","validAfter":"2015-01-01T00:00:00.000Z"}
+{"nodeId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==",
+"validAfter":"2015-01-01T00:00:00.000Z"
+}
 ```
 
 ### Example Response
@@ -299,7 +301,10 @@ As above
 
 ### Variables
 ```json
-{"nodeId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzgzOTkzNA==","validAfter":"2015-01-01T00:00:00.000Z"}
+{
+    "nodeId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzgzOTkzNA==",
+    "validAfter":"2015-01-01T00:00:00.000Z"
+}
 ```
 
 ### Example Response
@@ -374,7 +379,9 @@ As above
 
 ### Variables
 ```json
-{"nodeId":"R2FzTWV0ZXJUeXBlOjMyNzQ4MTY=","validAfter":"2015-01-01T00:00:00.000Z"}
+{"nodeId":"R2FzTWV0ZXJUeXBlOjMyNzQ4MTY=",
+    "validAfter":"2015-01-01T00:00:00.000Z"
+}
 ```
 
 ### Example Response
@@ -458,7 +465,8 @@ fragment consumptionFields on ConsumptionConnection {
   "mostRecentPeriodStart":"2024-08-19T00:00:00.000Z",
   "first":5,
   "grouping":"DAY",
-  "timezone":"Europe/London"}
+  "timezone":"Europe/London"
+}
 ```
 
 ### Example Response
@@ -581,7 +589,8 @@ As above
   "mostRecentPeriodStart":"2024-08-19T00:00:00.000Z",
   "first":5,
   "grouping":"DAY",
-  "timezone":"Europe/London"}
+  "timezone":"Europe/London"
+}
 ```
 
 ### Example Response
@@ -1530,8 +1539,8 @@ As above
   "gasGrouping":"NONE",
   "accountNumber":"A-B1C2D34E",
   "itemType":"CONSUMPTION_CHARGE",
-  "meterId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==","
-  lineItemGrouping":"NONE"
+  "meterId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==",
+  "lineItemGrouping":"NONE"
 }
 ```
 
@@ -1645,90 +1654,1104 @@ query getSmartMeterTelemetry($meterDeviceId: String!, $start: DateTime, $end: Da
 ```
 A repeat query to fetch the smart meter telemetry for the electricity meter which produces an empty result.
 
-## queryName
+# Electricity Import Custom Dates Billed and Used
+This query was run on August 24th, the start date was set to August 20th (so should cover 4 days) and `Everything` was selected (show used and billed).
+
+## smartMeterConsumption__first
 ### Query
 ```gql
-query
+query smartMeterConsumption__first($meterId: ID!, $grouping: ConsumptionGroupings!, $startAt: DateTime!, $first: Int, $timezone: String!) {
+  node(id: $meterId) {
+    ... on ElectricityMeterType {
+      ...meterComparisonFields__first
+      importMeter {
+        id
+        __typename
+      }
+      __typename
+    }
+    ... on GasMeterType {
+      ...meterComparisonFields__first
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment meterComparisonFields__first on Meter {
+  consumptionUnits
+  consumption(first: $first, grouping: $grouping, startAt: $startAt, timezone: $timezone) {
+    ...consumptionFields
+    __typename
+  }
+  serialNumber
+  __typename
+}
+
+fragment consumptionFields on ConsumptionConnection {
+  edges {
+    node {
+      consumption: value
+      intervalStart: startAt
+      intervalEnd: endAt
+      time: startAt
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
 ```
 
 ### Variables
 ```json
-{}
+{
+    "agreementId":29871002,
+    "grouping":"DAY",
+    "first":31,
+    "startAt":"2024-08-20T00:00:00+01:00",
+    "timezone":"Europe/London",
+    "gasGrouping":"NONE",
+    "accountNumber":"A-B1C2D34E",
+    "itemType":"CONSUMPTION_CHARGE",
+    "meterId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==",
+    "lineItemGrouping":"NONE"
+}
 ```
 
 ### Example Response
 ```json
-{}
+{
+    "data": {
+        "node": {
+            "consumptionUnits": "kWh",
+            "consumption": {
+                "edges": [
+                    {
+                        "node": {
+                            "consumption": "7.3570000000000000",
+                            "intervalStart": "2024-08-20T00:00:00+01:00",
+                            "intervalEnd": "2024-08-21T00:00:00+01:00",
+                            "__typename": "ConsumptionType"
+                        },
+                        "__typename": "ConsumptionEdge"
+                    },
+                    {
+                        "node": {
+                            "consumption": "22.5890000000000000",
+                            "intervalStart": "2024-08-21T00:00:00+01:00",
+                            "intervalEnd": "2024-08-22T00:00:00+01:00",
+                            "__typename": "ConsumptionType"
+                        },
+                        "__typename": "ConsumptionEdge"
+                    },
+                    {
+                        "node": {
+                            "consumption": "6.4130000000000000",
+                            "intervalStart": "2024-08-22T00:00:00+01:00",
+                            "intervalEnd": "2024-08-23T00:00:00+01:00",
+                            "__typename": "ConsumptionType"
+                        },
+                        "__typename": "ConsumptionEdge"
+                    },
+                    {
+                        "node": {
+                            "consumption": "4.5210000000000000",
+                            "intervalStart": "2024-08-23T00:00:00+01:00",
+                            "intervalEnd": "2024-08-23T01:00:00+01:00",
+                            "__typename": "ConsumptionType"
+                        },
+                        "__typename": "ConsumptionEdge"
+                    }
+                ],
+                "__typename": "ConsumptionConnection"
+            },
+            "serialNumber": "21E1111111",
+            "__typename": "ElectricityMeterType",
+            "importMeter": null
+        }
+    }
+}
 ```
-Description
+This query fetches the consumed electricity and returns 4 records covering the period from the requested start date to the day before the query was run.
 
-## queryName
+## electricityAgreementLineItems__first
 ### Query
 ```gql
-query
+query electricityAgreementLineItems__first($agreementId: ID!, $startAt: DateTime!, $first: Int, $timezone: String!, $itemType: LineItemTypeOptions!, $lineItemGrouping: LineItemGroupingOptions!, $lastCursor: String) {
+  electricityAgreement(id: $agreementId) {
+    ... on ElectricityAgreementType {
+      meterPoint {
+        mpan
+        __typename
+      }
+      lineItems(first: $first, grouping: $lineItemGrouping, startAt: $startAt, itemType: $itemType, timezone: $timezone, after: $lastCursor) {
+        ...lineItems
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment lineItems on LineItemConnection {
+  edges {
+    node {
+      startAt
+      endAt
+      netAmount
+      numberOfUnits
+      settlementUnit
+      time: startAt
+      __typename
+    }
+    cursor
+    __typename
+  }
+  pageInfo {
+    hasNextPage
+    hasPreviousPage
+    endCursor
+    startCursor
+    __typename
+  }
+  __typename
+}
 ```
 
 ### Variables
 ```json
-{}
+{
+    "agreementId":29871002,
+    "grouping":"DAY",
+    "first":31,
+    "startAt":"2024-08-20T00:00:00+01:00",
+    "timezone":"Europe/London",
+    "gasGrouping":"NONE",
+    "accountNumber":"A-B1C2D34E",
+    "itemType":"CONSUMPTION_CHARGE",
+    "meterId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==",
+    "lineItemGrouping":"NONE"
+}
 ```
 
 ### Example Response
 ```json
-{}
+{
+    "data": {
+        "electricityAgreement": {
+            "meterPoint": {
+                "mpan": "1111111111111",
+                "__typename": "ElectricityMeterPointType"
+            },
+            "lineItems": {
+                "edges": [
+                    {
+                        "node": {
+                            "startAt": "2024-08-20T08:00:00+01:00",
+                            "endAt": "2024-08-20T19:00:00+01:00",
+                            "netAmount": "3.02003",
+                            "numberOfUnits": "0.1300",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-20T19:00:00+01:00",
+                            "endAt": "2024-08-21T00:00:00+01:00",
+                            "netAmount": "14.13404",
+                            "numberOfUnits": "2.1200",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE=",
+                        "__typename": "LineItemEdge"
+                    }
+                ],
+                "pageInfo": {
+                    "hasNextPage": false,
+                    "hasPreviousPage": false,
+                    "endCursor": "YXJyYXljb25uZWN0aW9uOjE=",
+                    "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                    "__typename": "PageInfo"
+                },
+                "__typename": "LineItemConnection"
+            },
+            "__typename": "ElectricityAgreementType"
+        }
+    }
+}
+```
+This query retrieves the meter point line items, which is the amount billed. We only get two records both of which relate to the firt day in the selected range, one for `0.13` kWh for `3.02003` which is a rate of 23.231p / kWh for the period 08:00 - 19:00 and another for `14.13404` for `2.1200` kWh which is a rate of 6.667 p/kWh for the period 19:00 - midnight. These rates are close to, but not exactly, the Intelligent Go tariff rates, the second charge might relate to a smart charge but my charger does not show any charge activity on that day.
+
+## electricityAgreementLineItems__first
+The start date for the query was reset to 11th August and this query was sent (the consumption data had already been loaded for the whole month)
+### Query
+As above
+
+### Variables
+```json
+{
+    "agreementId":29871002,
+    "grouping":"DAY",
+    "first":31,
+    "startAt":"2024-08-11T00:00:00+01:00",
+    "timezone":"Europe/London",
+    "gasGrouping":"NONE",
+    "accountNumber":"A-B1C2D34E",
+    "itemType":"CONSUMPTION_CHARGE",
+    "meterId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==",
+    "lineItemGrouping":"NONE"
+}
+```
+
+### Example Response
+```json
+{
+    "data": {
+        "electricityAgreement": {
+            "meterPoint": {
+                "mpan": "1111111111111",
+                "__typename": "ElectricityMeterPointType"
+            },
+            "lineItems": {
+                "edges": [
+                    {
+                        "node": {
+                            "startAt": "2024-08-11T08:00:00+01:00",
+                            "endAt": "2024-08-11T14:00:00+01:00",
+                            "netAmount": "1.85848",
+                            "numberOfUnits": "0.0800",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-11T14:00:00+01:00",
+                            "endAt": "2024-08-11T16:30:00+01:00",
+                            "netAmount": "22.93448",
+                            "numberOfUnits": "3.4400",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-11T16:30:00+01:00",
+                            "endAt": "2024-08-11T20:30:00+01:00",
+                            "netAmount": "5.80775",
+                            "numberOfUnits": "0.2500",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjI=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-11T20:30:00+01:00",
+                            "endAt": "2024-08-12T08:00:00+01:00",
+                            "netAmount": "67.73672",
+                            "numberOfUnits": "10.1600",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjM=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-12T08:00:00+01:00",
+                            "endAt": "2024-08-12T13:30:00+01:00",
+                            "netAmount": "1.62617",
+                            "numberOfUnits": "0.0700",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjQ=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-12T13:30:00+01:00",
+                            "endAt": "2024-08-13T08:00:00+01:00",
+                            "netAmount": "333.35000",
+                            "numberOfUnits": "50.0000",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjU=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-13T08:00:00+01:00",
+                            "endAt": "2024-08-13T17:30:00+01:00",
+                            "netAmount": "0.00000",
+                            "numberOfUnits": "0.0000",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjY=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-13T17:30:00+01:00",
+                            "endAt": "2024-08-14T08:00:00+01:00",
+                            "netAmount": "353.08432",
+                            "numberOfUnits": "52.9600",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjc=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-14T08:00:00+01:00",
+                            "endAt": "2024-08-14T19:00:00+01:00",
+                            "netAmount": "1.62617",
+                            "numberOfUnits": "0.0700",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjg=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-14T19:00:00+01:00",
+                            "endAt": "2024-08-15T08:00:00+01:00",
+                            "netAmount": "40.46869",
+                            "numberOfUnits": "6.0700",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjk=",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-15T08:00:00+01:00",
+                            "endAt": "2024-08-15T19:00:00+01:00",
+                            "netAmount": "0.23231",
+                            "numberOfUnits": "0.0100",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjEw",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-15T19:00:00+01:00",
+                            "endAt": "2024-08-16T08:00:00+01:00",
+                            "netAmount": "33.26833",
+                            "numberOfUnits": "4.9900",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjEx",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-16T08:00:00+01:00",
+                            "endAt": "2024-08-16T19:00:00+01:00",
+                            "netAmount": "0.00000",
+                            "numberOfUnits": "0.0000",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjEy",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-16T19:00:00+01:00",
+                            "endAt": "2024-08-17T08:00:00+01:00",
+                            "netAmount": "36.46849",
+                            "numberOfUnits": "5.4700",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjEz",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-17T08:00:00+01:00",
+                            "endAt": "2024-08-17T19:00:00+01:00",
+                            "netAmount": "0.00000",
+                            "numberOfUnits": "0.0000",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE0",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-17T19:00:00+01:00",
+                            "endAt": "2024-08-18T08:00:00+01:00",
+                            "netAmount": "41.93543",
+                            "numberOfUnits": "6.2900",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE1",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-18T08:00:00+01:00",
+                            "endAt": "2024-08-18T19:00:00+01:00",
+                            "netAmount": "0.46462",
+                            "numberOfUnits": "0.0200",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE2",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-18T19:00:00+01:00",
+                            "endAt": "2024-08-19T08:00:00+01:00",
+                            "netAmount": "271.88026",
+                            "numberOfUnits": "40.7800",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE3",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-19T08:00:00+01:00",
+                            "endAt": "2024-08-19T10:30:00+01:00",
+                            "netAmount": "0.23231",
+                            "numberOfUnits": "0.0100",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE4",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-19T10:30:00+01:00",
+                            "endAt": "2024-08-19T16:00:00+01:00",
+                            "netAmount": "128.67310",
+                            "numberOfUnits": "19.3000",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE5",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-19T16:00:00+01:00",
+                            "endAt": "2024-08-19T21:30:00+01:00",
+                            "netAmount": "5.34313",
+                            "numberOfUnits": "0.2300",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjIw",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-19T21:30:00+01:00",
+                            "endAt": "2024-08-20T08:00:00+01:00",
+                            "netAmount": "47.73572",
+                            "numberOfUnits": "7.1600",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjIx",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-20T08:00:00+01:00",
+                            "endAt": "2024-08-20T19:00:00+01:00",
+                            "netAmount": "3.02003",
+                            "numberOfUnits": "0.1300",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjIy",
+                        "__typename": "LineItemEdge"
+                    },
+                    {
+                        "node": {
+                            "startAt": "2024-08-20T19:00:00+01:00",
+                            "endAt": "2024-08-21T00:00:00+01:00",
+                            "netAmount": "14.13404",
+                            "numberOfUnits": "2.1200",
+                            "settlementUnit": "KILOWATT_HOURS",
+                            "__typename": "LineItemType"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjIz",
+                        "__typename": "LineItemEdge"
+                    }
+                ],
+                "pageInfo": {
+                    "hasNextPage": false,
+                    "hasPreviousPage": false,
+                    "endCursor": "YXJyYXljb25uZWN0aW9uOjIz",
+                    "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                    "__typename": "PageInfo"
+                },
+                "__typename": "LineItemConnection"
+            },
+            "__typename": "ElectricityAgreementType"
+        }
+    }
+}
+```
+This query retrieves the meter point line items, which is the amount billed. 
+
+Looking only at the data for Monday 12th, when a significant smart charge occured, we have just four records:
+
+```json
+
+{
+    "node": {
+        "startAt": "2024-08-11T08:00:00+01:00",
+        "endAt": "2024-08-11T14:00:00+01:00",
+        "netAmount": "1.85848",
+        "numberOfUnits": "0.0800",
+        "settlementUnit": "KILOWATT_HOURS",
+        "__typename": "LineItemType"
+    },
+    "cursor": "YXJyYXljb25uZWN0aW9uOjA=",
+    "__typename": "LineItemEdge"
+},
+{
+    "node": {
+        "startAt": "2024-08-11T14:00:00+01:00",
+        "endAt": "2024-08-11T16:30:00+01:00",
+        "netAmount": "22.93448",
+        "numberOfUnits": "3.4400",
+        "settlementUnit": "KILOWATT_HOURS",
+        "__typename": "LineItemType"
+    },
+    "cursor": "YXJyYXljb25uZWN0aW9uOjE=",
+    "__typename": "LineItemEdge"
+},
+{
+    "node": {
+        "startAt": "2024-08-11T16:30:00+01:00",
+        "endAt": "2024-08-11T20:30:00+01:00",
+        "netAmount": "5.80775",
+        "numberOfUnits": "0.2500",
+        "settlementUnit": "KILOWATT_HOURS",
+        "__typename": "LineItemType"
+    },
+    "cursor": "YXJyYXljb25uZWN0aW9uOjI=",
+    "__typename": "LineItemEdge"
+},
+{
+    "node": {
+        "startAt": "2024-08-11T20:30:00+01:00",
+        "endAt": "2024-08-12T08:00:00+01:00",
+        "netAmount": "67.73672",
+        "numberOfUnits": "10.1600",
+        "settlementUnit": "KILOWATT_HOURS",
+        "__typename": "LineItemType"
+    },
+    "cursor": "YXJyYXljb25uZWN0aW9uOjM=",
+    "__typename": "LineItemEdge"
+},
+```
+
+The charge activity runs from about 13:30 until after midnight (into the early hours of the next day). The charge rates are as follows:
+
+```
+Start	                    End	                          Amount	  kWh	Rate / kWh
+2024-08-11T08:00:00+01:00	2024-08-11T14:00:00+01:00	 1.85848	 0.08	23.231
+2024-08-11T14:00:00+01:00	2024-08-11T16:30:00+01:00	22.93448	 3.44	 6.667
+2024-08-11T16:30:00+01:00	2024-08-11T20:30:00+01:00	 5.80775	 0.25	23.231
+2024-08-11T20:30:00+01:00	2024-08-12T08:00:00+01:00	67.73672	10.16	 6.667
+
+```
+
+It sort of looks like all consumption during the smart charge windows is at a rate of 6.667 p/kWh
+
+Indeed, this is exactly the total import for these times
+```
+
+2.125	2024-08-11T00:00:00+01:00	2024-08-11T00:30:00+01:00
+2.06	2024-08-11T00:30:00+01:00	2024-08-11T01:00:00+01:00
+2.046	2024-08-11T01:00:00+01:00	2024-08-11T01:30:00+01:00
+2.418	2024-08-11T01:30:00+01:00	2024-08-11T02:00:00+01:00
+1.943	2024-08-11T02:00:00+01:00	2024-08-11T02:30:00+01:00
+0.439	2024-08-11T02:30:00+01:00	2024-08-11T03:00:00+01:00
+0.174	2024-08-11T03:00:00+01:00	2024-08-11T03:30:00+01:00
+0.165	2024-08-11T03:30:00+01:00	2024-08-11T04:00:00+01:00
+0.174	2024-08-11T04:00:00+01:00	2024-08-11T04:30:00+01:00
+0.181	2024-08-11T04:30:00+01:00	2024-08-11T05:00:00+01:00
+0.153	2024-08-11T05:00:00+01:00	2024-08-11T05:30:00+01:00
+0.008	2024-08-11T05:30:00+01:00	2024-08-11T06:00:00+01:00
+0.012	2024-08-11T06:00:00+01:00	2024-08-11T06:30:00+01:00
+0.038	2024-08-11T06:30:00+01:00	2024-08-11T07:00:00+01:00
+0.026	2024-08-11T07:00:00+01:00	2024-08-11T07:30:00+01:00
+0.009	2024-08-11T07:30:00+01:00	2024-08-11T08:00:00+01:00
+11.971		
+0	2024-08-11T08:00:00+01:00	2024-08-11T08:30:00+01:00
+0.05	2024-08-11T08:30:00+01:00	2024-08-11T09:00:00+01:00
+0.028	2024-08-11T09:00:00+01:00	2024-08-11T09:30:00+01:00
+0	2024-08-11T09:30:00+01:00	2024-08-11T10:00:00+01:00
+0	2024-08-11T10:00:00+01:00	2024-08-11T10:30:00+01:00
+0	2024-08-11T10:30:00+01:00	2024-08-11T11:00:00+01:00
+0	2024-08-11T11:00:00+01:00	2024-08-11T11:30:00+01:00
+0	2024-08-11T11:30:00+01:00	2024-08-11T12:00:00+01:00
+0	2024-08-11T12:00:00+01:00	2024-08-11T12:30:00+01:00
+0	2024-08-11T12:30:00+01:00	2024-08-11T13:00:00+01:00
+0	2024-08-11T13:00:00+01:00	2024-08-11T13:30:00+01:00
+0	2024-08-11T13:30:00+01:00	2024-08-11T14:00:00+01:00
+0.078		
+0.003	2024-08-11T14:00:00+01:00	2024-08-11T14:30:00+01:00
+1.786	2024-08-11T14:30:00+01:00	2024-08-11T15:00:00+01:00
+0.825	2024-08-11T15:00:00+01:00	2024-08-11T15:30:00+01:00
+0.826	2024-08-11T15:30:00+01:00	2024-08-11T16:00:00+01:00
+0.004	2024-08-11T16:00:00+01:00	2024-08-11T16:30:00+01:00
+0	2024-08-11T16:30:00+01:00	2024-08-11T17:00:00+01:00
+3.444		
+0	2024-08-11T17:00:00+01:00	2024-08-11T17:30:00+01:00
+0.002	2024-08-11T17:30:00+01:00	2024-08-11T18:00:00+01:00
+0.061	2024-08-11T18:00:00+01:00	2024-08-11T18:30:00+01:00
+0.058	2024-08-11T18:30:00+01:00	2024-08-11T19:00:00+01:00
+0.03	2024-08-11T19:00:00+01:00	2024-08-11T19:30:00+01:00
+0.084	2024-08-11T19:30:00+01:00	2024-08-11T20:00:00+01:00
+0.016	2024-08-11T20:00:00+01:00	2024-08-11T20:30:00+01:00
+0.251		
+0.008	2024-08-11T20:30:00+01:00	2024-08-11T21:00:00+01:00
+0.008	2024-08-11T21:00:00+01:00	2024-08-11T21:30:00+01:00
+0.009	2024-08-11T21:30:00+01:00	2024-08-11T22:00:00+01:00
+0.008	2024-08-11T22:00:00+01:00	2024-08-11T22:30:00+01:00
+0.008	2024-08-11T22:30:00+01:00	2024-08-11T23:00:00+01:00
+0.008	2024-08-11T23:00:00+01:00	2024-08-11T23:30:00+01:00
+2.068	2024-08-11T23:30:00+01:00	2024-08-12T00:00:00+01:00
+2.021	2024-08-12T00:00:00+01:00	2024-08-12T00:30:00+01:00
+2.058	2024-08-12T00:30:00+01:00	2024-08-12T01:00:00+01:00
+1.971	2024-08-12T01:00:00+01:00	2024-08-12T01:30:00+01:00
+0.597	2024-08-12T01:30:00+01:00	2024-08-12T02:00:00+01:00
+0.169	2024-08-12T02:00:00+01:00	2024-08-12T02:30:00+01:00
+0.167	2024-08-12T02:30:00+01:00	2024-08-12T03:00:00+01:00
+0.186	2024-08-12T03:00:00+01:00	2024-08-12T03:30:00+01:00
+0.192	2024-08-12T03:30:00+01:00	2024-08-12T04:00:00+01:00
+0.166	2024-08-12T04:00:00+01:00	2024-08-12T04:30:00+01:00
+0.154	2024-08-12T04:30:00+01:00	2024-08-12T05:00:00+01:00
+0.208	2024-08-12T05:00:00+01:00	2024-08-12T05:30:00+01:00
+0.008	2024-08-12T05:30:00+01:00	2024-08-12T06:00:00+01:00
+0.008	2024-08-12T06:00:00+01:00	2024-08-12T06:30:00+01:00
+0.04	2024-08-12T06:30:00+01:00	2024-08-12T07:00:00+01:00
+0.049	2024-08-12T07:00:00+01:00	2024-08-12T07:30:00+01:00
+0.051	2024-08-12T07:30:00+01:00	2024-08-12T08:00:00+01:00
+10.162		
+
 ```
 Description
 
-## queryName
+# Balance History Page
+These queries result from clicking on the "View my balance hostory" link on the home page.
+## getBalanceHistory
 ### Query
 ```gql
-query
+query getBalanceHistory($accountNumber: String!, $cursor: String) {
+  account(accountNumber: $accountNumber) {
+    provisionalTransactions(first: 5) {
+      edges {
+        node {
+          id
+          amount
+          title
+          date
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    repayments(first: 5, statuses: [APPROVED, REQUESTED]) {
+      edges {
+        node {
+          id
+          amount
+          paymentDate
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    payments(first: 5, status: PENDING) {
+      edges {
+        node {
+          id
+          amount
+          paymentDate
+          status
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    transactions(first: 10, after: $cursor) {
+      edges {
+        node {
+          __typename
+          id
+          postedDate
+          amount
+          balanceCarriedForward
+          isHeld
+          title
+          ... on Charge {
+            consumption {
+              startDate
+              endDate
+              quantity
+              unit
+              __typename
+            }
+            __typename
+          }
+        }
+        cursor
+        __typename
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
 ```
 
 ### Variables
 ```json
-{}
+{
+    "accountNumber":"A-B1C2D34E"
+}
 ```
 
 ### Example Response
 ```json
-{}
+{
+    "data": {
+        "account": {
+            "provisionalTransactions": {
+                "edges": [],
+                "__typename": "ProvisionalTransactionConnectionTypeConnection"
+            },
+            "repayments": {
+                "edges": [],
+                "__typename": "AccountRepaymentConnectionTypeConnection"
+            },
+            "payments": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "326436023",
+                            "amount": 10221,
+                            "paymentDate": "2024-08-28",
+                            "status": "PENDING",
+                            "__typename": "AccountPaymentType"
+                        },
+                        "__typename": "AccountPaymentConnectionTypeEdge"
+                    }
+                ],
+                "__typename": "AccountPaymentConnectionTypeConnection"
+            },
+            "transactions": {
+                "edges": [
+                    {
+                        "node": {
+                            "__typename": "Charge",
+                            "id": "-1871040199",
+                            "postedDate": "2024-08-20",
+                            "amount": 2847,
+                            "balanceCarriedForward": 39303,
+                            "isHeld": false,
+                            "title": "Gas",
+                            "consumption": {
+                                "startDate": "2024-07-21",
+                                "endDate": "2024-08-20",
+                                "quantity": "360.7100",
+                                "unit": "kWh",
+                                "__typename": "Consumption"
+                            }
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Charge",
+                            "id": "-1871043601",
+                            "postedDate": "2024-08-20",
+                            "amount": -2716,
+                            "balanceCarriedForward": 42150,
+                            "isHeld": false,
+                            "title": "Electricity",
+                            "consumption": {
+                                "startDate": "2024-08-13",
+                                "endDate": "2024-08-20",
+                                "quantity": "181.0500",
+                                "unit": "kWh",
+                                "__typename": "Consumption"
+                            }
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjE=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Charge",
+                            "id": "-1871044025",
+                            "postedDate": "2024-08-20",
+                            "amount": 2997,
+                            "balanceCarriedForward": 39434,
+                            "isHeld": false,
+                            "title": "Electricity",
+                            "consumption": {
+                                "startDate": "2024-08-08",
+                                "endDate": "2024-08-20",
+                                "quantity": "334.7100",
+                                "unit": "kWh",
+                                "__typename": "Consumption"
+                            }
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjI=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Credit",
+                            "id": "-1896251302",
+                            "postedDate": "2024-08-14",
+                            "amount": 502,
+                            "balanceCarriedForward": 42431,
+                            "isHeld": false,
+                            "title": "Powerups Reward"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjM=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Charge",
+                            "id": "-1871043620",
+                            "postedDate": "2024-08-12",
+                            "amount": -2407,
+                            "balanceCarriedForward": 41929,
+                            "isHeld": false,
+                            "title": "Electricity",
+                            "consumption": {
+                                "startDate": "2024-07-21",
+                                "endDate": "2024-08-12",
+                                "quantity": "300.8200",
+                                "unit": "kWh",
+                                "__typename": "Consumption"
+                            }
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjQ=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Charge",
+                            "id": "-1871044052",
+                            "postedDate": "2024-08-07",
+                            "amount": 4309,
+                            "balanceCarriedForward": 39522,
+                            "isHeld": false,
+                            "title": "Electricity",
+                            "consumption": {
+                                "startDate": "2024-07-21",
+                                "endDate": "2024-08-07",
+                                "quantity": "322.5100",
+                                "unit": "kWh",
+                                "__typename": "Consumption"
+                            }
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjU=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Payment",
+                            "id": "-1949392858",
+                            "postedDate": "2024-07-29",
+                            "amount": 24790,
+                            "balanceCarriedForward": 43831,
+                            "isHeld": false,
+                            "title": "Direct debit"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjY=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Credit",
+                            "id": "-1973989678",
+                            "postedDate": "2024-07-24",
+                            "amount": 571,
+                            "balanceCarriedForward": 19041,
+                            "isHeld": false,
+                            "title": "Powerups Reward"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjc=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Credit",
+                            "id": "-1974036696",
+                            "postedDate": "2024-07-24",
+                            "amount": 186,
+                            "balanceCarriedForward": 18470,
+                            "isHeld": false,
+                            "title": "Powerups Reward"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjg=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    },
+                    {
+                        "node": {
+                            "__typename": "Credit",
+                            "id": "-1974103763",
+                            "postedDate": "2024-07-24",
+                            "amount": 493,
+                            "balanceCarriedForward": 18284,
+                            "isHeld": false,
+                            "title": "Powerups Reward"
+                        },
+                        "cursor": "YXJyYXljb25uZWN0aW9uOjk=",
+                        "__typename": "TransactionConnectionTypeEdge"
+                    }
+                ],
+                "pageInfo": {
+                    "endCursor": "YXJyYXljb25uZWN0aW9uOjk=",
+                    "hasNextPage": true,
+                    "__typename": "PageInfo"
+                },
+                "__typename": "TransactionConnectionTypeConnection"
+            },
+            "__typename": "AccountType"
+        }
+    }
+}
 ```
-Description
+This query fetches the payments and charges made against the account. a pending direct debit payment shows up under `payments` but the previous cleared direct debit appears in the `transactions`
 
-## queryName
+## accountBalanceTransactions
 ### Query
 ```gql
-query
+query accountBalanceTransactions($accountNumber: String!) {
+  account(accountNumber: $accountNumber) {
+    balance
+    bills(first: 1) {
+      edges {
+        node {
+          issuedDate
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    transactions(first: 1) {
+      edges {
+        node {
+          id
+          amount
+          postedDate
+          isHeld
+          isIssued
+          title
+          statementId
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
 ```
 
 ### Variables
 ```json
-{}
+{
+    "accountNumber":"A-B1C2D34E"
+}
 ```
 
 ### Example Response
 ```json
-{}
+{
+    "data": {
+        "account": {
+            "balance": 39303,
+            "bills": {
+                "edges": [
+                    {
+                        "node": {
+                            "issuedDate": "2024-08-22",
+                            "__typename": "StatementType"
+                        },
+                        "__typename": "BillConnectionTypeEdge"
+                    }
+                ],
+                "__typename": "BillConnectionTypeConnection"
+            },
+            "transactions": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "-1871040199",
+                            "amount": 2847,
+                            "postedDate": "2024-08-20",
+                            "isHeld": false,
+                            "isIssued": true,
+                            "title": "Gas",
+                            "statementId": "236646425",
+                            "__typename": "Charge"
+                        },
+                        "__typename": "TransactionConnectionTypeEdge"
+                    }
+                ],
+                "__typename": "TransactionConnectionTypeConnection"
+            },
+            "__typename": "AccountType"
+        }
+    }
+}
 ```
-Description
-
-## queryName
-### Query
-```gql
-query
-```
-
-### Variables
-```json
-{}
-```
-
-### Example Response
-```json
-{}
-```
-Description
+This query returns the account balance, most recent bill and most recent transaction. It's not clear why the transaction is needed, perhaps to make sure that the list of transactions isn't empty as it's paged. When you scroll down more `getBalanceHistory` queries are sent.
 
 ## queryName
 ### Query
