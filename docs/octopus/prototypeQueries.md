@@ -597,38 +597,51 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
         	fullName
           productCode
           standingCharge
+          preVatStandingCharge
           unitRate
+          preVatUnitRate
         }
         ... on DayNightTariff {
         	fullName
           productCode
           standingCharge
+          preVatStandingCharge
           dayRate
+          preVatDayRate
           nightRate
+          preVatNightRate
         }
         ... on ThreeRateTariff {
         	fullName
           productCode
           standingCharge
+          preVatStandingCharge
           dayRate
+          preVatDayRate
           nightRate
+          preVatNightRate
           offPeakRate
+          preVatOffPeakRate
         }
         ... on HalfHourlyTariff {
         	fullName
           productCode
           standingCharge
+          preVatStandingCharge
           unitRates {
             validFrom
             validTo
             value
+            preVatValue
           }
         }
         ... on PrepayTariff {
         	fullName
           productCode
           standingCharge
+          preVatStandingCharge
           unitRate
+          preVatUnitRate
         }
        	__typename
       }
@@ -695,7 +708,9 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
             "fullName": "Outgoing Octopus 12M Fixed May 2019",
             "productCode": "OUTGOING-FIX-12M-19-05-13",
             "standingCharge": 0,
+            "preVatStandingCharge": 0,
             "unitRate": 15,
+            "preVatUnitRate": 15,
             "__typename": "StandardTariff"
           }
         },
@@ -704,31 +719,25 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
             "fullName": "Intelligent Octopus Go",
             "productCode": "INTELLI-VAR-22-10-14",
             "standingCharge": 47.8485,
+            "preVatStandingCharge": 45.57,
             "unitRates": [
-              {
-                "validFrom": "2024-08-22T22:30:00+00:00",
-                "validTo": "2024-08-23T04:30:00+00:00",
-                "value": 7.00035
-              },
-              {
-                "validFrom": "2024-08-23T04:30:00+00:00",
-                "validTo": "2024-08-23T22:30:00+00:00",
-                "value": 24.39255
-              },
-              {
-                "validFrom": "2024-08-23T22:30:00+00:00",
-                "validTo": "2024-08-24T04:30:00+00:00",
-                "value": 7.00035
-              },
-              {
-                "validFrom": "2024-08-24T04:30:00+00:00",
-                "validTo": "2024-08-24T22:30:00+00:00",
-                "value": 24.39255
-              },
               {
                 "validFrom": "2024-08-24T22:30:00+00:00",
                 "validTo": "2024-08-25T04:30:00+00:00",
-                "value": 7.00035
+                "value": 7.00035,
+                "preVatValue": 6.667
+              },
+              {
+                "validFrom": "2024-08-25T04:30:00+00:00",
+                "validTo": "2024-08-25T22:30:00+00:00",
+                "value": 24.39255,
+                "preVatValue": 23.231
+              },
+              {
+                "validFrom": "2024-08-25T22:30:00+00:00",
+                "validTo": "2024-08-26T04:30:00+00:00",
+                "value": 7.00035,
+                "preVatValue": 6.667
               }
             ],
             "__typename": "HalfHourlyTariff"

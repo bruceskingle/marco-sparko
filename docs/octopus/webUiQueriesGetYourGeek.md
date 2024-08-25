@@ -8,7 +8,7 @@ As soon as the details in the "Get your geek on" panel are changed, a series of 
 ## smartMeterConsumption__first
 ### Query
 ```gql
-"query smartMeterConsumption__first($meterId: ID!, $grouping: ConsumptionGroupings!, $startAt: DateTime!, $first: Int, $timezone: String!, $cursor: String) {
+query smartMeterConsumption__first($meterId: ID!, $grouping: ConsumptionGroupings!, $startAt: DateTime!, $first: Int, $timezone: String!, $cursor: String) {
   node(id: $meterId) {
     ... on ElectricityMeterType {
       ...meterComparisonFields__first

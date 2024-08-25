@@ -2290,7 +2290,7 @@ Start	                    End	                          Amount	  kWh	Rate / kWh
 
 ```
 
-It sort of looks like all consumption during the smart charge windows is at a rate of 6.667 p/kWh
+It sort of looks like all consumption during the smart charge windows is at a rate of 6.667 p/kWh, which is the VAT exclusive Intelligent Go night rate. The charges outside the smart charge windows are all at 23.231 p/kWh which is the VAT exclusive Intelligent Go day rate.
 
 Indeed, this is exactly the total import for these times
 ```
