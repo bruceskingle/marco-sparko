@@ -22,6 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
+use std::error::Error as StdError;
+use std::num::ParseIntError;
+use std::fmt::{self, Display};
+use serde::{de, ser};
+
 #[derive(Debug)]
 pub enum Error {
     GraphQLError(crate::gql::Error),
@@ -30,6 +35,23 @@ pub enum Error {
     InternalError(&'static str),
     CallerError(&'static str),
     StringError(String)
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::GraphQLError(err) => f.write_fmt(format_args!("GraphQLError({})", err)),
+            Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
+            Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
+            Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
+            Error::CallerError(err) => f.write_fmt(format_args!("CallerError({})", err)),
+            Error::StringError(err) => f.write_fmt(format_args!("StringError({})", err))
+        }
+    }
+}
+
+impl StdError for Error {
+
 }
 
 impl From<crate::gql::error::Error> for Error {
@@ -55,5 +77,25 @@ impl From<std::io::Error> for Error {
 impl From<crate::Error> for Error {
     fn from(err: crate::Error) -> Error {
         Error::StringError(format!("{:?}", err))
+    }
+}
+
+
+
+impl From<ParseIntError> for Error {
+    fn from(err: ParseIntError) -> Error {
+        Error::StringError(format!("{:?}", err))
+    }
+}
+
+impl ser::Error for Error {
+    fn custom<T: Display>(msg: T) -> Self {
+        Error::StringError(msg.to_string())
+    }
+}
+
+impl de::Error for Error {
+    fn custom<T: Display>(msg: T) -> Self {
+        Error::StringError(msg.to_string())
     }
 }

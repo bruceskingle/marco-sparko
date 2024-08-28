@@ -26,10 +26,9 @@ pub mod gql;
 pub mod octopus;
 pub mod system;
 
-
-use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::error::Error as StdError;
+use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};
 use async_trait::async_trait;
-
 use dirs::home_dir;
 use serde::{Deserialize, Serialize};
 use clap::{Parser, Subcommand};
@@ -40,8 +39,38 @@ pub enum Error {
     JsonError(serde_json::Error),
     IOError(std::io::Error),
     InternalError(String),
-    UserError(String)
+    UserError(String),
+    WrappedError(Box<dyn StdError>)
 }
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::OctopusError(err) => f.write_fmt(format_args!("OctopusError({})", err)),
+            Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
+            Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
+            Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
+            Error::UserError(err) => f.write_fmt(format_args!("UserError({})", err)),
+            Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err))
+        }
+    }
+}
+
+impl StdError for Error {
+
+}
+
+// impl From<time::error::ComponentRange> for Error {
+//     fn from(err: time::error::ComponentRange) -> Error {
+//         Error::WrappedError(Box::new(err))
+//     }
+// }
+
+// impl From<Box<dyn StdError>> for Error {
+//     fn from(err: Box<dyn StdError>) -> Error {
+//         Error::WrappedError(err)
+//     }
+// }
 
 impl From<crate::octopus::error::Error> for Error {
     fn from(err: crate::octopus::error::Error) -> Error {
@@ -88,6 +117,7 @@ pub struct Args {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Summary,
+    Bill,
     /// does testing things
     Test {
         /// lists test values
@@ -119,6 +149,7 @@ impl Profile {
 #[async_trait]
 pub trait Module {
     async fn summary(&mut self) -> Result<(), Error>;
+    async fn bill(&mut self) -> Result<(), Error>;
 }
 
 pub trait ModuleBuilder {
@@ -216,6 +247,10 @@ impl MarcoSparko {
                         self.summary().await?; 
                         
                     }
+                    Commands::Bill => {
+                        self.bill().await?; 
+                        
+                    }
                     Commands::Test { list } => {
                         println!("TEST {}!", list); 
                         
@@ -235,6 +270,15 @@ impl MarcoSparko {
         for (_module_id, module) in self.modules.iter_mut() {
             println!("Summary {}", _module_id);
             module.summary().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn bill(&mut self) -> Result<(), Error> {
+        for (_module_id, module) in self.modules.iter_mut() {
+            println!("Bill {}", _module_id);
+            module.bill().await?;
         }
 
         Ok(())

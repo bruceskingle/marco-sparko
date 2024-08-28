@@ -594,6 +594,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
     electricityAgreements(active: true) {
       tariff {
         ... on StandardTariff {
+          id
         	fullName
           productCode
           standingCharge
@@ -602,6 +603,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
           preVatUnitRate
         }
         ... on DayNightTariff {
+          id
         	fullName
           productCode
           standingCharge
@@ -612,6 +614,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
           preVatNightRate
         }
         ... on ThreeRateTariff {
+          id
         	fullName
           productCode
           standingCharge
@@ -624,6 +627,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
           preVatOffPeakRate
         }
         ... on HalfHourlyTariff {
+          id
         	fullName
           productCode
           standingCharge
@@ -636,6 +640,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
           }
         }
         ... on PrepayTariff {
+          id
         	fullName
           productCode
           standingCharge
@@ -705,6 +710,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
       "electricityAgreements": [
         {
           "tariff": {
+            "id": "11353",
             "fullName": "Outgoing Octopus 12M Fixed May 2019",
             "productCode": "OUTGOING-FIX-12M-19-05-13",
             "standingCharge": 0,
@@ -716,6 +722,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
         },
         {
           "tariff": {
+            "id": "175911",
             "fullName": "Intelligent Octopus Go",
             "productCode": "INTELLI-VAR-22-10-14",
             "standingCharge": 47.8485,
@@ -1621,20 +1628,1337 @@ query getElectricityMeterReadings {
 ```
 Description
 
-## queryName
+## Get Energy Products Available at some Postcode
 ### Query
 ```gql
-query
+query energyProducts($postcode:String!) {
+    energyProducts(first: 20,brand: "OCTOPUS_ENERGY", postcode:$postcode, filterBy:DOMESTIC, availability:AVAILABLE) {
+        edges {
+            node {
+                id
+                fullName
+                displayName
+                description
+                availableFrom
+                availableTo
+                isHidden
+                code
+                direction
+                notes
+                isVariable
+                isGreen
+                isBusiness
+                isChargedHalfHourly
+                isPrepay
+                isDefault
+                isOccupier
+                term
+                isAvailable
+                isUnavailable
+                isFixed
+                isDomestic
+                includesEpgReduction
+                exitFees
+                exitFeesType
+                tags
+                __typename
+                tariffs(first: 20,postcode:$postcode) {
+                    edges {
+                        node {
+                            ... on TariffType {
+                                id
+                                displayName
+                                fullName
+                                description
+                                productCode
+                                standingCharge
+                                preVatStandingCharge
+                                tariffCode
+                            }
+                            ... on StandardTariff {
+                                unitRate
+                                unitRateEpgApplied
+                                preVatUnitRate
+                            }
+                            ... on DayNightTariff {
+                                dayRate
+
+                                # Is EPG applied to the unit rate.
+                                dayRateEpgApplied
+                                nightRate
+
+                                # Is EPG applied to the unit rate.
+                                nightRateEpgApplied
+                                preVatDayRate
+                                preVatNightRate
+                            }
+                            ... on ThreeRateTariff {
+                                dayRate
+
+                                # Is EPG applied to the unit rate.
+                                dayRateEpgApplied
+                                nightRate
+
+                                # Is EPG applied to the unit rate.
+                                nightRateEpgApplied
+                                offPeakRate
+
+                                # Is EPG applied to the unit rate.
+                                offPeakRateEpgApplied
+                                preVatDayRate
+                                preVatNightRate
+                                preVatOffPeakRate
+                            }  
+                            __typename
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+  }
 ```
 
 ### Variables
 ```json
-{}
+{
+  "postcode":"BB12 3AM"
+}
 ```
 
 ### Example Response
 ```json
-{}
+{
+  "data": {
+    "energyProducts": {
+      "edges": [
+        {
+          "node": {
+            "id": "14360",
+            "fullName": "Octopus 12M Fixed August 2024 v3",
+            "displayName": "Octopus 12M Fixed",
+            "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
+            "availableFrom": "2024-08-20T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": false,
+            "code": "OE-FIX-12M-24-08-20",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": false,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": false,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": 12,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": true,
+            "isDomestic": true,
+            "includesEpgReduction": true,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "242336",
+                    "displayName": "Octopus 12M Fixed",
+                    "fullName": "Octopus 12M Fixed August 2024 v3",
+                    "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
+                    "productCode": "OE-FIX-12M-24-08-20",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-1R-OE-FIX-12M-24-08-20-A",
+                    "unitRate": 24.15,
+                    "unitRateEpgApplied": false,
+                    "preVatUnitRate": null,
+                    "__typename": "StandardTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "242337",
+                    "displayName": "Octopus 12M Fixed",
+                    "fullName": "Octopus 12M Fixed August 2024 v3",
+                    "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
+                    "productCode": "OE-FIX-12M-24-08-20",
+                    "standingCharge": 48.39,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-2R-OE-FIX-12M-24-08-20-A",
+                    "dayRate": 29.79,
+                    "dayRateEpgApplied": false,
+                    "nightRate": 12.5,
+                    "nightRateEpgApplied": false,
+                    "preVatDayRate": null,
+                    "preVatNightRate": null,
+                    "__typename": "DayNightTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "75840",
+                    "displayName": "Octopus 12M Fixed",
+                    "fullName": "Octopus 12M Fixed August 2024 v3",
+                    "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
+                    "productCode": "OE-FIX-12M-24-08-20",
+                    "standingCharge": 28.95,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "G-1R-OE-FIX-12M-24-08-20-A",
+                    "__typename": "GasTariffType"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "14140",
+            "fullName": "Aira Flexible",
+            "displayName": "Aira Flexible",
+            "description": "Aira Flexible offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
+            "availableFrom": "2024-07-01T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": false,
+            "code": "AIRA-VAR-24-07-01",
+            "direction": "IMPORT",
+            "notes": "This is a copy of the \"Flexible Octopus\" product, created to be used by the Aira affiliate",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": false,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": true,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "234536",
+                    "displayName": "Aira Flexible",
+                    "fullName": "Aira Flexible",
+                    "description": "Aira Flexible offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
+                    "productCode": "AIRA-VAR-24-07-01",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-1R-AIRA-VAR-24-07-01-A",
+                    "unitRate": 23.08,
+                    "unitRateEpgApplied": false,
+                    "preVatUnitRate": null,
+                    "__typename": "StandardTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "234537",
+                    "displayName": "Aira Flexible",
+                    "fullName": "Aira Flexible",
+                    "description": "Aira Flexible offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
+                    "productCode": "AIRA-VAR-24-07-01",
+                    "standingCharge": 48.39,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-2R-AIRA-VAR-24-07-01-A",
+                    "dayRate": 28.52,
+                    "dayRateEpgApplied": false,
+                    "nightRate": 11.96,
+                    "nightRateEpgApplied": false,
+                    "preVatDayRate": null,
+                    "preVatNightRate": null,
+                    "__typename": "DayNightTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "8028",
+            "fullName": "Flexible Octopus",
+            "displayName": "Flexible Octopus",
+            "description": "Flexible Octopus offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
+            "availableFrom": "2023-03-28T10:35:00+01:00",
+            "availableTo": null,
+            "isHidden": false,
+            "code": "VAR-22-11-01",
+            "direction": "IMPORT",
+            "notes": "Payment-price-switching product\r\nRenamed from Flexible Octopus November 2022 v1 as part of SVT price change in October 2023",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": false,
+            "isPrepay": false,
+            "isDefault": true,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": true,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "176152",
+                    "displayName": "Flexible Octopus",
+                    "fullName": "Flexible Octopus",
+                    "description": "Flexible Octopus offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
+                    "productCode": "VAR-22-11-01",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-1R-VAR-22-11-01-A",
+                    "unitRate": 23.08,
+                    "unitRateEpgApplied": false,
+                    "preVatUnitRate": null,
+                    "__typename": "StandardTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "176153",
+                    "displayName": "Flexible Octopus",
+                    "fullName": "Flexible Octopus",
+                    "description": "Flexible Octopus offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
+                    "productCode": "VAR-22-11-01",
+                    "standingCharge": 48.39,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-2R-VAR-22-11-01-A",
+                    "dayRate": 28.52,
+                    "dayRateEpgApplied": false,
+                    "nightRate": 11.96,
+                    "nightRateEpgApplied": false,
+                    "preVatDayRate": null,
+                    "preVatNightRate": null,
+                    "__typename": "DayNightTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "49383",
+                    "displayName": "Flexible Octopus",
+                    "fullName": "Flexible Octopus",
+                    "description": "Flexible Octopus offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
+                    "productCode": "VAR-22-11-01",
+                    "standingCharge": 28.95,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "G-1R-VAR-22-11-01-A",
+                    "__typename": "GasTariffType"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "14202",
+            "fullName": "Intelligent Octopus Go - EV Saver",
+            "displayName": "Intelligent Octopus Go - EV Saver",
+            "description": "An EV tariff exclusively for customers that lease through Octopus EV",
+            "availableFrom": "2024-07-17T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "INTELLI-VAR-OEV-24-07-17",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "236702",
+                    "displayName": "Intelligent Octopus Go - EV Saver",
+                    "fullName": "Intelligent Octopus Go - EV Saver",
+                    "description": "An EV tariff exclusively for customers that lease through Octopus EV",
+                    "productCode": "INTELLI-VAR-OEV-24-07-17",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": 45.57,
+                    "tariffCode": "E-1R-INTELLI-VAR-OEV-24-07-17-A",
+                    "dayRate": 24.39,
+                    "dayRateEpgApplied": null,
+                    "nightRate": 6,
+                    "nightRateEpgApplied": null,
+                    "preVatDayRate": 23.23,
+                    "preVatNightRate": 5.71,
+                    "__typename": "DayNightTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "14133",
+            "fullName": "Aira Zero",
+            "displayName": "Aira Zero",
+            "description": "Aira Zero is a heat pump tariff with eight hours of super cheap electricity every day to warm your home.",
+            "availableFrom": "2024-07-01T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "AIRA-ZERO-24-07-01",
+            "direction": "IMPORT",
+            "notes": "This is a copy of the \"Cosy Octopus\" product, created to be used by the Aira affiliate",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "234298",
+                    "displayName": "Aira Zero",
+                    "fullName": "Aira Zero",
+                    "description": "Aira Zero is a heat pump tariff with eight hours of super cheap electricity every day to warm your home.",
+                    "productCode": "AIRA-ZERO-24-07-01",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": 45.57,
+                    "tariffCode": "E-1R-AIRA-ZERO-24-07-01-A",
+                    "dayRate": 33.9,
+                    "dayRateEpgApplied": null,
+                    "nightRate": 11.46,
+                    "nightRateEpgApplied": null,
+                    "offPeakRate": 23.38,
+                    "offPeakRateEpgApplied": null,
+                    "preVatDayRate": 32.29,
+                    "preVatNightRate": 10.91,
+                    "preVatOffPeakRate": 22.27,
+                    "__typename": "ThreeRateTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "14138",
+            "fullName": "Octopus Tracker July 2024 v1",
+            "displayName": "Octopus Tracker",
+            "description": "Tracker gives you the most transparent energy pricing in the UK. Every day, we update the price of your energy based on an independently published wholesale market price. The unit rate is capped at 100p/kWh for electricity and 30p/kWh for gas (including VAT).",
+            "availableFrom": "2024-07-01T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "SILVER-24-07-01",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": false,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": 12,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": true,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [
+              "tracker"
+            ],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "234480",
+                    "displayName": "Octopus Tracker",
+                    "fullName": "Octopus Tracker July 2024 v1",
+                    "description": "Tracker gives you the most transparent energy pricing in the UK. Every day, we update the price of your energy based on an independently published wholesale market price. The unit rate is capped at 100p/kWh for electricity and 30p/kWh for gas (including VAT).",
+                    "productCode": "SILVER-24-07-01",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-1R-SILVER-24-07-01-A",
+                    "unitRate": 19.98,
+                    "unitRateEpgApplied": false,
+                    "preVatUnitRate": null,
+                    "__typename": "StandardTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "73463",
+                    "displayName": "Octopus Tracker",
+                    "fullName": "Octopus Tracker July 2024 v1",
+                    "description": "Tracker gives you the most transparent energy pricing in the UK. Every day, we update the price of your energy based on an independently published wholesale market price. The unit rate is capped at 100p/kWh for electricity and 30p/kWh for gas (including VAT).",
+                    "productCode": "SILVER-24-07-01",
+                    "standingCharge": 27.47,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "G-1R-SILVER-24-07-01-A",
+                    "__typename": "GasTariffType"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "13979",
+            "fullName": "Agile Octopus April 2024 v1",
+            "displayName": "Agile Octopus",
+            "description": "With Agile Octopus, you get access to half-hourly energy prices, tied to wholesale prices and updated daily.  The unit rate is capped at 100p/kWh (including VAT).",
+            "availableFrom": "2024-04-03T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "AGILE-24-04-03",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": true,
+            "isGreen": true,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": 12,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [
+              "agile"
+            ],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "230015",
+                    "displayName": "Agile Octopus",
+                    "fullName": "Agile Octopus April 2024 v1",
+                    "description": "With Agile Octopus, you get access to half-hourly energy prices, tied to wholesale prices and updated daily.  The unit rate is capped at 100p/kWh (including VAT).",
+                    "productCode": "AGILE-24-04-03",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-1R-AGILE-24-04-03-A",
+                    "unitRate": 9.66,
+                    "unitRateEpgApplied": false,
+                    "preVatUnitRate": null,
+                    "__typename": "StandardTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "10338",
+            "fullName": "Intelligent Octopus Flux Import",
+            "displayName": "Intelligent Octopus Flux Import",
+            "description": "Power your home with 100% renewable energy on this Octopus Energy electricity tariff designed exclusively for solar and battery owners.",
+            "availableFrom": "2023-07-13T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "INTELLI-FLUX-IMPORT-23-07-14",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "182257",
+                    "displayName": "Intelligent Octopus Flux Import",
+                    "fullName": "Intelligent Octopus Flux Import",
+                    "description": "Power your home with 100% renewable energy on this Octopus Energy electricity tariff designed exclusively for solar and battery owners.",
+                    "productCode": "INTELLI-FLUX-IMPORT-23-07-14",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": 45.57,
+                    "tariffCode": "E-1R-INTELLI-FLUX-IMPORT-23-07-14-A",
+                    "dayRate": 27.7,
+                    "dayRateEpgApplied": null,
+                    "nightRate": 20.78,
+                    "nightRateEpgApplied": null,
+                    "preVatDayRate": 26.38,
+                    "preVatNightRate": 19.79,
+                    "__typename": "DayNightTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "8985",
+            "fullName": "Octopus Flux Import",
+            "displayName": "Octopus Flux Import",
+            "description": "Power your home with 100% renewable energy on this Octopus Energy electricity tariff designed exclusively for solar and battery owners.",
+            "availableFrom": "2023-02-14T00:00:00+00:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "FLUX-IMPORT-23-02-14",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "178297",
+                    "displayName": "Octopus Flux Import",
+                    "fullName": "Octopus Flux Import",
+                    "description": "Power your home with 100% renewable energy on this Octopus Energy electricity tariff designed exclusively for solar and battery owners.",
+                    "productCode": "FLUX-IMPORT-23-02-14",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": 45.57,
+                    "tariffCode": "E-1R-FLUX-IMPORT-23-02-14-A",
+                    "dayRate": 32.32,
+                    "dayRateEpgApplied": null,
+                    "nightRate": 13.85,
+                    "nightRateEpgApplied": null,
+                    "offPeakRate": 23.08,
+                    "offPeakRateEpgApplied": null,
+                    "preVatDayRate": 30.78,
+                    "preVatNightRate": 13.19,
+                    "preVatOffPeakRate": 21.98,
+                    "__typename": "ThreeRateTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "8490",
+            "fullName": "Cosy Octopus",
+            "displayName": "Cosy Octopus",
+            "description": "Cosy Octopus is a heat pump tariff with eight hours of super cheap electricity every day to warm your home.",
+            "availableFrom": "2022-12-13T00:00:00+00:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "COSY-22-12-08",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "177076",
+                    "displayName": "Cosy Octopus",
+                    "fullName": "Cosy Octopus",
+                    "description": "Cosy Octopus is a heat pump tariff with eight hours of super cheap electricity every day to warm your home.",
+                    "productCode": "COSY-22-12-08",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": 45.57,
+                    "tariffCode": "E-1R-COSY-22-12-08-A",
+                    "dayRate": 33.9,
+                    "dayRateEpgApplied": null,
+                    "nightRate": 11.46,
+                    "nightRateEpgApplied": null,
+                    "offPeakRate": 23.38,
+                    "offPeakRateEpgApplied": null,
+                    "preVatDayRate": 32.29,
+                    "preVatNightRate": 10.91,
+                    "preVatOffPeakRate": 22.27,
+                    "__typename": "ThreeRateTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "7833",
+            "fullName": "Octopus Go",
+            "displayName": "Octopus Go",
+            "description": "The smart EV tariff with super cheap electricity between 00:30 - 05:30 every night",
+            "availableFrom": "2022-10-14T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "GO-VAR-22-10-14",
+            "direction": "IMPORT",
+            "notes": "\" October 2022 v1\" removed from full_name 2024-07-01",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "175897",
+                    "displayName": "Octopus Go",
+                    "fullName": "Octopus Go",
+                    "description": "The smart EV tariff with super cheap electricity between 00:30 - 05:30 every night",
+                    "productCode": "GO-VAR-22-10-14",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": 45.57,
+                    "tariffCode": "E-1R-GO-VAR-22-10-14-A",
+                    "dayRate": 24.39,
+                    "dayRateEpgApplied": null,
+                    "nightRate": 8.5,
+                    "nightRateEpgApplied": null,
+                    "preVatDayRate": 23.23,
+                    "preVatNightRate": 8.1,
+                    "__typename": "DayNightTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "7834",
+            "fullName": "Intelligent Octopus Go",
+            "displayName": "Intelligent Octopus Go",
+            "description": "With Intelligent Octopus Go EV tariff, you have access to a super low electricity rate between 23:30 - 05:30 every night, plus it smart-charges your car at the cheapest and greenest times overnight.",
+            "availableFrom": "2022-10-14T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "INTELLI-VAR-22-10-14",
+            "direction": "IMPORT",
+            "notes": "\" October 2022 v1\" removed from full_name 2024-07-01",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": true,
+            "isPrepay": false,
+            "isDefault": false,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": false,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "175911",
+                    "displayName": "Intelligent Octopus Go",
+                    "fullName": "Intelligent Octopus Go",
+                    "description": "With Intelligent Octopus Go EV tariff, you have access to a super low electricity rate between 23:30 - 05:30 every night, plus it smart-charges your car at the cheapest and greenest times overnight.",
+                    "productCode": "INTELLI-VAR-22-10-14",
+                    "standingCharge": 47.85,
+                    "preVatStandingCharge": 45.57,
+                    "tariffCode": "E-1R-INTELLI-VAR-22-10-14-A",
+                    "dayRate": 24.39,
+                    "dayRateEpgApplied": null,
+                    "nightRate": 7,
+                    "nightRateEpgApplied": null,
+                    "preVatDayRate": 23.23,
+                    "preVatNightRate": 6.67,
+                    "__typename": "DayNightTariff"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "191",
+            "fullName": "Octopus Key and Card",
+            "displayName": "Octopus Key and Card",
+            "description": "Non-smart prepayment tariff",
+            "availableFrom": "2018-10-10T00:00:00+01:00",
+            "availableTo": null,
+            "isHidden": true,
+            "code": "PREPAY-VAR-18-09-21",
+            "direction": "IMPORT",
+            "notes": "",
+            "isVariable": true,
+            "isGreen": false,
+            "isBusiness": false,
+            "isChargedHalfHourly": false,
+            "isPrepay": true,
+            "isDefault": true,
+            "isOccupier": false,
+            "term": null,
+            "isAvailable": true,
+            "isUnavailable": false,
+            "isFixed": false,
+            "isDomestic": true,
+            "includesEpgReduction": true,
+            "exitFees": 0,
+            "exitFeesType": "NONE",
+            "tags": [],
+            "__typename": "EnergyProductType",
+            "tariffs": {
+              "edges": [
+                {
+                  "node": {
+                    "id": "6393",
+                    "displayName": "Octopus Key and Card",
+                    "fullName": "Octopus Key and Card",
+                    "description": "Non-smart prepayment tariff",
+                    "productCode": "PREPAY-VAR-18-09-21",
+                    "standingCharge": 47.86,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-1R-PREPAY-VAR-18-09-21-A",
+                    "unitRate": 22.3,
+                    "unitRateEpgApplied": false,
+                    "preVatUnitRate": null,
+                    "__typename": "StandardTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "6421",
+                    "displayName": "Octopus Key and Card",
+                    "fullName": "Octopus Key and Card",
+                    "description": "Non-smart prepayment tariff",
+                    "productCode": "PREPAY-VAR-18-09-21",
+                    "standingCharge": 48.4,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "E-2R-PREPAY-VAR-18-09-21-A",
+                    "dayRate": 28.66,
+                    "dayRateEpgApplied": false,
+                    "nightRate": 10.34,
+                    "nightRateEpgApplied": false,
+                    "preVatDayRate": null,
+                    "preVatNightRate": null,
+                    "__typename": "DayNightTariff"
+                  }
+                },
+                {
+                  "node": {
+                    "id": "2115",
+                    "displayName": "Octopus Key and Card",
+                    "fullName": "Octopus Key and Card",
+                    "description": "Non-smart prepayment tariff",
+                    "productCode": "PREPAY-VAR-18-09-21",
+                    "standingCharge": 28.95,
+                    "preVatStandingCharge": null,
+                    "tariffCode": "G-1R-PREPAY-VAR-18-09-21-A",
+                    "__typename": "GasTariffType"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+Note that this query returns instances of `EnergyTariffType` which does not include `HalfHourlyTariff` or `PrepayTariff` so in this sense at least, Intelligent Go is not an Energy Product. 
+
+## getBills
+### Query
+```gql
+query getBills($accountNumber: String!) {
+  account(accountNumber: $accountNumber) {
+    status
+    number
+    balance
+    bills(first: 1) {
+      pageInfo {
+        startCursor
+        hasNextPage
+      }
+      edges {
+        node {
+          billType
+          fromDate
+          toDate
+          issuedDate
+          __typename
+          ...on StatementType {
+            closingBalance
+            openingBalance
+            isExternalBill
+            transactions(
+            first: 100
+            ) {
+              pageInfo {
+                startCursor
+                hasNextPage
+              }
+              edges {
+                node {
+                  postedDate
+                  createdAt
+                  amounts {
+                    net
+                    tax
+                    gross
+                  }
+                  balanceCarriedForward
+                  isHeld
+                  isIssued
+                  title
+                  isReversed
+                  hasStatement
+                  note
+                  ... on Charge {
+                    consumption {
+                      startDate
+                      endDate
+                      quantity
+                      unit
+                      usageCost
+                      supplyCharge
+                    }
+                    isExport
+                  }
+                  __typename
+                }
+              }
+            }
+
+            userId
+            toAddress
+            paymentDueDate
+            consumptionStartDate
+            consumptionEndDate
+            reversalsAfterClose
+            status
+            heldStatus {
+              isHeld
+              reason
+            }
+            totalCharges {
+              netTotal
+              taxTotal
+              grossTotal
+            }
+            totalCredits {
+              netTotal
+              taxTotal
+              grossTotal
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Variables
+```json
+{
+  "accountNumber":"A-B1C2D34E"
+}
+```
+
+### Example Response
+```json
+{
+  "data": {
+    "account": {
+      "status": "ACTIVE",
+      "number": "A-B1C2D34E",
+      "balance": 39303,
+      "bills": {
+        "pageInfo": {
+          "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+          "hasNextPage": true
+        },
+        "edges": [
+          {
+            "node": {
+              "billType": "STATEMENT",
+              "fromDate": "2024-07-22",
+              "toDate": "2024-08-21",
+              "issuedDate": "2024-08-22",
+              "__typename": "StatementType",
+              "closingBalance": 39303,
+              "openingBalance": 17791,
+              "isExternalBill": false,
+              "transactions": {
+                "pageInfo": {
+                  "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                  "hasNextPage": false
+                },
+                "edges": [
+                  {
+                    "node": {
+                      "postedDate": "2024-08-20",
+                      "createdAt": "2024-08-21T21:36:10.492186+00:00",
+                      "amounts": {
+                        "net": 2711,
+                        "tax": 136,
+                        "gross": 2847
+                      },
+                      "balanceCarriedForward": 39303,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Gas",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-07-21",
+                        "endDate": "2024-08-20",
+                        "quantity": "360.7100",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": false,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-08-20",
+                      "createdAt": "2024-08-21T21:32:19.902722+00:00",
+                      "amounts": {
+                        "net": -2716,
+                        "tax": 0,
+                        "gross": -2716
+                      },
+                      "balanceCarriedForward": 42150,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-08-13",
+                        "endDate": "2024-08-20",
+                        "quantity": "181.0500",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": true,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-08-20",
+                      "createdAt": "2024-08-21T21:32:01.991119+00:00",
+                      "amounts": {
+                        "net": 2854,
+                        "tax": 143,
+                        "gross": 2997
+                      },
+                      "balanceCarriedForward": 39434,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-08-08",
+                        "endDate": "2024-08-20",
+                        "quantity": "334.7100",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": false,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-08-14",
+                      "createdAt": "2024-08-15T11:55:19.400763+00:00",
+                      "amounts": {
+                        "net": 478,
+                        "tax": 24,
+                        "gross": 502
+                      },
+                      "balanceCarriedForward": 42431,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-08-12",
+                      "createdAt": "2024-08-21T21:32:19.073366+00:00",
+                      "amounts": {
+                        "net": -2407,
+                        "tax": 0,
+                        "gross": -2407
+                      },
+                      "balanceCarriedForward": 41929,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-07-21",
+                        "endDate": "2024-08-12",
+                        "quantity": "300.8200",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": true,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-08-07",
+                      "createdAt": "2024-08-21T21:32:01.008991+00:00",
+                      "amounts": {
+                        "net": 4104,
+                        "tax": 205,
+                        "gross": 4309
+                      },
+                      "balanceCarriedForward": 39522,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-07-21",
+                        "endDate": "2024-08-07",
+                        "quantity": "322.5100",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": false,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-07-29",
+                      "createdAt": "2024-08-01T03:09:50.202838+00:00",
+                      "amounts": {
+                        "net": 24790,
+                        "tax": 0,
+                        "gross": 0
+                      },
+                      "balanceCarriedForward": 43831,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Direct debit",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": null,
+                      "__typename": "Payment"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-07-24",
+                      "createdAt": "2024-07-25T10:53:30.897903+00:00",
+                      "amounts": {
+                        "net": 543,
+                        "tax": 28,
+                        "gross": 571
+                      },
+                      "balanceCarriedForward": 19041,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-07-24",
+                      "createdAt": "2024-07-25T10:43:02.339290+00:00",
+                      "amounts": {
+                        "net": 177,
+                        "tax": 9,
+                        "gross": 186
+                      },
+                      "balanceCarriedForward": 18470,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  },
+                  {
+                    "node": {
+                      "postedDate": "2024-07-24",
+                      "createdAt": "2024-07-25T10:17:07.255688+00:00",
+                      "amounts": {
+                        "net": 469,
+                        "tax": 24,
+                        "gross": 493
+                      },
+                      "balanceCarriedForward": 18284,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  }
+                ]
+              },
+              "userId": 3235447,
+              "toAddress": "dan@archer.org",
+              "paymentDueDate": "2024-09-06",
+              "consumptionStartDate": null,
+              "consumptionEndDate": null,
+              "reversalsAfterClose": "NONE",
+              "status": "CLOSED",
+              "heldStatus": {
+                "isHeld": false,
+                "reason": null
+              },
+              "totalCharges": {
+                "netTotal": 4546,
+                "taxTotal": 484,
+                "grossTotal": 5030
+              },
+              "totalCredits": {
+                "netTotal": 1667,
+                "taxTotal": 85,
+                "grossTotal": 1752
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
 ```
 Description
 
@@ -1651,24 +2975,330 @@ query
 
 ### Example Response
 ```json
-{}
-```
-Description
-
-## queryName
-### Query
-```gql
-query
-```
-
-### Variables
-```json
-{}
-```
-
-### Example Response
-```json
-{}
+{
+  "data": {
+    "account": {
+      "status": "ACTIVE",
+      "number": "A-B1C2D34E",
+      "balance": 39303,
+      "bills": {
+        "pageInfo": {
+          "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+          "hasNextPage": true
+        },
+        "edges": [
+          {
+            "node": {
+              "id": "236646425",
+              "billType": "STATEMENT",
+              "fromDate": "2024-07-22",
+              "toDate": "2024-08-21",
+              "issuedDate": "2024-08-22",
+              "__typename": "StatementType",
+              "closingBalance": 39303,
+              "openingBalance": 17791,
+              "isExternalBill": false,
+              "transactions": {
+                "pageInfo": {
+                  "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                  "hasNextPage": false
+                },
+                "edges": [
+                  {
+                    "node": {
+                      "id": "-1871040199",
+                      "postedDate": "2024-08-20",
+                      "createdAt": "2024-08-21T21:36:10.492186+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 2711,
+                        "tax": 136,
+                        "gross": 2847
+                      },
+                      "balanceCarriedForward": 39303,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Gas",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-07-21",
+                        "endDate": "2024-08-20",
+                        "quantity": "360.7100",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": false,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1871043601",
+                      "postedDate": "2024-08-20",
+                      "createdAt": "2024-08-21T21:32:19.902722+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": -2716,
+                        "tax": 0,
+                        "gross": -2716
+                      },
+                      "balanceCarriedForward": 42150,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-08-13",
+                        "endDate": "2024-08-20",
+                        "quantity": "181.0500",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": true,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1871044025",
+                      "postedDate": "2024-08-20",
+                      "createdAt": "2024-08-21T21:32:01.991119+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 2854,
+                        "tax": 143,
+                        "gross": 2997
+                      },
+                      "balanceCarriedForward": 39434,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-08-08",
+                        "endDate": "2024-08-20",
+                        "quantity": "334.7100",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": false,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1896251302",
+                      "postedDate": "2024-08-14",
+                      "createdAt": "2024-08-15T11:55:19.400763+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 478,
+                        "tax": 24,
+                        "gross": 502
+                      },
+                      "balanceCarriedForward": 42431,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1871043620",
+                      "postedDate": "2024-08-12",
+                      "createdAt": "2024-08-21T21:32:19.073366+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": -2407,
+                        "tax": 0,
+                        "gross": -2407
+                      },
+                      "balanceCarriedForward": 41929,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-07-21",
+                        "endDate": "2024-08-12",
+                        "quantity": "300.8200",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": true,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1871044052",
+                      "postedDate": "2024-08-07",
+                      "createdAt": "2024-08-21T21:32:01.008991+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 4104,
+                        "tax": 205,
+                        "gross": 4309
+                      },
+                      "balanceCarriedForward": 39522,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Electricity",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "consumption": {
+                        "startDate": "2024-07-21",
+                        "endDate": "2024-08-07",
+                        "quantity": "322.5100",
+                        "unit": "kWh",
+                        "usageCost": 0,
+                        "supplyCharge": 0
+                      },
+                      "isExport": false,
+                      "__typename": "Charge"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1949392858",
+                      "postedDate": "2024-07-29",
+                      "createdAt": "2024-08-01T03:09:50.202838+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 24790,
+                        "tax": 0,
+                        "gross": 0
+                      },
+                      "balanceCarriedForward": 43831,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Direct debit",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": null,
+                      "__typename": "Payment"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1973989678",
+                      "postedDate": "2024-07-24",
+                      "createdAt": "2024-07-25T10:53:30.897903+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 543,
+                        "tax": 28,
+                        "gross": 571
+                      },
+                      "balanceCarriedForward": 19041,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1974036696",
+                      "postedDate": "2024-07-24",
+                      "createdAt": "2024-07-25T10:43:02.339290+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 177,
+                        "tax": 9,
+                        "gross": 186
+                      },
+                      "balanceCarriedForward": 18470,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  },
+                  {
+                    "node": {
+                      "id": "-1974103763",
+                      "postedDate": "2024-07-24",
+                      "createdAt": "2024-07-25T10:17:07.255688+00:00",
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "net": 469,
+                        "tax": 24,
+                        "gross": 493
+                      },
+                      "balanceCarriedForward": 18284,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "title": "Powerups Reward",
+                      "billingDocumentIdentifier": "236646425",
+                      "isReversed": false,
+                      "hasStatement": true,
+                      "note": "",
+                      "__typename": "Credit"
+                    }
+                  }
+                ]
+              },
+              "userId": 3235447,
+              "toAddress": "dan@archer.org",
+              "paymentDueDate": "2024-09-06",
+              "consumptionStartDate": null,
+              "consumptionEndDate": null,
+              "reversalsAfterClose": "NONE",
+              "status": "CLOSED",
+              "heldStatus": {
+                "isHeld": false,
+                "reason": null
+              },
+              "totalCharges": {
+                "netTotal": 4546,
+                "taxTotal": 484,
+                "grossTotal": 5030
+              },
+              "totalCredits": {
+                "netTotal": 1667,
+                "taxTotal": 85,
+                "grossTotal": 1752
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
 ```
 Description
 

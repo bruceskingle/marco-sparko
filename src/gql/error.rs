@@ -22,10 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
+use std::error::Error as StdError;
+use std::fmt::{self, Display};
+use std::num::{ParseFloatError, ParseIntError};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-
-
 
 #[derive(Debug)]
 pub enum Error {
@@ -33,6 +34,62 @@ pub enum Error {
     IOError(reqwest::Error),
     JsonError(serde_json::Error),
     HttpError(StatusCode),
+    InvalidInputError(Box<dyn StdError>)
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::GraphQLError(err_list) => {
+                f.write_str("GraphQLError[\n")?;
+
+                
+                
+                for err in err_list {
+                    f.write_fmt(format_args!(" [{}]\n", err))?;
+                }
+                f.write_str("]\n")
+            },
+            Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
+            Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
+            Error::HttpError(err) => f.write_fmt(format_args!("HttpError({})", err)),
+            Error::InvalidInputError(err) => f.write_fmt(format_args!("InvalidInputError({})", err))
+        }
+    }
+}
+
+impl StdError for Error {}
+
+ 
+
+impl From<std::str::ParseBoolError> for Error {
+    fn from(err: std::str::ParseBoolError) -> Error {
+        Error::InvalidInputError(Box::new(err))
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(err: ParseIntError) -> Error {
+        Error::InvalidInputError(Box::new(err))
+    }
+}
+
+impl From<ParseFloatError> for Error {
+    fn from(err: ParseFloatError) -> Error {
+        Error::InvalidInputError(Box::new(err))
+    }
+}
+
+impl From<time::error::ComponentRange> for Error {
+    fn from(err: time::error::ComponentRange) -> Error {
+        Error::InvalidInputError(Box::new(err))
+    }
+}
+
+impl From<time::error::Parse> for Error {
+    fn from(err: time::error::Parse) -> Error {
+        Error::InvalidInputError(Box::new(err))
+    }
 }
 
 impl From<reqwest::Error> for Error {
@@ -81,24 +138,14 @@ pub struct GraphQLJsonError {
     pub extensions: Extensions,
 }
 
-// #[derive(Serialize, Deserialize, Debug)]
-// struct Variable {
-//     name:   String,
-//     value:  dyn Serialize,
-// }
-
-
-// #[derive(Serialize, Deserialize, Debug)]
-// struct VariableMap {
-//     vars:   Vec<Variable>,
-//     map:    HashMap<&str, &Variable>
-// }
-
-// impl VariableMap {
-//     fn new() -> VariableMap {
-//         VariableMap {
-//             vars: Vec::new(),
-//             map: HashMap::new(),
-//         }
-//     }
-// }
+impl Display for GraphQLJsonError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Ok(json) = serde_json::to_string_pretty(self) {
+            f.write_str(&json)?;
+            Ok(())
+        }
+        else {
+            Err(std::fmt::Error)
+        }
+    }
+}

@@ -32,6 +32,9 @@ use serde::{Deserialize, Serialize};
 pub use error::{Error, GraphQLJsonError};
 
 
+pub mod types;
+
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Request<'a, T>
@@ -82,43 +85,45 @@ impl Client {
 
         println!("payload {}", &serialized);
 
-            let mut request = self.reqwest_client.post(&self.url)
-                .header("Content-Type", "application/json");
+        let mut request = self.reqwest_client.post(&self.url)
+            .header("Content-Type", "application/json");
 
-            if let Some(map) = headers {
-                
-                for (key, value) in map {
-                    request = request.header(*key, *value);
-                }
-            }
+        if let Some(map) = headers {
             
-            let response = request
-                .body(serialized)
-                .send()
-                .await?;
-
-            println!("\nStatus:   {:?}", &response.status());
-
-            if &response.status() != &StatusCode::OK {
-                let status = response.status();
-                let text = &(response).text().await;
-                println!("ERROR {}", text.as_ref().expect("No Response Body"));
-                return Err(Error::HttpError(status));
+            for (key, value) in map {
+                request = request.header(*key, *value);
             }
+        }
+        
+        let response = request
+            .body(serialized)
+            .send()
+            .await?;
 
-            let graphql_response:  GraphQLResponse = response
-                .json()
-                .await?;
+        println!("\nStatus:   {:?}", &response.status());
 
-            if let Some(errors) = graphql_response.errors {
-                
-                println!("\nerrors:   {:?}", errors);
+        if &response.status() != &StatusCode::OK {
+            let status = response.status();
+            let text = &(response).text().await;
+            println!("ERROR {}", text.as_ref().expect("No Response Body"));
+            return Err(Error::HttpError(status));
+        }
 
-                return Err(Error::GraphQLError(errors));
-            }
+        let response_json = response.json().await?;
+
+        println!("response {:?}", response_json);
+
+        let graphql_response:  GraphQLResponse = response_json;
+
+        if let Some(errors) = graphql_response.errors {
             
-            
-            Ok(graphql_response.data)               
+            println!("\nerrors:   {:?}", errors);
+
+            return Err(Error::GraphQLError(errors));
+        }
+        
+        
+        Ok(graphql_response.data)               
     }
 }
 

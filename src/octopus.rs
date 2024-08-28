@@ -25,6 +25,12 @@ SOFTWARE.
 pub mod error;
 pub mod token;
 mod account;
+mod tariff;
+mod page_info;
+mod decimal;
+mod consumption;
+mod transaction;
+mod bill;
 
 use std::sync::Arc;
 use std::fmt;
@@ -163,6 +169,7 @@ pub struct Client{
     profile: Option<Profile>,
     gql_client:     Arc<crate::gql::Client>,
     pub(crate) token_manager:  TokenManager,
+    default_account: Option<Arc<AccountInterface>>
 }
 
 const MODULE_ID: &str = "octopus";
@@ -192,7 +199,8 @@ impl Client {
             context,
             profile,
             gql_client,
-            token_manager
+            token_manager,
+            default_account: None
         }
     }
 
@@ -200,8 +208,16 @@ impl Client {
     //     self.token_manager.authenticate().await
     // }
 
-    pub async fn get_account(&mut self, account_number: &str)  -> Result<AccountInterface, Error> {
-        AccountInterface::get_account(&self.gql_client, &mut self.token_manager, account_number).await
+    pub async fn get_default_account(&mut self)  -> Result<Arc<AccountInterface>, Error> {
+        if let Some(default_account) = &self.default_account {
+            Ok(default_account.clone())
+        }
+        else {
+            let default_account = Arc::new(AccountInterface::get_default_account(&self.gql_client, &mut self.token_manager).await?);
+            let return_value = default_account.clone();
+            self.default_account = Some(default_account);
+            Ok(return_value)
+        }
     }
 
     pub async fn get_account_user(&mut self)  -> Result<AccountUser, Error> {
@@ -265,6 +281,17 @@ impl Module for Client {
         let user = self.get_account_user().await?;
         println!("{}", user);
         Ok(())
+    }
+
+    async fn bill(&mut self) -> Result<(), crate::Error>{
+        let account = self.get_default_account().await?;
+        if let Some(account_number) =  &account.number {
+            println!("{}", account_number);
+            Ok(())
+        }
+        else {
+            Err(crate::Error::InternalError(String::from("Unable to find default account number")))
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 /*****************************************************************************
- MIT License
+MIT License
 
 Copyright (c) 2024 Bruce Skingle
 
@@ -259,6 +259,12 @@ pub struct GetAccountVar<'a> {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct AccountList {
+    pub accounts: Vec<AccountInterface>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AccountInterface {
     pub number: Option<String>,
     pub brand: Option<String>,
@@ -327,6 +333,49 @@ billingEmail
             let account: AccountInterface = serde_json::from_value(result_json)?;
 
             Ok(account)
+        } else {
+            return Err(Error::InternalError("No result found"));
+        }
+    }
+
+    pub async fn get_default_account(
+        gql_client: &Arc<crate::gql::Client>,
+        token_manager: &mut TokenManager
+    ) -> Result<AccountInterface, Error> {
+        let operation_name = "getDefaultAccount";
+        let query = format!(
+            r#"query {}
+                            {{
+                                viewer
+                                {{
+                                    accounts {{
+                                        {}
+                                    }}
+                                }}
+                            }}"#,
+            operation_name, Self::get_field_names()
+        );
+
+
+        println!("QUERY {}", query);
+
+        let mut headers = HashMap::new();
+        // let token = String::from(self.get_authenticator().await?);
+        let token = &*token_manager.get_authenticator().await?;
+        headers.insert("Authorization", token);
+
+        let href = Some(&headers);
+
+        let variables = {};
+
+        let mut response = gql_client
+            .call(operation_name, &query, &variables, href)
+            .await?;
+
+        if let Some(result_json) = response.remove("viewer") {
+            let mut account_list: AccountList = serde_json::from_value(result_json)?;
+
+            Ok(account_list.accounts.remove(0))
         } else {
             return Err(Error::InternalError("No result found"));
         }
