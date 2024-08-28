@@ -105,12 +105,13 @@ impl Display for Boolean {
   
   #[cfg(test)]
   mod tests {
-      use serde::Deserialize;
+      use display_json::DisplayAsJsonPretty;
+    use serde::Deserialize;
 
     use super::*;
   
   
-      #[derive(Serialize, Deserialize, Debug)]
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
       struct MyStruct {
           value: Boolean,
       }

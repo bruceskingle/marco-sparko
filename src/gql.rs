@@ -26,6 +26,7 @@ pub mod error;
 
 use std::collections::HashMap;
 
+use display_json::DisplayAsJsonPretty;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -35,7 +36,7 @@ pub use error::{Error, GraphQLJsonError};
 pub mod types;
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 struct Request<'a, T>
     where T: Serialize
@@ -47,7 +48,7 @@ struct Request<'a, T>
 
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 struct GraphQLResponse {
    errors: Option<Vec<GraphQLJsonError>>,

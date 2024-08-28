@@ -24,6 +24,7 @@ SOFTWARE.
 
 use std::fmt::Display;
 
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use super::error::Error;
@@ -329,7 +330,7 @@ impl Tariff {
 }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct StandardTariff {
     pub id: String,
@@ -446,7 +447,7 @@ impl Display for Tariff {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct DayNightTariff {
   id: String,
@@ -486,7 +487,7 @@ impl DayNightTariff {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreeRateTariff {
   id: String,

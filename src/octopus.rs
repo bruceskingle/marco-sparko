@@ -33,8 +33,8 @@ mod transaction;
 mod bill;
 
 use std::sync::Arc;
-use std::fmt;
 use async_trait::async_trait;
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use account::{AccountInterface, AccountUser};
@@ -70,21 +70,21 @@ impl Profile {
 }
 
 
-     #[derive(Serialize, Deserialize, Debug)]
+     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
      #[serde(rename_all = "camelCase")]
      struct Location {
         line: i32,
         column: i32,
      }
 
-     #[derive(Serialize, Deserialize, Debug)]
+     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
      #[serde(rename_all = "camelCase")]
      struct ValidationError {
             message: String,
             input_path: Vec<String>
      }
 
-     #[derive(Serialize, Deserialize, Debug)]
+     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
      #[serde(rename_all = "camelCase")]
      struct Extensions {
         error_type: String,
@@ -94,7 +94,7 @@ impl Profile {
         validation_errors: Vec<ValidationError>
      }
 
-     #[derive(Serialize, Deserialize, Debug)]
+     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
      #[serde(rename_all = "camelCase")]
      pub struct PossibleErrorType {
         message: Option<String>,
@@ -136,30 +136,30 @@ impl Profile {
 
 
 
-    impl fmt::Display for PossibleErrorType {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "[")?;
+    // impl fmt::Display for PossibleErrorType {
+    //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    //         write!(f, "[")?;
 
-            if let Some(code) = &self.code {
-                write!(f, "code: {}", code)?
-            }
+    //         if let Some(code) = &self.code {
+    //             write!(f, "code: {}", code)?
+    //         }
 
-            if let Some(description) = &self.description {
-                write!(f, "description: {}", description)?
-            }
+    //         if let Some(description) = &self.description {
+    //             write!(f, "description: {}", description)?
+    //         }
 
-            if let Some(message) = &self.message {
-                write!(f, "message: {}", message)?
-            }
+    //         if let Some(message) = &self.message {
+    //             write!(f, "message: {}", message)?
+    //         }
 
-            if let Some(type_name) = &self.type_name {
-                write!(f, "type: {}", type_name)?
-            }
+    //         if let Some(type_name) = &self.type_name {
+    //             write!(f, "type: {}", type_name)?
+    //         }
 
-            // Close the opened bracket and return a fmt::Result value.
-            write!(f, "]")
-        }
-    }
+    //         // Close the opened bracket and return a fmt::Result value.
+    //         write!(f, "]")
+    //     }
+    // }
 
 
     //  self.config.get_active_profile()?.modules.octopus.clone()

@@ -22,8 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use std::fmt::Display;
-
+use display_json::{DisplayAsJson, DisplayAsJsonPretty};
 use serde::{Deserialize, Serialize};
 
 use crate::gql::types::{Boolean, Date, DateTime, Int, ID};
@@ -31,20 +30,20 @@ use super::{ consumption::Consumption, decimal::Decimal, page_info::ForwardPageI
 
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct PageOfTransactions {
     page_info: ForwardPageInfo,
     edges: Vec<TransactionEdge>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionEdge {
     node: Transaction
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(tag = "__typename")]
 pub enum Transaction {
   Charge(Charge),
@@ -53,19 +52,7 @@ pub enum Transaction {
   Refund(TransactionTypeInterface)
 }
 
-impl Display for Transaction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            f.write_str(&json)?;
-            Ok(())
-        }
-        else {
-            Err(std::fmt::Error)
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionTypeInterface {
   id: ID,
@@ -107,7 +94,7 @@ impl TransactionTypeInterface {
 
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Charge {
   id: ID,
@@ -149,7 +136,7 @@ impl Charge {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionAmountType {
     net: Int,
@@ -167,7 +154,7 @@ impl TransactionAmountType {
     }
 }
 
-// #[derive(Serialize, Deserialize, Debug)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 // enum StatementReversalsAfterClose {
 //     All,
@@ -177,7 +164,7 @@ impl TransactionAmountType {
 // }
 
 
-// #[derive(Serialize, Deserialize, Debug)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 // enum AccountStatementStatus {
 //     Open,
@@ -620,29 +607,28 @@ fn test_parse_page() {
   }
   "#;
 
-// let bill = Bill::from_json(json).unwrap();
-let page: PageOfTransactions = serde_json::from_str(json).unwrap();
+  // let bill = Bill::from_json(json).unwrap();
+  let page: PageOfTransactions = serde_json::from_str(json).unwrap();
 
-assert_eq!(page.page_info.has_next_page, false);
+  assert_eq!(page.page_info.has_next_page, false);
 
-if let Transaction::Charge(charge) = &page.edges[0].node {
-  assert_eq!(charge.amounts.net, Int::new(2711));
-  assert_eq!(charge.amounts.tax, Int::new(136));
-  assert_eq!(charge.amounts.gross, Int::new(2847));
-}
-else {
-  panic!("Expected first transaction to be Charge not {}", &page.edges[0].node);
-}
+  if let Transaction::Charge(charge) = &page.edges[0].node {
+    assert_eq!(charge.amounts.net, Int::new(2711));
+    assert_eq!(charge.amounts.tax, Int::new(136));
+    assert_eq!(charge.amounts.gross, Int::new(2847));
+  }
+  else {
+    panic!("Expected first transaction to be Charge not {}", &page.edges[0].node);
+  }
 
-// if let Bill::Statement(statement) = bill {
-//     assert_eq!(statement.total_credits.net_total, Int::new(1667));
-//     assert_eq!(statement.total_credits.tax_total, Int::new(85));
-//     assert_eq!(statement.total_credits.gross_total, Int::new(1752));
-// }
-// else {
-//     panic!("Expected Statement not {:?}", bill);
-// }
-
+  if let Transaction::Credit(credit) = &page.edges[3].node {
+    assert_eq!(credit.amounts.net, Int::new(478));
+    assert_eq!(credit.amounts.tax, Int::new(24));
+    assert_eq!(credit.amounts.gross, Int::new(502));
+  }
+  else {
+    panic!("Expected 4th transaction to be Credit not {}", &page.edges[0].node);
+  }
 }
 
 

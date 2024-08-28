@@ -26,11 +26,12 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use super::{error::Error, PossibleErrorType};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 struct ObtainKrakenJSONWebToken {
     // "The body payload of the Kraken Token. The same information can be obtained by using JWT decoding tools on the value of the token field."
@@ -44,13 +45,13 @@ struct ObtainKrakenJSONWebToken {
     token: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 struct ObtainKrakenJSONWebTokenWrapper {
     obtain_kraken_token: Option<ObtainKrakenJSONWebToken>
 }
 
-// #[derive(Serialize, Deserialize, Debug)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "camelCase")]
 // struct ObtainKrakenJSONWebTokenResponse {
 //     errors: Option<Vec<PossibleErrorType>>,

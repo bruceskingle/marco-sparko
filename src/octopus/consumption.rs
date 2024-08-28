@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use crate::gql::types::Date;
@@ -30,7 +31,7 @@ use super::decimal::Decimal;
 
 
 // Represents AccountUserType in the GraphQL schema
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Consumption {
   start_date: Date,
@@ -54,7 +55,7 @@ impl Consumption {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 enum ConsumptionUnit {
   #[serde(rename = "kWh")]
   KWH,

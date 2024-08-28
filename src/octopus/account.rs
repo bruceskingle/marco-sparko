@@ -22,8 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use std::{collections::HashMap, fmt::Display, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -31,7 +32,7 @@ use super::{error::Error, token::TokenManager};
 
 
 // Represents AccountUserType in the GraphQL schema
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountUser {
     pub id: String,
@@ -186,18 +187,6 @@ isOptedInToWof"#, account_field_names)
     }
 }
 
-impl Display for AccountUser {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            f.write_str(&json)?;
-            Ok(())
-        }
-        else {
-            Err(std::fmt::Error)
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAccountVar<'a> {
@@ -230,7 +219,7 @@ pub struct GetAccountVar<'a> {
 //     VOID
 //   }
 
-// #[derive(Serialize, Deserialize, Debug)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "camelCase")]
 // pub struct Address {
 //     brand: Option<String>,
@@ -241,7 +230,7 @@ pub struct GetAccountVar<'a> {
 //     billing_email: Option<String>,
 // }
 
-// #[derive(Serialize, Deserialize, Debug)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "camelCase")]
 // pub struct AccountSummaryView {
 //     brand: Option<String>,
@@ -257,13 +246,13 @@ pub struct GetAccountVar<'a> {
 //     status: AccountStatus,
 // }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountList {
     pub accounts: Vec<AccountInterface>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInterface {
     pub number: Option<String>,

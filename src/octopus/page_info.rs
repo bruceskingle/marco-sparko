@@ -22,11 +22,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 
 // Represents AccountUserType in the GraphQL schema
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct ForwardPageInfo {
     pub start_cursor: String,

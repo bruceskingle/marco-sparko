@@ -25,6 +25,7 @@ SOFTWARE.
 use std::error::Error as StdError;
 use std::fmt::{self, Display};
 use std::num::{ParseFloatError, ParseIntError};
+use display_json::DisplayAsJsonPretty;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -105,21 +106,21 @@ impl From<serde_json::Error> for Error {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Location {
     pub line: i32,
     pub column: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationError {
        pub message: String,
        pub input_path: Vec<String>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Extensions {
     pub error_type: String,
@@ -129,23 +130,11 @@ pub struct Extensions {
     pub validation_errors: Vec<ValidationError>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphQLJsonError {
     pub message: Option<String>,
     pub locations: Vec<Location>,
     pub path: Vec<String>,
     pub extensions: Extensions,
-}
-
-impl Display for GraphQLJsonError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            f.write_str(&json)?;
-            Ok(())
-        }
-        else {
-            Err(std::fmt::Error)
-        }
-    }
 }

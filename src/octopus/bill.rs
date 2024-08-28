@@ -24,6 +24,7 @@ SOFTWARE.
 
 use std::fmt::Display;
 
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use crate::gql::types::{Date, Int, ID};
@@ -31,7 +32,7 @@ use super::{ page_info::ForwardPageInfo, Error};
 
 
 // Represents AccountUserType in the GraphQL schema
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct BillResults {
     status: String,
@@ -40,20 +41,20 @@ pub struct BillResults {
     bills: PageOfBills
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct PageOfBills {
     page_info: ForwardPageInfo,
     edges: Vec<BillEdge>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct BillEdge {
     node: Bill
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "billType")]
 pub enum Bill {
@@ -78,7 +79,7 @@ pub enum Bill {
 //     }
 // }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct BillInterfaceType {
     id: ID,
@@ -100,7 +101,7 @@ pub struct BillInterfaceType {
     issued_date: Date
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct StatementType {
     id: ID,
@@ -195,19 +196,19 @@ totalCredits
     }
 }
 
-impl Display for StatementType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            f.write_str(&json)?;
-            Ok(())
-        }
-        else {
-            Err(std::fmt::Error)
-        }
-    }
-}
+// impl Display for StatementType {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         if let Ok(json) = serde_json::to_string_pretty(self) {
+//             f.write_str(&json)?;
+//             Ok(())
+//         }
+//         else {
+//             Err(std::fmt::Error)
+//         }
+//     }
+// }
 
-// #[derive(Serialize, Deserialize, Debug)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 // enum BillTypeEnum {
 //     Statement,
@@ -216,7 +217,7 @@ impl Display for StatementType {
 //     PreKraken
 //   }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct StatementTotalType {
     net_total: Int,
@@ -234,7 +235,7 @@ impl StatementTotalType {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum StatementReversalsAfterClose {
     All,
@@ -244,7 +245,7 @@ enum StatementReversalsAfterClose {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum AccountStatementStatus {
     Open,
@@ -252,7 +253,7 @@ enum AccountStatementStatus {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct HeldStatus {
     is_held: bool,
