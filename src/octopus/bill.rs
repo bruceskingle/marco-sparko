@@ -27,7 +27,7 @@ use std::collections::BTreeMap;
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
-use crate::gql::types::{Date, Int, ID};
+use crate::{gql::types::{Date, Int, ID}, octopus::decimal::Decimal};
 use super::{ page_info::ForwardPageInfo, transaction::PageOfTransactions, transaction::Transaction};
 
 // // Represents AccountUserType in the GraphQL schema
@@ -345,6 +345,10 @@ impl StatementType {
                     charge.consumption.end_date,
                     charge.consumption.quantity
                 );
+
+                let rate = Decimal::from_int(&txn.amounts.gross) / charge.consumption.quantity;
+
+                print!(" {:>12}", rate);
             }
             println!();
         }

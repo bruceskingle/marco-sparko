@@ -23,28 +23,75 @@ SOFTWARE.
 ******************************************************************************/
 
 use std::fmt::{self, Display};
+use std::ops::{Add, Deref, Div, Mul, Sub};
 use std::str::FromStr;
 use serde::{Deserializer, Serialize, Serializer};
 use serde::de::{self, Visitor};
 
+use crate::gql::types::Int;
+
 use super::Error;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Decimal(rust_decimal::Decimal);
 
 impl Decimal {
 
   pub fn new(num: i64, scale: u32) -> Decimal {
     Decimal (rust_decimal::Decimal::new(num, scale))
-    }
   }
+
+  pub fn from_int(i: &Int) -> Decimal {
+    Decimal::new(**i as i64, 0)
+  }
+}
+
+impl Div for Decimal {
+    type Output = Decimal;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Decimal(self.0.div(rhs.0))
+    }
+}
+
+impl Mul for Decimal {
+    type Output = Decimal;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Decimal(self.0.mul(rhs.0))
+    }
+}
+
+impl Add for Decimal {
+    type Output = Decimal;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Decimal(self.0.add(rhs.0))
+    }
+}
+
+impl Sub for Decimal {
+    type Output = Decimal;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Decimal(self.0.sub(rhs.0))
+    }
+}
 
 impl Display for Decimal {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     // f.pad(&format!("{}.{}", self.int, self.dec))
     self.0.fmt(f)
   }
+}
+
+impl Deref for Decimal {
+    type Target = rust_decimal::Decimal;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl FromStr for Decimal {
