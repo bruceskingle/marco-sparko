@@ -276,92 +276,53 @@ impl Client {
 
         match &result.bills.edges[0].node {
             bill::Bill::Statement(statement) => {
-                
+                statement.print();
 
-                println!("Energy Account Statement");
-                println!("========================");
-                println!("Date                {}", statement.issued_date);
-                println!("Ref                 {}", statement.id);
-                println!("From                {}", statement.from_date);
-                println!("To                  {}", statement.to_date);
+                // println!("Energy Account Statement");
+                // println!("========================");
+                // println!("Date                {}", statement.issued_date);
+                // println!("Ref                 {}", statement.id);
+                // println!("From                {}", statement.from_date);
+                // println!("To                  {}", statement.to_date);
 
-                // let map = BTreeMap::new();
+                // let mut map = BTreeMap::new();
                 // for edge in &statement.transactions.edges {
+                //     let txn = edge.node.as_transaction();
+
+                //     map.insert(&txn.posted_date, &edge.node);
                 // }
 
 
-                for edge in &statement.transactions.edges {
-                    match &edge.node {
-                        transaction::Transaction::Charge(txn) => {
-                            print!("{:20} {} ", 
-                                txn.title,
-                                txn.posted_date
-                            );
-                            print!("{}-{} {:10} ", 
-                                txn.consumption.start_date,
-                                txn.consumption.end_date,
-                                txn.consumption.quantity
-                            );
-                            if *txn.is_export {
-                                print!("export ");
-                            }
-                            else {
-                                print!("import ");
-                            }
-                            println!("{:10} {:10} {:10} {:10}", 
-                                txn.amounts.net,
-                                txn.amounts.tax, 
-                                txn.amounts.gross,
-                                txn.balance_carried_forward
-                                );
-                        },
-                        transaction::Transaction::Credit(txn) => {
-                            print!("{:20} {} ", 
-                                txn.title,
-                                txn.posted_date
-                            );
-                            print!("{:39} ", 
-                                ""
-                            );
-                            println!("{:10} {:10} {:10} {:10}", 
-                                txn.amounts.net,
-                                txn.amounts.tax, 
-                                txn.amounts.gross,
-                                txn.balance_carried_forward
-                             );
-                        },
-                        transaction::Transaction::Payment(txn) => {
-                            print!("{:20} {} ", 
-                                txn.title,
-                                txn.posted_date
-                            );
-                            print!("{:39} ", 
-                                ""
-                            );
-                            println!("{:10} {:10} {:10} {:10}", 
-                                txn.amounts.net,
-                                txn.amounts.tax, 
-                                txn.amounts.gross,
-                                txn.balance_carried_forward
-                             );
-                        },
-                        transaction::Transaction::Refund(txn) => {
-                            print!("{:20} {} ", 
-                                txn.title,
-                                txn.posted_date
-                            );
-                            print!("{:39} ", 
-                                ""
-                            );
-                            println!("{:10} {:10} {:10} {:10}", 
-                                txn.amounts.net,
-                                txn.amounts.tax, 
-                                txn.amounts.gross,
-                                txn.balance_carried_forward
-                             );
-                        },
-                    }
-                } 
+                // for transaction in &mut map.values() {
+                //     let txn = transaction.as_transaction();
+
+                //     print!("{:20} {:10} ", 
+                //                 txn.title,
+                //                 txn.posted_date
+                //             );
+                //     print!("{:10} {:10} {:10} {:10}", 
+                //         txn.amounts.net,
+                //         txn.amounts.tax, 
+                //         txn.amounts.gross,
+                //         txn.balance_carried_forward
+                //         );
+
+                //     if let transaction::Transaction::Charge(charge) = &transaction {
+                            
+                //         print!("{}-{} {:10} ", 
+                //             charge.consumption.start_date,
+                //             charge.consumption.end_date,
+                //             charge.consumption.quantity
+                //         );
+                //         if *charge.is_export {
+                //             print!("export ");
+                //         }
+                //         else {
+                //             print!("import ");
+                //         }
+                //     }
+                //     println!();
+                // } 
             },
         };
 

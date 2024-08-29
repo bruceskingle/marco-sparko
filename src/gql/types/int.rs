@@ -40,6 +40,26 @@ impl Int {
   pub fn new(s: i32) -> Int {
     Int(s)
   }
+
+  pub fn as_decimal(&self, decimals: usize) -> String{
+    // let f = 10 ^ decimals as u32;
+    let mut s = format!("{}", self.0);
+
+    let mut l = s.len();
+
+    if l <= decimals {
+      while l < decimals{
+        s.insert(0, '0');
+        l += 1;
+      }
+      s.insert(0, '.');
+      s.insert(0, '0');
+    }
+    else {
+      s.insert(s.len() - decimals, '.');
+    }
+    s
+  }
 }
 
 impl Deref for Int {
@@ -65,7 +85,7 @@ impl PartialOrd for Int {
 
 impl Display for Int {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-      f.write_fmt(format_args!("{}", self.0))
+      self.0.fmt(f)
     }
   }
   
@@ -179,5 +199,12 @@ impl Display for Int {
         assert_eq!(serde_json::to_string(&MyStruct {
           value: Int(42)
         }).unwrap(), "{\"value\":42}");
+      }
+  
+      #[test]
+      fn test_as_decimal() {
+        assert_eq!(Int(1).as_decimal(2), "0.01");
+        assert_eq!(Int(12).as_decimal(2), "0.12");
+        assert_eq!(Int(4212).as_decimal(2), "42.12");
       }
   }

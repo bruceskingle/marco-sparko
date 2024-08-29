@@ -82,11 +82,20 @@ impl PartialOrd for Date {
     }
 }
 
+impl Eq for Date {
+}
+
+impl Ord for Date {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(other)
+    }
+}
+
 
 impl Display for Date {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       match self.0.format(&FORMAT) {
-        Ok(s) => f.write_str(&s),
+        Ok(s) => f.pad(&s),
         Err(error) => Err(std::fmt::Error::custom(format!("Can't format Date: {}", error))),
       }
     }

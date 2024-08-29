@@ -26,6 +26,26 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug unit tests in 'tests::test_handle_bill_total'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "octopus::tests::test_handle_bill_total",
+                    "--no-run",
+                    "--lib",
+                    "--package=marco-sparko"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug executable 'marco-sparko'",
             "cargo": {
                 "args": [

@@ -62,11 +62,8 @@ impl TransactionEdge {
         format!(r#"
         node {{
             {}
-            ... on Charge {{
-              {}
-            }}
         }}
-        "#, TransactionTypeInterface::get_field_names(), Charge::get_field_names())
+        "#, AbstractTransaction::get_field_names())
     }
 }
 
@@ -74,11 +71,21 @@ impl TransactionEdge {
 #[serde(tag = "__typename")]
 pub enum Transaction {
   Charge(Charge),
-  Credit(TransactionTypeInterface),
-  Payment(TransactionTypeInterface),
-  Refund(TransactionTypeInterface)
+  Credit(AbstractTransaction),
+  Payment(AbstractTransaction),
+  Refund(AbstractTransaction)
 }
 
+impl Transaction {
+  pub fn as_transaction(&self) -> &TransactionTypeInterface {
+    match self {
+      Transaction::Charge(txn) => &txn.transaction,
+      Transaction::Credit(txn) => &txn.transaction,
+      Transaction::Payment(txn) => &txn.transaction,
+      Transaction::Refund(txn) => &txn.transaction,
+    }
+  }
+}
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
@@ -121,26 +128,29 @@ impl TransactionTypeInterface {
   }
 }
 
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct AbstractTransaction{
+  #[serde(flatten)]
+  pub transaction: TransactionTypeInterface,
+}
 
-
-
+impl AbstractTransaction {
+  pub fn get_field_names() -> String {
+    format!(r#"
+        {}
+        ... on Charge {{
+          {}
+        }}
+    "#, TransactionTypeInterface::get_field_names(), Charge::get_field_names())
+  }
+}
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Charge {
-    pub id: ID,
-    pub posted_date: Date,
-    pub created_at: DateTime,
-    pub account_number: String,
-    pub amounts: TransactionAmountType,
-    pub balance_carried_forward: Int,
-    pub is_held: Boolean,
-    pub is_issued: Boolean,
-    pub title: String,
-    pub billing_document_identifier: ID,
-    pub is_reversed: Boolean,
-    pub has_statement: Boolean,
-    pub note: Option<String>,
+    #[serde(flatten)]
+    pub transaction: TransactionTypeInterface,
     pub consumption: Consumption,
     pub is_export: Boolean
 }
@@ -291,18 +301,18 @@ fn test_parse_charge_transaction() {
   "#;
 
   let charge: Charge = serde_json::from_str(json).unwrap();
-  assert_eq!(charge.amounts.net, Int::new(2711));
-  assert_eq!(charge.amounts.tax, Int::new(136));
-  assert_eq!(charge.amounts.gross, Int::new(2847));
+  assert_eq!(charge.transaction.amounts.net, Int::new(2711));
+  assert_eq!(charge.transaction.amounts.tax, Int::new(136));
+  assert_eq!(charge.transaction.amounts.gross, Int::new(2847));
 
   assert_eq!(charge.consumption.unit, ConsumptionUnit::KWH);
 
   let transaction: Transaction = serde_json::from_str(json).unwrap();
 
   if let Transaction::Charge(charge) = transaction {
-      assert_eq!(charge.amounts.net, Int::new(2711));
-      assert_eq!(charge.amounts.tax, Int::new(136));
-      assert_eq!(charge.amounts.gross, Int::new(2847));
+      assert_eq!(charge.transaction.amounts.net, Int::new(2711));
+      assert_eq!(charge.transaction.amounts.tax, Int::new(136));
+      assert_eq!(charge.transaction.amounts.gross, Int::new(2847));
   }
   else {
       panic!("Expected Charge not {:?}", transaction);
@@ -343,9 +353,9 @@ fn test_parse_credit_transaction() {
   let transaction: Transaction = serde_json::from_str(json).unwrap();
 
   if let Transaction::Credit(credit) = transaction {
-      assert_eq!(credit.amounts.net, Int::new(478));
-      assert_eq!(credit.amounts.tax, Int::new(24));
-      assert_eq!(credit.amounts.gross, Int::new(502));
+      assert_eq!(credit.transaction.amounts.net, Int::new(478));
+      assert_eq!(credit.transaction.amounts.tax, Int::new(24));
+      assert_eq!(credit.transaction.amounts.gross, Int::new(502));
   }
   else {
       panic!("Expected Credit not {:?}", transaction);
@@ -637,18 +647,18 @@ fn test_parse_page() {
   assert_eq!(page.page_info.has_next_page, false);
 
   if let Transaction::Charge(charge) = &page.edges[0].node {
-    assert_eq!(charge.amounts.net, Int::new(2711));
-    assert_eq!(charge.amounts.tax, Int::new(136));
-    assert_eq!(charge.amounts.gross, Int::new(2847));
+    assert_eq!(charge.transaction.amounts.net, Int::new(2711));
+    assert_eq!(charge.transaction.amounts.tax, Int::new(136));
+    assert_eq!(charge.transaction.amounts.gross, Int::new(2847));
   }
   else {
     panic!("Expected first transaction to be Charge not {}", &page.edges[0].node);
   }
 
   if let Transaction::Credit(credit) = &page.edges[3].node {
-    assert_eq!(credit.amounts.net, Int::new(478));
-    assert_eq!(credit.amounts.tax, Int::new(24));
-    assert_eq!(credit.amounts.gross, Int::new(502));
+    assert_eq!(credit.transaction.amounts.net, Int::new(478));
+    assert_eq!(credit.transaction.amounts.tax, Int::new(24));
+    assert_eq!(credit.transaction.amounts.gross, Int::new(502));
   }
   else {
     panic!("Expected 4th transaction to be Credit not {}", &page.edges[0].node);

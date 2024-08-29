@@ -22,11 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
+use std::collections::BTreeMap;
+
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use crate::gql::types::{Date, Int, ID};
-use super::{ page_info::ForwardPageInfo, transaction::PageOfTransactions};
+use super::{ page_info::ForwardPageInfo, transaction::PageOfTransactions, transaction::Transaction};
 
 // // Represents AccountUserType in the GraphQL schema
 // #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -118,6 +120,12 @@ impl Bill {
             {}
         }}
         "#, BillInterfaceType::get_field_names(), StatementType::get_field_names())
+    }
+
+    pub fn print(&self) {
+        match self {
+            Bill::Statement(bill) => bill.print(),
+        };
     }
 }
 
@@ -272,6 +280,75 @@ impl StatementType {
             StatementTotalType::get_field_names(),
             StatementTotalType::get_field_names())
     }
+
+    pub fn print(&self) {
+        println!("Energy Account Statement");
+        println!("========================");
+        println!("Date                 {}", self.issued_date);
+        println!("Ref                  {}", self.id);
+        println!("From                 {}", self.from_date);
+        println!("To                   {}", self.to_date);
+        println!();
+
+        // let mut map = BTreeMap::new();
+        // for edge in &self.transactions.edges {
+        //     let txn = edge.node.as_transaction();
+
+        //     map.insert(&txn.posted_date, &edge.node);
+        // }
+
+        print!("{:20} {:10} ", 
+            "Description",
+            "Posted"
+        );
+        print!("{:>10} {:>10} {:>10} {:>10} ", 
+            "Net",
+            "Tax", 
+            "Total",
+            "Balance"
+        );
+        print!("{:10} {:10} {:>12} ", 
+            "From",
+            "To",
+            "Units"
+        );
+        println!();
+
+
+        // for transaction in &mut map.values() {
+        for edge in (&self.transactions.edges).into_iter().rev() {
+            let transaction = &edge.node;
+            let txn = transaction.as_transaction();
+            if let Transaction::Charge(charge) = &transaction {
+                if *charge.is_export {
+                    print!("{} {:width$} ", txn.title, "Export", width = 20 - txn.title.len() - 1);
+                }
+                else {
+                    print!("{} {:width$} ", txn.title, "Import",width =  20 - txn.title.len() - 1);
+                }
+            }
+            else {
+                print!("{:20} ", txn.title);
+            }
+            print!("{:10} ", 
+                        txn.posted_date
+                    );
+            print!("{:>10} {:>10} {:>10} {:>10} ", 
+                txn.amounts.net.as_decimal(2),
+                txn.amounts.tax.as_decimal(2), 
+                txn.amounts.gross.as_decimal(2),
+                txn.balance_carried_forward.as_decimal(2)
+            );
+            if let Transaction::Charge(charge) = &transaction {
+                print!("{:10} {:10} {:>12}", 
+                    charge.consumption.start_date,
+                    charge.consumption.end_date,
+                    charge.consumption.quantity
+                );
+            }
+            println!();
+        }
+    }
 }
 
 // impl Display for StatementType {
@@ -315,7 +392,7 @@ impl StatementTotalType {
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum StatementReversalsAfterClose {
+pub enum StatementReversalsAfterClose {
     All,
     Some,
     None,
@@ -325,7 +402,7 @@ enum StatementReversalsAfterClose {
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum AccountStatementStatus {
+pub enum AccountStatementStatus {
     Open,
     Closed
 }

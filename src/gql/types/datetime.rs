@@ -75,11 +75,20 @@ impl PartialOrd for DateTime {
     }
 }
 
+impl Eq for DateTime {
+}
+
+impl Ord for DateTime {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(other)
+    }
+}
+
 
 impl Display for DateTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       match self.0.format(&FORMAT) {
-        Ok(s) => f.write_str(&s),
+        Ok(s) => f.pad(&s),
         Err(error) => Err(std::fmt::Error::custom(format!("Can't format OffsetDateTime: {}", error))),
       }
     }
