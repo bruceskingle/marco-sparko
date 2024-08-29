@@ -33,14 +33,41 @@ use super::{ consumption::Consumption, decimal::Decimal, page_info::ForwardPageI
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct PageOfTransactions {
-    page_info: ForwardPageInfo,
-    edges: Vec<TransactionEdge>
+    pub page_info: ForwardPageInfo,
+    pub edges: Vec<TransactionEdge>
+}
+
+impl PageOfTransactions {
+  pub fn get_field_names() -> String {
+    format!(r#"
+    pageInfo {{
+      {}
+    }}
+    edges {{
+      {}
+    }}
+    "#, ForwardPageInfo::get_field_names(),
+    TransactionEdge::get_field_names())
+}
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionEdge {
-    node: Transaction
+    pub node: Transaction
+}
+
+impl TransactionEdge {
+    pub fn get_field_names() -> String {
+        format!(r#"
+        node {{
+            {}
+            ... on Charge {{
+              {}
+            }}
+        }}
+        "#, TransactionTypeInterface::get_field_names(), Charge::get_field_names())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -52,32 +79,35 @@ pub enum Transaction {
   Refund(TransactionTypeInterface)
 }
 
+
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionTypeInterface {
-  id: ID,
-  posted_date: Date,
-  created_at: DateTime,
-  account_number: String,
-  amounts: TransactionAmountType,
-  balance_carried_forward: Int,
-  is_held: Boolean,
-  is_issued: Boolean,
-  title: String,
-  billing_document_identifier: ID,
-  is_reversed: Boolean,
-  has_statement: Boolean,
-  note: Option<String>
+    pub id: ID,
+    pub posted_date: Date,
+    pub created_at: DateTime,
+    pub account_number: String,
+    pub amounts: TransactionAmountType,
+    pub balance_carried_forward: Int,
+    pub is_held: Boolean,
+    pub is_issued: Boolean,
+    pub title: String,
+    pub billing_document_identifier: ID,
+    pub is_reversed: Boolean,
+    pub has_statement: Boolean,
+    pub note: Option<String>
 }
 
 impl TransactionTypeInterface {
-  pub fn get_field_names() -> &'static str {
-    r#"
+  pub fn get_field_names() -> String {
+    format!(r#"
       id
       postedDate
       createdAt
       accountNumber
-      amounts
+      amounts {{
+        {}
+      }}
       balanceCarriedForward
       isHeld
       isIssued
@@ -86,7 +116,8 @@ impl TransactionTypeInterface {
       isReversed,
       hasStatement
       note
-    "#
+      __typename
+    "#, TransactionAmountType::get_field_names())
   }
 }
 
@@ -97,51 +128,40 @@ impl TransactionTypeInterface {
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Charge {
-  id: ID,
-  posted_date: Date,
-  created_at: DateTime,
-  account_number: String,
-  amounts: TransactionAmountType,
-  balance_carried_forward: Int,
-  is_held: Boolean,
-  is_issued: Boolean,
-  title: String,
-  billing_document_identifier: ID,
-  is_reversed: Boolean,
-  has_statement: Boolean,
-  note: Option<String>,
-  consumption: Consumption,
-  is_export: Boolean
+    pub id: ID,
+    pub posted_date: Date,
+    pub created_at: DateTime,
+    pub account_number: String,
+    pub amounts: TransactionAmountType,
+    pub balance_carried_forward: Int,
+    pub is_held: Boolean,
+    pub is_issued: Boolean,
+    pub title: String,
+    pub billing_document_identifier: ID,
+    pub is_reversed: Boolean,
+    pub has_statement: Boolean,
+    pub note: Option<String>,
+    pub consumption: Consumption,
+    pub is_export: Boolean
 }
 
 impl Charge {
-    pub fn get_field_names() -> &'static str {
-      r#"
-        id
-        postedDate
-        createdAt
-        accountNumber
-        amounts
-        balanceCarriedForward
-        isHeld
-        isIssued
-        title
-        billingDocumentIdentifier
-        isReversed,
-        hasStatement
-        note
-        consumption
+    pub fn get_field_names() -> String {
+      format!(r#"
+        consumption {{
+          {}
+        }}
         isExport
-      "#
+      "#, Consumption::get_field_names())
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionAmountType {
-    net: Int,
-    tax: Int,
-    gross: Int,
+    pub net: Int,
+    pub tax: Int,
+    pub gross: Int,
 }
 
 impl TransactionAmountType {
@@ -173,6 +193,8 @@ impl TransactionAmountType {
 
 #[cfg(test)]
 mod tests {
+    use crate::octopus::consumption::ConsumptionUnit;
+
     use super::*;
 
     #[test]
@@ -272,6 +294,8 @@ fn test_parse_charge_transaction() {
   assert_eq!(charge.amounts.net, Int::new(2711));
   assert_eq!(charge.amounts.tax, Int::new(136));
   assert_eq!(charge.amounts.gross, Int::new(2847));
+
+  assert_eq!(charge.consumption.unit, ConsumptionUnit::KWH);
 
   let transaction: Transaction = serde_json::from_str(json).unwrap();
 

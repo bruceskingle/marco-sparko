@@ -28,8 +28,66 @@ use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use super::{error::Error, token::TokenManager};
+use super::{bill::BillResults, error::Error, token::TokenManager};
 
+
+pub struct AccountManager {
+    pub account_number: String
+}
+
+impl AccountManager {
+    pub fn new(account_number: &str) -> AccountManager {
+        AccountManager {
+            account_number: account_number.to_string()
+        }
+    }
+
+    pub async fn get_latest_bill(
+        &self,
+        gql_client: &Arc<crate::gql::Client>,
+        token_manager: &mut TokenManager,
+    ) -> Result<BillResults, Error> {
+    let operation_name = "getAccountLatestBill";
+    let query = format!(
+        r#"query {}($accountNumber: String!)
+                        {{
+                            account(accountNumber: $accountNumber)
+                            {{
+                                {}
+                            }}
+                        }}"#,
+        operation_name, BillResults::get_field_names()
+    );
+
+    println!("QUERY {}", query);
+
+    let mut headers = HashMap::new();
+    // let token = String::from(self.get_authenticator().await?);
+    let token = &*token_manager.get_authenticator().await?;
+    headers.insert("Authorization", token);
+
+    let href = Some(&headers);
+
+    let variables = GetAccountVar {
+        account_number: &self.account_number,
+    };
+
+    let mut response = gql_client
+        .call(operation_name, &query, &variables, href)
+        .await?;
+
+        println!("\nHashMap response\n===========================\n{:?}\n===========================\n", response);
+
+
+    if let Some(result_json) = response.remove("account") {
+        let result: BillResults = serde_json::from_value(result_json)?;
+
+        Ok(result)
+    } else {
+        return Err(Error::InternalError("No result found"));
+    }
+    }
+}
 
 // Represents AccountUserType in the GraphQL schema
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]

@@ -3315,7 +3315,316 @@ query
 
 ### Example Response
 ```json
-{}
+{
+    "account": {
+      "balance": 39305,
+      "bills": {
+        "edges": [
+          {
+            "node": {
+              "closingBalance": 39303,
+              "consumptionEndDate": null,
+              "consumptionStartDate": null,
+              "fromDate": "2024-07-22",
+              "heldStatus": {
+                "isHeld": false,
+                "reason": null
+              },
+              "id": "236646425",
+              "isExternalBill": false,
+              "issuedDate": "2024-08-22",
+              "openingBalance": 17791,
+              "paymentDueDate": "2024-09-06",
+              "reversalsAfterClose": "NONE",
+              "status": "CLOSED",
+              "toAddress": "dan@archer.org",
+              "toDate": "2024-08-21",
+              "totalCharges": {
+                "grossTotal": 5030,
+                "netTotal": 4546,
+                "taxTotal": 484
+              },
+              "totalCredits": {
+                "grossTotal": 1752,
+                "netTotal": 1667,
+                "taxTotal": 85
+              },
+              "transactions": {
+                "edges": [
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 2847,
+                        "net": 2711,
+                        "tax": 136
+                      },
+                      "balanceCarriedForward": 39303,
+                      "billingDocumentIdentifier": "236646425",
+                      "consumption": {
+                        "endDate": "2024-08-20",
+                        "quantity": "360.7100",
+                        "startDate": "2024-07-21",
+                        "supplyCharge": 0,
+                        "unit": "kWh",
+                        "usageCost": 0
+                      },
+                      "createdAt": "2024-08-21T21:36:10.492186+00:00",
+                      "hasStatement": true,
+                      "id": "-1871040199",
+                      "isExport": false,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-08-20",
+                      "title": "Gas"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": -2716,
+                        "net": -2716,
+                        "tax": 0
+                      },
+                      "balanceCarriedForward": 42150,
+                      "billingDocumentIdentifier": "236646425",
+                      "consumption": {
+                        "endDate": "2024-08-20",
+                        "quantity": "181.0500",
+                        "startDate": "2024-08-13",
+                        "supplyCharge": 0,
+                        "unit": "kWh",
+                        "usageCost": 0
+                      },
+                      "createdAt": "2024-08-21T21:32:19.902722+00:00",
+                      "hasStatement": true,
+                      "id": "-1871043601",
+                      "isExport": true,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-08-20",
+                      "title": "Electricity"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 2997,
+                        "net": 2854,
+                        "tax": 143
+                      },
+                      "balanceCarriedForward": 39434,
+                      "billingDocumentIdentifier": "236646425",
+                      "consumption": {
+                        "endDate": "2024-08-20",
+                        "quantity": "334.7100",
+                        "startDate": "2024-08-08",
+                        "supplyCharge": 0,
+                        "unit": "kWh",
+                        "usageCost": 0
+                      },
+                      "createdAt": "2024-08-21T21:32:01.991119+00:00",
+                      "hasStatement": true,
+                      "id": "-1871044025",
+                      "isExport": false,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-08-20",
+                      "title": "Electricity"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 502,
+                        "net": 478,
+                        "tax": 24
+                      },
+                      "balanceCarriedForward": 42431,
+                      "billingDocumentIdentifier": "236646425",
+                      "createdAt": "2024-08-15T11:55:19.400763+00:00",
+                      "hasStatement": true,
+                      "id": "-1896251302",
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-08-14",
+                      "title": "Powerups Reward"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": -2407,
+                        "net": -2407,
+                        "tax": 0
+                      },
+                      "balanceCarriedForward": 41929,
+                      "billingDocumentIdentifier": "236646425",
+                      "consumption": {
+                        "endDate": "2024-08-12",
+                        "quantity": "300.8200",
+                        "startDate": "2024-07-21",
+                        "supplyCharge": 0,
+                        "unit": "kWh",
+                        "usageCost": 0
+                      },
+                      "createdAt": "2024-08-21T21:32:19.073366+00:00",
+                      "hasStatement": true,
+                      "id": "-1871043620",
+                      "isExport": true,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-08-12",
+                      "title": "Electricity"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 4309,
+                        "net": 4104,
+                        "tax": 205
+                      },
+                      "balanceCarriedForward": 39522,
+                      "billingDocumentIdentifier": "236646425",
+                      "consumption": {
+                        "endDate": "2024-08-07",
+                        "quantity": "322.5100",
+                        "startDate": "2024-07-21",
+                        "supplyCharge": 0,
+                        "unit": "kWh",
+                        "usageCost": 0
+                      },
+                      "createdAt": "2024-08-21T21:32:01.008991+00:00",
+                      "hasStatement": true,
+                      "id": "-1871044052",
+                      "isExport": false,
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-08-07",
+                      "title": "Electricity"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 0,
+                        "net": 24790,
+                        "tax": 0
+                      },
+                      "balanceCarriedForward": 43831,
+                      "billingDocumentIdentifier": "236646425",
+                      "createdAt": "2024-08-01T03:09:50.202838+00:00",
+                      "hasStatement": true,
+                      "id": "-1949392858",
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": null,
+                      "postedDate": "2024-07-29",
+                      "title": "Direct debit"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 571,
+                        "net": 543,
+                        "tax": 28
+                      },
+                      "balanceCarriedForward": 19041,
+                      "billingDocumentIdentifier": "236646425",
+                      "createdAt": "2024-07-25T10:53:30.897903+00:00",
+                      "hasStatement": true,
+                      "id": "-1973989678",
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-07-24",
+                      "title": "Powerups Reward"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 186,
+                        "net": 177,
+                        "tax": 9
+                      },
+                      "balanceCarriedForward": 18470,
+                      "billingDocumentIdentifier": "236646425",
+                      "createdAt": "2024-07-25T10:43:02.339290+00:00",
+                      "hasStatement": true,
+                      "id": "-1974036696",
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-07-24",
+                      "title": "Powerups Reward"
+                    }
+                  },
+                  {
+                    "node": {
+                      "accountNumber": "A-B1C2D34E",
+                      "amounts": {
+                        "gross": 493,
+                        "net": 469,
+                        "tax": 24
+                      },
+                      "balanceCarriedForward": 18284,
+                      "billingDocumentIdentifier": "236646425",
+                      "createdAt": "2024-07-25T10:17:07.255688+00:00",
+                      "hasStatement": true,
+                      "id": "-1974103763",
+                      "isHeld": false,
+                      "isIssued": true,
+                      "isReversed": false,
+                      "note": "",
+                      "postedDate": "2024-07-24",
+                      "title": "Powerups Reward"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "startCursor": "YXJyYXljb25uZWN0aW9uOjA="
+                }
+              },
+              "userId": 3235447
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": true,
+          "startCursor": "YXJyYXljb25uZWN0aW9uOjA="
+        }
+      },
+      "number": "A-B1C2D34E",
+      "status": "ACTIVE"
+    }
+  }
 ```
 Description
 

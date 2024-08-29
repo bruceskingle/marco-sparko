@@ -278,10 +278,7 @@ mod tests {
             if let Error::GraphQLError(gql_error) = octopus_error {
 
                 if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
-                    let x = json_errors.get(0).unwrap();
-                    let y = &x.extensions;
-                    let x = &y.error_code;
-
+                    let x = json_errors.get(0).unwrap().extensions.error_code.as_ref().unwrap();
                     assert_eq!(x, "KT-CT-1139");
                 }
                 else {
@@ -323,10 +320,7 @@ mod tests {
             if let Error::GraphQLError(gql_error) = octopus_error {
 
                 if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
-                    let x = json_errors.get(0).unwrap();
-                    let y = &x.extensions;
-                    let x = &y.error_code;
-
+                    let x = json_errors.get(0).unwrap().extensions.error_code.as_ref().unwrap();
                     assert_eq!(x, "KT-CT-1135");
                 }
                 else {
@@ -386,11 +380,8 @@ mod tests {
             if let Error::GraphQLError(gql_error) = octopus_error {
 
                 if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
-                    let x = json_errors.get(0).unwrap();
-                    let y = &x.extensions;
-                    let x = &y.error_code;
-
-                    assert_eq!(x, "KT-CT-1135");
+                    let x = json_errors.get(0).unwrap().extensions.error_code.as_ref().unwrap();
+                     assert_eq!(x, "KT-CT-1135");
                 }
                 else {
                     panic!("Expected GraphQLError KT-CT-1139 got <{:?}>", &gql_error);

@@ -41,14 +41,22 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            
             Error::GraphQLError(err_list) => {
+                
                 f.write_str("GraphQLError[\n")?;
 
+                match serde_json::to_string_pretty(&err_list) {
+                    Ok(json) => {
+                        f.write_str(&json)?;
+                    },
+                    Err(_) => {
+                        for err in err_list {
+                            f.write_fmt(format_args!(" [{}]\n", err))?;
+                        }
+                    },
+                };
                 
-                
-                for err in err_list {
-                    f.write_fmt(format_args!(" [{}]\n", err))?;
-                }
                 f.write_str("]\n")
             },
             Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
@@ -123,11 +131,11 @@ pub struct ValidationError {
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Extensions {
-    pub error_type: String,
-    pub error_code: String,
-    pub error_description: String,
-    pub error_class: String,
-    pub validation_errors: Vec<ValidationError>
+    pub error_type: Option<String>,
+    pub error_code: Option<String>,
+    pub error_description: Option<String>,
+    pub error_class: Option<String>,
+    pub validation_errors: Option<Vec<ValidationError>>
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]

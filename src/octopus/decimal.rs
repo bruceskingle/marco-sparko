@@ -24,16 +24,27 @@ SOFTWARE.
 
 use std::fmt::{self, Display};
 use std::str::FromStr;
-use serde::Deserializer;
+use serde::{Deserializer, Serialize, Serializer};
 use serde::de::{self, Visitor};
 
 use super::Error;
 
 
-#[derive(serde::Serialize, Debug)]
+#[derive(Debug)]
 pub struct Decimal {
   int: i32,
   dec: u32
+}
+
+impl Decimal {
+
+  pub fn new(int: i32,
+    dec: u32) -> Decimal {
+      Decimal {
+        int,
+        dec
+      }
+    }
 }
 
 impl Display for Decimal {
@@ -102,6 +113,17 @@ impl<'de> serde::Deserialize<'de> for Decimal {
     }
 }
 
+
+
+impl Serialize for Decimal {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+      S: Serializer,
+  {
+    serializer.serialize_str(&format!("{}.{}", self.int, self.dec))
+  }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,5 +179,12 @@ mod tests {
       expect_parse(r#"{ "decimal": "876.444" }"#, 876, 444);
       
       expect_parse_error(r#"{ "decimal": "0.1.2" }"#);
+    }
+  
+    #[test]
+    fn test_serialize() {
+      assert_eq!(serde_json::to_string(&MyStruct {
+        decimal: Decimal::new(3, 14159)
+      }).unwrap(), "{\"decimal\":\"3.14159\"}");
     }
 }

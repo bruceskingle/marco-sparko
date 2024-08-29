@@ -110,15 +110,25 @@ impl Client {
             return Err(Error::HttpError(status));
         }
 
-        let response_json = response.json().await?;
+        let response_json: serde_json::Value = response.json().await?;
 
-        println!("response {:?}", response_json);
+        println!("response {}", serde_json::to_string_pretty(&response_json)?);
 
-        let graphql_response:  GraphQLResponse = response_json;
+        let graphql_response: GraphQLResponse = serde_json::from_value(response_json)?;
+
+
+
+
+
+        // let response_json = response.json().await?;
+
+        // println!("response {:?}", response_json);
+
+        // let graphql_response:  GraphQLResponse = response_json;
 
         if let Some(errors) = graphql_response.errors {
             
-            println!("\nerrors:   {:?}", errors);
+            println!("\nerrors:   {:?}", serde_json::to_string_pretty(&errors)?);
 
             return Err(Error::GraphQLError(errors));
         }

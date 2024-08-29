@@ -34,12 +34,12 @@ use super::decimal::Decimal;
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Consumption {
-  start_date: Date,
-  end_date: Date,
-  quantity: Decimal,
-  unit: ConsumptionUnit,
-  usage_cost: i32,
-  supply_charge: i32,
+  pub start_date: Date,
+  pub end_date: Date,
+  pub quantity: Decimal,
+  pub unit: ConsumptionUnit,
+  pub usage_cost: i32,
+  pub supply_charge: i32,
 }
 
 impl Consumption {
@@ -55,8 +55,8 @@ impl Consumption {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-enum ConsumptionUnit {
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, PartialEq)]
+pub enum ConsumptionUnit {
   #[serde(rename = "kWh")]
   KWH,
   MJ
