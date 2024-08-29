@@ -54,12 +54,19 @@ impl StdError for Error {
 
 }
 
+
+
+impl From<rust_decimal::Error> for Error {
+    fn from(err: rust_decimal::Error) -> Error {
+        Error::StringError(err.to_string())
+    }
+}
+
 impl From<crate::gql::error::Error> for Error {
     fn from(err: crate::gql::error::Error) -> Error {
         Error::GraphQLError(err)
     }
 }
-
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Error {

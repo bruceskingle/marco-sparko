@@ -31,25 +31,19 @@ use super::Error;
 
 
 #[derive(Debug)]
-pub struct Decimal {
-  int: i32,
-  dec: u32
-}
+pub struct Decimal(rust_decimal::Decimal);
 
 impl Decimal {
 
-  pub fn new(int: i32,
-    dec: u32) -> Decimal {
-      Decimal {
-        int,
-        dec
-      }
+  pub fn new(num: i64, scale: u32) -> Decimal {
+    Decimal (rust_decimal::Decimal::new(num, scale))
     }
-}
+  }
 
 impl Display for Decimal {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.pad(&format!("{}.{}", self.int, self.dec))
+    // f.pad(&format!("{}.{}", self.int, self.dec))
+    self.0.fmt(f)
   }
 }
 
@@ -57,31 +51,32 @@ impl FromStr for Decimal {
     type Err = Error;
 
     fn from_str(str: &str) -> Result<Decimal, Self::Err> {
-        let mut int: i32 = 0;
-        let mut dec: u32 = 0;
-        let mut i = 0;
+      Ok(Decimal(rust_decimal::Decimal::from_str(str)?))
+        // let mut int: i32 = 0;
+        // let mut dec: u32 = 0;
+        // let mut i = 0;
 
-        for part in str.split(".") {
-          if i==0 {
-            int = i32::from_str(part)?
-          }
-          else if i==1 {
-            dec = u32::from_str(part)?
-          }
-          else {
-            return Err(Error::StringError(format!("Too many decimal points '{}'", str)))
-          }
-          i += 1;
-        }
+        // for part in str.split(".") {
+        //   if i==0 {
+        //     int = i32::from_str(part)?
+        //   }
+        //   else if i==1 {
+        //     dec = u32::from_str(part)?
+        //   }
+        //   else {
+        //     return Err(Error::StringError(format!("Too many decimal points '{}'", str)))
+        //   }
+        //   i += 1;
+        // }
 
-        if i==0 {
-          return Err(Error::StringError(format!("Empty value ''{}'", str)))
-        }
+        // if i==0 {
+        //   return Err(Error::StringError(format!("Empty value ''{}'", str)))
+        // }
 
-        Ok(Decimal {
-          int,
-          dec
-        })
+        // Ok(Decimal {
+        //   int,
+        //   dec
+        // })
 
     }
 }
@@ -120,12 +115,15 @@ impl Serialize for Decimal {
   where
       S: Serializer,
   {
-    serializer.serialize_str(&format!("{}.{}", self.int, self.dec))
+    // serializer.serialize_str(&format!("{}.{}", self.int, self.dec))
+    serializer.serialize_str(&self.0.to_string())
   }
 }
 
 #[cfg(test)]
 mod tests {
+    use rust_decimal_macros::dec;
+
     use super::*;
 
 
@@ -136,47 +134,51 @@ mod tests {
 
     #[test]
     fn test_from_str() {
+
+      let dd = rust_decimal::Decimal::new(123456, 3);
+      assert_eq!(dd.to_string(), "123.456");
+
       let decimal = Decimal::from_str("123.456").unwrap();
 
-      assert_eq!(decimal.int, 123);
-      assert_eq!(decimal.dec, 456);
+      assert_eq!(decimal.0, rust_decimal::Decimal::new(123456, 3));
     }
 
-    fn expect_parse(s: &str, int: i32, dec: u32) {
+    fn expect_parse(s: &str, v:rust_decimal::Decimal) {
       let result: Result<MyStruct, serde_json::Error> = serde_json::from_str(s);
       if let Ok(value) = result {
-        assert_eq!(value.decimal.int, int);
-        assert_eq!(value.decimal.dec, dec);
+        assert_eq!(value.decimal.0, v);
       }
       else {
-        panic!("Expecting {}.{} for {}", int, dec, s);
+        panic!("Expecting {} for {}", v, s);
       }
     }
 
     fn expect_parse_error(s: &str) {
       let result: Result<MyStruct, serde_json::Error> = serde_json::from_str(s);
-      if let Ok(_) = result {
-        panic!("Expecting error for {}", s);
+      if let Ok(v) = result {
+        panic!("Expecting error for {}, got {}", s, v.decimal);
       }
     }
 
     #[test]
     fn test_parse() {
       
-      expect_parse(r#"{ "decimal": "123.456" }"#, 123, 456);
+      expect_parse(r#"{ "decimal": "123.456" }"#, rust_decimal::Decimal::new(123456,3));
       
-      expect_parse(r#"{ "decimal": "444" }"#, 444, 0);
+      expect_parse(r#"{ "decimal": "444" }"#, rust_decimal::Decimal::new(444, 0));
       
-      expect_parse(r#"{ "decimal": "444.0" }"#, 444, 0);
+      expect_parse(r#"{ "decimal": "444.0" }"#, rust_decimal::Decimal::new(444, 0));
+      expect_parse(r#"{ "decimal": "444." }"#, rust_decimal::Decimal::new(444, 0));
+      expect_parse(r#"{ "decimal": ".444" }"#, dec!(0.444));
       
-      expect_parse_error(r#"{ "decimal": "444." }"#);
-      expect_parse_error(r#"{ "decimal": ".444" }"#);
+      // expect_parse_error(r#"{ "decimal": "444." }"#);
+      // expect_parse_error(r#"{ "decimal": ".444" }"#);
       
-      expect_parse(r#"{ "decimal": "0.444" }"#, 0, 444);
+      expect_parse(r#"{ "decimal": "0.444" }"#, dec!(0.444));
       
-      expect_parse(r#"{ "decimal": "0000.444" }"#, 0, 444);
+      expect_parse(r#"{ "decimal": "0000.444" }"#, dec!(0.444));
       
-      expect_parse(r#"{ "decimal": "876.444" }"#, 876, 444);
+      expect_parse(r#"{ "decimal": "876.444" }"#, dec!(876.444));
       
       expect_parse_error(r#"{ "decimal": "0.1.2" }"#);
     }
@@ -184,7 +186,7 @@ mod tests {
     #[test]
     fn test_serialize() {
       assert_eq!(serde_json::to_string(&MyStruct {
-        decimal: Decimal::new(3, 14159)
+        decimal: Decimal::new(314159, 5)
       }).unwrap(), "{\"decimal\":\"3.14159\"}");
     }
 }
