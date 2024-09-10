@@ -22,14 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use display_json::{DisplayAsJson, DisplayAsJsonPretty};
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use sparko_graphql::NoParams;
 use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 
-use sparko_graphql::{types::{Boolean, Date, DateTime, Int, ID, ForwardPageInfo, ForwardPageOf}, GraphQLQueryParams, GraphQLType, GraphQL, ParamBuffer, VariableBuffer};
-use super::{ consumption::Consumption, consumption_type::ConsumptionType, decimal::Decimal, Error};
+use sparko_graphql::{types::{Boolean, Date, DateTime, Int, ID}, GraphQLQueryParams, GraphQLType, GraphQL, ParamBuffer, VariableBuffer};
+use super::consumption::Consumption;
 
 
 
@@ -265,6 +265,8 @@ pub struct TransactionAmountType {
 
 #[cfg(test)]
 mod tests {
+    use sparko_graphql::types::ForwardPageOf;
+
     use crate::octopus::consumption::ConsumptionUnit;
 
     use super::*;

@@ -22,19 +22,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-
-use const_format::formatcp;  
-
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 
 use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 
-use sparko_graphql::{types::{Boolean, Date, DateTime, ForwardPageInfo, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
-use super::{ consumption::Consumption, decimal::Decimal,Error};
-use super::{ transaction::{Transaction, TransactionSimpleView, TransactionSimpleViewParams}};
-
+use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+use super::decimal::Decimal;
+use super::transaction::{Transaction, TransactionSimpleView, TransactionSimpleViewParams};
 
 
 #[derive(GraphQLQueryParams)]

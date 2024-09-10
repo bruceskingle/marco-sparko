@@ -26,7 +26,6 @@ pub mod error;
 pub mod token;
 mod account;
 mod tariff;
-mod page_info;
 mod decimal;
 mod consumption;
 mod consumption_type;
@@ -825,7 +824,7 @@ mod tests {
 
         let result: bill::AccountBillsView = serde_json::from_str(json).unwrap();
         
-        Client::handle_bill(result);
+        let _ = Client::handle_bill(result);
 
         panic!("DEV");
     }

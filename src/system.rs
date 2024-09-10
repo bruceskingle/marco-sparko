@@ -22,11 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use std::{collections::HashMap, fmt::Display, sync::Arc};
-
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 
 /// Represents a physical site, or address
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
