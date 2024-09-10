@@ -98,7 +98,7 @@ struct Token {
 }
 
 pub struct TokenManager {
-    gql_client:     Arc<crate::gql::Client>,
+    gql_client:     Arc<sparko_graphql::Client>,
     authenticator:  ObtainJSONWebTokenInput,
     token:          Option<Token>
 }
@@ -108,7 +108,7 @@ impl TokenManager{
         TokenManagerBuilder::new()
     }
 
-    fn new(gql_client: Arc<crate::gql::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
+    fn new(gql_client: Arc<sparko_graphql::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
         TokenManager {
             gql_client,
             authenticator,
@@ -191,7 +191,7 @@ impl TokenManager{
 }
 
 pub struct TokenManagerBuilder {
-    gql_client:         Option<Arc<crate::gql::Client>>,
+    gql_client:         Option<Arc<sparko_graphql::Client>>,
     authenticator:      Option<ObtainJSONWebTokenInput>,
 
 }
@@ -204,7 +204,7 @@ impl TokenManagerBuilder{
         }
     }
     
-    pub fn with_gql_client(mut self, gql_client: Arc<crate::gql::Client>) -> TokenManagerBuilder {
+    pub fn with_gql_client(mut self, gql_client: Arc<sparko_graphql::Client>) -> TokenManagerBuilder {
         self.gql_client = Some(gql_client);
         self
     }
@@ -277,7 +277,7 @@ mod tests {
             println!("result {:?}", octopus_error);
             if let Error::GraphQLError(gql_error) = octopus_error {
 
-                if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
+                if let sparko_graphql::error::Error::GraphQLError(json_errors) = &gql_error {
                     let x = json_errors.get(0).unwrap().extensions.error_code.as_ref().unwrap();
                     assert_eq!(x, "KT-CT-1139");
                 }
@@ -319,7 +319,7 @@ mod tests {
             println!("result {:?}", octopus_error);
             if let Error::GraphQLError(gql_error) = octopus_error {
 
-                if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
+                if let sparko_graphql::error::Error::GraphQLError(json_errors) = &gql_error {
                     let x = json_errors.get(0).unwrap().extensions.error_code.as_ref().unwrap();
                     assert_eq!(x, "KT-CT-1135");
                 }
@@ -379,7 +379,7 @@ mod tests {
             println!("result {:?}", octopus_error);
             if let Error::GraphQLError(gql_error) = octopus_error {
 
-                if let crate::gql::error::Error::GraphQLError(json_errors) = &gql_error {
+                if let sparko_graphql::error::Error::GraphQLError(json_errors) = &gql_error {
                     let x = json_errors.get(0).unwrap().extensions.error_code.as_ref().unwrap();
                      assert_eq!(x, "KT-CT-1135");
                 }

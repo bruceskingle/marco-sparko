@@ -29,7 +29,7 @@ use serde::{de, ser};
 
 #[derive(Debug)]
 pub enum Error {
-    GraphQLError(crate::gql::Error),
+    GraphQLError(sparko_graphql::Error),
     IOError(std::io::Error),
     JsonError(serde_json::Error),
     InternalError(&'static str),
@@ -62,8 +62,8 @@ impl From<rust_decimal::Error> for Error {
     }
 }
 
-impl From<crate::gql::error::Error> for Error {
-    fn from(err: crate::gql::error::Error) -> Error {
+impl From<sparko_graphql::error::Error> for Error {
+    fn from(err: sparko_graphql::error::Error) -> Error {
         Error::GraphQLError(err)
     }
 }

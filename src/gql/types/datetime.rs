@@ -32,7 +32,7 @@ use serde::de::{self, Visitor};
 use serde::ser::Error as SerError;
 use time::format_description;
 
-use crate::gql::Error;
+use sparko_graphql::Error;
 
 static FORMAT: format_description::well_known::Rfc3339 = format_description::well_known::Rfc3339;
 

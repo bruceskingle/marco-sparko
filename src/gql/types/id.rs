@@ -30,7 +30,7 @@ use std::str::FromStr;
 use serde::{Deserializer, Serialize};
 use serde::de::{self, Visitor};
 
-use crate::gql::Error;
+use sparko_graphql::Error;
 
 
 /// A GraphQL ID value

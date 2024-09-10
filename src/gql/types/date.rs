@@ -33,7 +33,7 @@ use serde::ser::Error as SerError;
 use time::format_description;
 use once_cell::sync::Lazy;
 
-use crate::gql::Error;
+use sparko_graphql::Error;
 
 
 // use std::{sync::Mutex, collections::HashMap};

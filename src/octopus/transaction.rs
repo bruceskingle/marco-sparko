@@ -25,47 +25,53 @@ SOFTWARE.
 use display_json::{DisplayAsJson, DisplayAsJsonPretty};
 use serde::{Deserialize, Serialize};
 
-use crate::gql::types::{Boolean, Date, DateTime, Int, ID};
-use super::{ consumption::Consumption, decimal::Decimal, page_info::ForwardPageInfo, Error};
+use sparko_graphql::NoParams;
+use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+
+use sparko_graphql::{types::{Boolean, Date, DateTime, Int, ID, ForwardPageInfo, ForwardPageOf}, GraphQLQueryParams, GraphQLType, GraphQL, ParamBuffer, VariableBuffer};
+use super::{ consumption::Consumption, consumption_type::ConsumptionType, decimal::Decimal, Error};
 
 
 
+
+#[derive(GraphQLQueryParams)]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
-pub struct PageOfTransactions {
-    pub page_info: ForwardPageInfo,
-    pub edges: Vec<TransactionEdge>
+pub struct TransactionSimpleViewParams {
+    pub first: Int
 }
 
-impl PageOfTransactions {
-  pub fn get_field_names() -> String {
-    format!(r#"
-    pageInfo {{
-      {}
-    }}
-    edges {{
-      {}
-    }}
-    "#, ForwardPageInfo::get_field_names(),
-    TransactionEdge::get_field_names())
-}
-}
-
+#[derive(GraphQLType)]
+#[graphql(params = "TransactionSimpleViewParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
-pub struct TransactionEdge {
-    pub node: Transaction
+pub struct TransactionSimpleView {
+    pub id: String,
+    pub posted_date: String,
+    pub __typename: String
 }
 
-impl TransactionEdge {
-    pub fn get_field_names() -> String {
-        format!(r#"
-        node {{
-            {}
-        }}
-        "#, AbstractTransaction::get_field_names())
-    }
-}
+
+
+// PROTOTYPE FOR PAGINATION
+
+// #[derive(GraphQLQueryParams)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct StatementTransactionParams {
+//     pub before: String,
+//     pub after: String,
+//     pub first: Int,
+//     pub last: Int,
+// }
+
+// #[derive(GraphQLQueryParams)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct TransactionParams {
+//   pub amounts: NoParams,
+//   pub consumption: NoParams,
+// }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(tag = "__typename")]
@@ -75,6 +81,28 @@ pub enum Transaction {
   Payment(AbstractTransaction),
   Refund(AbstractTransaction)
 }
+
+impl GraphQLType<NoParams> for Transaction {
+  fn get_query_part(params: &NoParams, prefix: &str) -> String {
+      format!(r#"
+              {}
+              {}
+      "#, TransactionTypeInterface::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
+      Charge::get_query_part(&params, &GraphQL::prefix(prefix, "transactions"))
+      )
+  }
+}
+
+// impl GraphQLType<()> for Transaction {
+//   fn get_query(_:()) -> String {
+//     format!(r#"
+//         {}
+//         ... on Charge {{
+//           {}
+//         }}
+//     "#, TransactionTypeInterface::get_field_names(), Charge::get_query(()))
+//   }
+// }
 
 impl Transaction {
   pub fn as_transaction(&self) -> &TransactionTypeInterface {
@@ -87,6 +115,8 @@ impl Transaction {
   }
 }
 
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionTypeInterface {
@@ -94,6 +124,7 @@ pub struct TransactionTypeInterface {
     pub posted_date: Date,
     pub created_at: DateTime,
     pub account_number: String,
+    #[graphql(no_params)]
     pub amounts: TransactionAmountType,
     pub balance_carried_forward: Int,
     pub is_held: Boolean,
@@ -105,29 +136,33 @@ pub struct TransactionTypeInterface {
     pub note: Option<String>
 }
 
-impl TransactionTypeInterface {
-  pub fn get_field_names() -> String {
-    format!(r#"
-      id
-      postedDate
-      createdAt
-      accountNumber
-      amounts {{
-        {}
-      }}
-      balanceCarriedForward
-      isHeld
-      isIssued
-      title
-      billingDocumentIdentifier
-      isReversed,
-      hasStatement
-      note
-      __typename
-    "#, TransactionAmountType::get_field_names())
-  }
-}
+// impl TransactionTypeInterface {
+//   pub fn get_field_names() -> String {
+//     format!(r#"
+//       id
+//       postedDate
+//       createdAt
+//       accountNumber
+//       amounts {{
+//         {}
+//       }}
+//       balanceCarriedForward
+//       isHeld
+//       isIssued
+//       title
+//       billingDocumentIdentifier
+//       isReversed,
+//       hasStatement
+//       note
+//       __typename
+//     "#, TransactionAmountType::get_query(()))
+//   }
+// }
 
+// Several variants have no additional fields so this implements for all of them
+
+// #[derive(GraphQLType)]
+// #[graphql(params = "StatementTransactionParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AbstractTransaction{
@@ -135,17 +170,17 @@ pub struct AbstractTransaction{
   pub transaction: TransactionTypeInterface,
 }
 
-impl AbstractTransaction {
-  pub fn get_field_names() -> String {
-    format!(r#"
-        {}
-        ... on Charge {{
-          {}
-        }}
-    "#, TransactionTypeInterface::get_field_names(), Charge::get_field_names())
-  }
-}
+// impl GraphQLType<TransactionParams> for AbstractTransaction {
+//   fn get_query_part(params: &TransactionParams, prefix: &str) -> String {
+//       format!(r#"
+//         {}
+//       "#, TransactionTypeInterface::get_query_part(&params, &prefix)
+//       )
+//   }
+// }
 
+// #[derive(GraphQLType)]
+// #[graphql(params = "StatementTransactionParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Charge {
@@ -155,17 +190,35 @@ pub struct Charge {
     pub is_export: Boolean
 }
 
-impl Charge {
-    pub fn get_field_names() -> String {
+impl GraphQLType<NoParams> for Charge {
+  fn get_query_part(params: &NoParams, prefix: &str) -> String {
       format!(r#"
-        consumption {{
-          {}
+        {}
+        ...on Charge {{
+          consumption {{
+            {}
+          }}
+          isExport
         }}
-        isExport
-      "#, Consumption::get_field_names())
-    }
+      "#, TransactionTypeInterface::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
+          Consumption::get_query_part(&NoParams, prefix)
+      )
+  }
 }
 
+// impl GraphQLType<()> for Charge {
+//     fn get_query(params: ()) -> String {
+//       format!(r#"
+//         consumption {{
+//           {}
+//         }}
+//         isExport
+//       "#, Consumption::get_field_names())
+//     }
+// }
+
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionAmountType {
@@ -174,15 +227,24 @@ pub struct TransactionAmountType {
     pub gross: Int,
 }
 
-impl TransactionAmountType {
-    pub fn get_field_names() -> &'static str {
-        r#"
-            net
-            tax
-            gross
-        "#
-    }
-}
+// impl GraphQLType<NoParams> for TransactionAmountType {
+//     fn get_query(params: NoParams) -> String {
+//         format!(r#"
+//             net
+//             tax
+//             gross
+//         "#)
+//     }
+    
+//     fn get_query_part(params: &(), prefix: String) -> String {
+//       format!(r#"
+//         net
+//         tax
+//         gross
+//         "#
+//       )
+//     }
+// }
 
 // #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -362,6 +424,15 @@ fn test_parse_credit_transaction() {
   }
 
 }
+
+// #[test]
+// fn test_get_field_names() {
+//   let field_names = PageOfTransactions::get_query(());
+
+//   println!("{}", field_names);
+
+//   assert_eq!(PageOfTransactions::get_field_names(), String::from("foo"));
+// }
 
 #[test]
 fn test_parse_page() {
@@ -642,7 +713,7 @@ fn test_parse_page() {
   "#;
 
   // let bill = Bill::from_json(json).unwrap();
-  let page: PageOfTransactions = serde_json::from_str(json).unwrap();
+  let page: ForwardPageOf<Transaction> = serde_json::from_str(json).unwrap();
 
   assert_eq!(page.page_info.has_next_page, false);
 

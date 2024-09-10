@@ -28,7 +28,13 @@ use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use super::{bill::BillResults, error::Error, token::TokenManager};
+use sparko_graphql::{types::{Boolean, Date, DateTime, ForwardPageInfo, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+
+use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+
+use crate::octopus::bill::{AccountBillsQuery, AccountBillsQueryParams, AccountBillsViewParams, BillQueryParams};
+
+use super::{bill::{AccountBillsView, Bill}, error::Error, token::TokenManager};
 
 
 pub struct AccountManager {
@@ -44,20 +50,33 @@ impl AccountManager {
 
     pub async fn get_latest_bill(
         &self,
-        gql_client: &Arc<crate::gql::Client>,
+        gql_client: &Arc<sparko_graphql::Client>,
         token_manager: &mut TokenManager,
-    ) -> Result<BillResults, Error> {
+    ) -> Result<AccountBillsView, Error> {
+    let params = AccountBillsQueryParams {
+        account: AccountBillsViewParams {
+            account_number: self.account_number.clone(),
+            bills: BillQueryParams {
+                first: Some(Int::new(1)),
+                ..Default::default()
+            },
+        }
+    };
     let operation_name = "getAccountLatestBill";
-    let query = format!(
-        r#"query {}($accountNumber: String!)
-                        {{
-                            account(accountNumber: $accountNumber)
-                            {{
-                                {}
-                            }}
-                        }}"#,
-        operation_name, BillResults::get_field_names()
-    );
+    let query = AccountBillsQuery::get_query(&operation_name, &params);
+    
+    
+    
+    // format!(
+    //     r#"query {}($accountNumber: String!)
+    //                     {{
+    //                         account(accountNumber: $accountNumber)
+    //                         {{
+    //                             {}
+    //                         }}
+    //                     }}"#,
+    //     operation_name, AccountBillsView::get_field_names()
+    // );
 
     println!("QUERY {}", query);
 
@@ -80,7 +99,7 @@ impl AccountManager {
 
 
     if let Some(result_json) = response.remove("account") {
-        let result: BillResults = serde_json::from_value(result_json)?;
+        let result: AccountBillsView = serde_json::from_value(result_json)?;
 
         Ok(result)
     } else {
@@ -88,6 +107,29 @@ impl AccountManager {
     }
     }
 }
+
+
+// #[derive(GraphQLQueryParams)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AccountBillsViewParams {
+//     #[graphql(required)]
+//     pub account_number: String,
+//     pub bills: BillQueryParams
+// }
+
+// #[derive(GraphQLType)]
+// #[graphql(params = "AccountBillsViewParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AccountBillsView {
+//     pub id: String,
+//     pub bills: ForwardPageOf<Bill>
+// }
+
+
+
+
 
 // Represents AccountUserType in the GraphQL schema
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -205,7 +247,7 @@ isOptedInToWof"#, account_field_names)
     }
 
     pub async fn get_account_user(
-        gql_client: &Arc<crate::gql::Client>,
+        gql_client: &Arc<sparko_graphql::Client>,
         token_manager: &mut TokenManager,
     ) -> Result<AccountUser, Error> {
         let operation_name = "getAccountUser";
@@ -343,7 +385,7 @@ billingEmail
     // }
 
     pub async fn get_account(
-        gql_client: &Arc<crate::gql::Client>,
+        gql_client: &Arc<sparko_graphql::Client>,
         token_manager: &mut TokenManager,
         account_number: &str
     ) -> Result<AccountInterface, Error> {
@@ -386,7 +428,7 @@ billingEmail
     }
 
     pub async fn get_default_account(
-        gql_client: &Arc<crate::gql::Client>,
+        gql_client: &Arc<sparko_graphql::Client>,
         token_manager: &mut TokenManager
     ) -> Result<AccountInterface, Error> {
         let operation_name = "getDefaultAccount";

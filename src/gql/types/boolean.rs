@@ -30,11 +30,11 @@ use std::str::FromStr;
 use serde::{Deserializer, Serialize};
 use serde::de::{self, Visitor};
 
-use crate::gql::Error;
+use sparko_graphql::Error;
 
 
 /// A GraphQL Boolean value
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 pub struct Boolean(bool);
 
 impl Boolean {

@@ -24,16 +24,16 @@ SOFTWARE.
 
 
 use std::fmt::{self, Display};
-use std::ops::Deref;
+use std::ops::{Add, AddAssign, Deref, Div, Mul, Sub};
 use std::str::FromStr;
 
 use serde::{Deserializer, Serialize};
 use serde::de::{self, Visitor};
 
-use crate::gql::Error;
+use sparko_graphql::Error;
 
 /// A GraphQL Int value
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone, Copy)]
 pub struct Int(i32);
 
 impl Int {
@@ -80,6 +80,45 @@ impl PartialOrd for Int {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.0.partial_cmp(&other.0)
     }
+}
+
+
+impl Div for Int {
+  type Output = Int;
+
+  fn div(self, rhs: Self) -> Self::Output {
+      Int(self.0.div(rhs.0))
+  }
+}
+
+impl Mul for Int {
+  type Output = Int;
+
+  fn mul(self, rhs: Self) -> Self::Output {
+      Int(self.0.mul(rhs.0))
+  }
+}
+
+impl AddAssign for Int {
+  fn add_assign(&mut self, rhs: Self) {
+      self.0.add_assign(rhs.0);
+  }
+}
+
+impl Add for Int {
+  type Output = Int;
+
+  fn add(self, rhs: Self) -> Self::Output {
+      Int(self.0.add(rhs.0))
+  }
+}
+
+impl Sub for Int {
+  type Output = Int;
+
+  fn sub(self, rhs: Self) -> Self::Output {
+      Int(self.0.sub(rhs.0))
+  }
 }
 
 

@@ -23,12 +23,12 @@ SOFTWARE.
 ******************************************************************************/
 
 use std::fmt::{self, Display};
-use std::ops::{Add, Deref, Div, Mul, Sub};
+use std::ops::{Add, AddAssign, Deref, Div, Mul, Sub};
 use std::str::FromStr;
 use serde::{Deserializer, Serialize, Serializer};
 use serde::de::{self, Visitor};
 
-use crate::gql::types::Int;
+use sparko_graphql::types::Int;
 
 use super::Error;
 
@@ -60,6 +60,12 @@ impl Mul for Decimal {
 
     fn mul(self, rhs: Self) -> Self::Output {
         Decimal(self.0.mul(rhs.0))
+    }
+}
+
+impl AddAssign for Decimal {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0.add_assign(rhs.0);
     }
 }
 

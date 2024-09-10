@@ -34,6 +34,8 @@ pub use error::{Error, GraphQLJsonError};
 
 
 pub mod types;
+mod traits;
+pub use traits::{ParamBuffer,VariableBuffer,GraphQLQueryParams,GraphQLType, GraphQL};
 
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]

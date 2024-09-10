@@ -25,35 +25,48 @@ SOFTWARE.
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
-use crate::gql::types::Date;
+use sparko_graphql::NoParams;
+use sparko_graphql::{types::ForwardPageOf, GraphQL, GraphQLQueryParams, GraphQLType, ParamBuffer, VariableBuffer};
+use sparko_graphql::types::Date;
+use sparko_graphql::types::{DateTime, Int};
+
+use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 
 use super::decimal::Decimal;
 
+/*
+  These types relate to Transactions on Statements. There is also a ConsumptionType
+  which is related to Meters
+*/
 
-// Represents AccountUserType in the GraphQL schema
+
+
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Consumption {
   pub start_date: Date,
   pub end_date: Date,
   pub quantity: Decimal,
+  #[graphql(scalar)]
   pub unit: ConsumptionUnit,
   pub usage_cost: i32,
   pub supply_charge: i32,
 }
 
-impl Consumption {
-  pub fn get_field_names() -> &'static str {
-    r#"
-    startDate
-    endDate
-    quantity
-    unit
-    usageCost
-    supplyCharge
-    "#
-  }
-}
+// impl Consumption {
+//   pub fn get_field_names() -> &'static str {
+//     r#"
+//     startDate
+//     endDate
+//     quantity
+//     unit
+//     usageCost
+//     supplyCharge
+//     "#
+//   }
+// }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, PartialEq)]
 pub enum ConsumptionUnit {
@@ -61,6 +74,7 @@ pub enum ConsumptionUnit {
   KWH,
   MJ
 }
+
 
 #[cfg(test)]
 mod tests {

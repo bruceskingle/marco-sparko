@@ -21,6 +21,9 @@ once_cell = "1.19.0"
 display_json = "0.2.1"
 rust_decimal = "1.36.0"
 rust_decimal_macros = "1.36.0"
+const_format = "0.2.32"
+sparko_graphql = {veraion = "0.0.1", path = "../../git/sparko_graphql" }
+sparko_graphql_derive = {veraion = "0.0.1", path = "../../git/sparko_graphql_derive" }
 
 [dev-dependencies]
 tokio-test = "*"

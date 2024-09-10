@@ -25,8 +25,6 @@ SOFTWARE.
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
-
-// Represents AccountUserType in the GraphQL schema
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct ForwardPageInfo {
@@ -34,13 +32,19 @@ pub struct ForwardPageInfo {
     pub has_next_page: bool
 }
 
-impl ForwardPageInfo {
-  pub fn get_field_names() -> &'static str {
-    r#"
-    startCursor
-    hasNextPage
-    "#
-  }
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ForwardPageOf<T> 
+{
+    pub page_info: ForwardPageInfo,
+    pub edges: Vec<EdgeOf<T>>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct  EdgeOf<T>
+{
+  pub node: T
 }
 
 #[cfg(test)]

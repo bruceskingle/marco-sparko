@@ -29,12 +29,15 @@ mod tariff;
 mod page_info;
 mod decimal;
 mod consumption;
+mod consumption_type;
 mod transaction;
 mod bill;
+// mod meter;
 
 use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
-use bill::BillResults;
+use bill::AccountBillsView;
+// use bill::BillResults;
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
@@ -168,7 +171,7 @@ impl Profile {
 pub struct Client{
     context: Context, 
     profile: Option<Profile>,
-    gql_client:     Arc<crate::gql::Client>,
+    gql_client: Arc<sparko_graphql::Client>,
     pub(crate) token_manager:  TokenManager,
     default_account: Option<Arc<AccountInterface>>
 }
@@ -195,7 +198,7 @@ impl Client {
         ClientBuilder::new(context, json_profile)
     }
 
-    fn new(context: Context, profile: Option<Profile>, gql_client: Arc<crate::gql::Client>, token_manager: TokenManager) -> Client {        
+    fn new(context: Context, profile: Option<Profile>, gql_client: Arc<sparko_graphql::Client>, token_manager: TokenManager) -> Client {        
         Client {
             context,
             profile,
@@ -271,58 +274,58 @@ impl Client {
         Ok(())
     }
 
-    fn handle_bill(result: BillResults) -> Result<(), crate::Error> {
+    fn handle_bill(result: AccountBillsView) -> Result<(), crate::Error> {
         //println!("\n===========================\n{}\n===========================\n", result);
 
         match &result.bills.edges[0].node {
             bill::Bill::Statement(statement) => {
                 statement.print();
 
-                // println!("Energy Account Statement");
-                // println!("========================");
-                // println!("Date                {}", statement.issued_date);
-                // println!("Ref                 {}", statement.id);
-                // println!("From                {}", statement.from_date);
-                // println!("To                  {}", statement.to_date);
+                println!("Energy Account Statement");
+                println!("========================");
+                println!("Date                {}", statement.bill.issued_date);
+                println!("Ref                 {}", statement.bill.id);
+                println!("From                {}", statement.bill.from_date);
+                println!("To                  {}", statement.bill.to_date);
 
-                // let mut map = BTreeMap::new();
-                // for edge in &statement.transactions.edges {
-                //     let txn = edge.node.as_transaction();
+                let mut map = BTreeMap::new();
+                for edge in &statement.transactions.edges {
+                    let txn = edge.node.as_transaction();
 
-                //     map.insert(&txn.posted_date, &edge.node);
-                // }
+                    map.insert(&txn.posted_date, &edge.node);
+                }
 
 
-                // for transaction in &mut map.values() {
-                //     let txn = transaction.as_transaction();
+                for transaction in &mut map.values() {
+                    let txn = transaction.as_transaction();
 
-                //     print!("{:20} {:10} ", 
-                //                 txn.title,
-                //                 txn.posted_date
-                //             );
-                //     print!("{:10} {:10} {:10} {:10}", 
-                //         txn.amounts.net,
-                //         txn.amounts.tax, 
-                //         txn.amounts.gross,
-                //         txn.balance_carried_forward
-                //         );
+                    print!("{:20} {:10} ", 
+                                txn.title,
+                                txn.posted_date
+                            );
+                    print!("{:10} {:10} {:10} {:10}", 
+                        txn.amounts.net,
+                        txn.amounts.tax, 
+                        txn.amounts.gross,
+                        txn.balance_carried_forward
+                        );
 
-                //     if let transaction::Transaction::Charge(charge) = &transaction {
+                    if let transaction::Transaction::Charge(charge) = &transaction {
                             
-                //         print!("{}-{} {:10} ", 
-                //             charge.consumption.start_date,
-                //             charge.consumption.end_date,
-                //             charge.consumption.quantity
-                //         );
-                //         if *charge.is_export {
-                //             print!("export ");
-                //         }
-                //         else {
-                //             print!("import ");
-                //         }
-                //     }
-                //     println!();
-                // } 
+                        print!(" {} {} {:10} ", 
+                            charge.consumption.start_date,
+                            charge.consumption.end_date,
+                            charge.consumption.quantity
+                        );
+                        if *charge.is_export {
+                            print!("export ");
+                        }
+                        else {
+                            print!("import ");
+                        }
+                    }
+                    println!();
+                } 
             },
         };
 
@@ -365,7 +368,7 @@ impl Module for Client {
 pub struct ClientBuilder {
     context: Context, 
     profile: Option<Profile>,
-    gql_client_builder:         crate::gql::ClientBuilder,
+    gql_client_builder:         sparko_graphql::ClientBuilder,
     token_manager_builder:      TokenManagerBuilder,
 }
 
@@ -411,7 +414,7 @@ impl ClientBuilder {
         let builder = ClientBuilder {
             context: context.clone(),
             profile,
-            gql_client_builder:     crate::gql::Client::builder(),
+            gql_client_builder:     sparko_graphql::Client::builder(),
             token_manager_builder:  TokenManager::builder(),
         };
 
@@ -429,7 +432,7 @@ impl ClientBuilder {
         ClientBuilder {
             context: Context::new_test(),
             profile: None,
-            gql_client_builder:     crate::gql::Client::builder(),
+            gql_client_builder:     sparko_graphql::Client::builder(),
             token_manager_builder:  TokenManager::builder(),
         }
     }
@@ -498,6 +501,7 @@ mod tests {
     fn test_handle_bill_total() {
         let json = r#"
 {
+  "id": "-1871883601",
   "status": "ACTIVE",
   "number": "A-B3D8B29D",
   "balance": 39305,
@@ -819,7 +823,7 @@ mod tests {
         "#;
 
 
-        let result: bill::BillResults = serde_json::from_str(json).unwrap();
+        let result: bill::AccountBillsView = serde_json::from_str(json).unwrap();
         
         Client::handle_bill(result);
 
