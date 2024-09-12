@@ -86,6 +86,7 @@ impl GraphQLType<NoParams> for Transaction {
   fn get_query_attributes(params: &NoParams, prefix: &str) -> String {
       format!(r#"
       # transaction
+              __typename
               {}
       # /transaction
       "#, 

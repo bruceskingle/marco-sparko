@@ -419,7 +419,8 @@ impl GraphQLType<BillQueryParams> for Bill {
   fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
       format!(r#"
       #bill
-              {}
+            billType
+            {}
         #/bill
       "#, 
       //BillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 

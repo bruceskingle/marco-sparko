@@ -55,37 +55,35 @@ impl AccountManager {
         gql_client: &Arc<sparko_graphql::Client>,
         token_manager: &mut TokenManager,
     ) -> Result<AccountBillsView, Error> {
-    let variables = AccountBillsQueryParams {
-        account: AccountBillsViewParams {
-            account_number: self.account_number.clone(),
-            bills: BillQueryParams {
-                first: Some(Int::new(1)),
-                transactions: crate::octopus::bill::StatementTransactionParams { 
-                    first: Some(Int::new(100)),
-                    ..Default::default()
-                },
+    let variables = AccountBillsViewParams {
+        account_number: self.account_number.clone(),
+        bills: BillQueryParams {
+            first: Some(Int::new(1)),
+            transactions: crate::octopus::bill::StatementTransactionParams { 
+                first: Some(Int::new(100)),
                 ..Default::default()
             },
-        }
+            ..Default::default()
+        },
     };
 
     let operation_name = "getAccountLatestBill";
-    let query = AccountBillsQuery::get_query(&operation_name, &variables);
+    // let query = AccountBillsView::get_query(&operation_name, &variables);
     
     
     
-    // format!(
-    //     r#"query {}($accountNumber: String!)
-    //                     {{
-    //                         account(accountNumber: $accountNumber)
-    //                         {{
-    //                             {}
-    //                         }}
-    //                     }}"#,
-    //     operation_name, AccountBillsView::get_field_names()
-    // );
+    // // format!(
+    // //     r#"query {}($accountNumber: String!)
+    // //                     {{
+    // //                         account(accountNumber: $accountNumber)
+    // //                         {{
+    // //                             {}
+    // //                         }}
+    // //                     }}"#,
+    // //     operation_name, AccountBillsView::get_field_names()
+    // // );
 
-    println!("QUERY {}", query);
+    // println!("QUERY {}", query);
 
     let mut headers = HashMap::new();
     // let token = String::from(self.get_authenticator().await?);
@@ -98,14 +96,14 @@ impl AccountManager {
     println!("NEW params {:?}", &variables);
     println!("NEW params.get_actual {:?}", &variables.get_actual("TEST"));
 
-    let mut result_json = gql_client
-        .new_call::<AccountBillsQuery, AccountBillsQueryParams>(operation_name, variables, href)
+    let mut result = gql_client
+        .new_call::<AccountBillsView, AccountBillsViewParams>(operation_name, "account", variables, href)
         .await?;
 
-        println!("\nHashMap response\n===========================\n{:?}\n===========================\n", result_json);
+        println!("\nHashMap response\n===========================\n{:?}\n===========================\n", result);
 
 
-        let result: AccountBillsView = serde_json::from_value(result_json)?;
+        // let result: AccountBillsView = serde_json::from_value(result_json)?;
 
         Ok(result)
     }
