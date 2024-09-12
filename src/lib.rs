@@ -30,6 +30,7 @@ use std::error::Error as StdError;
 use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};
 use async_trait::async_trait;
 use dirs::home_dir;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use clap::{Parser, Subcommand};
 
@@ -307,16 +308,52 @@ impl Context {
         &self.marco_sparko.args
     }
 
-    pub fn update_profile<T>(&mut self, module_id: &str, profile: T) -> Result<(), Error>
+    pub fn update_cache<T>(&self, module_id: &str, profile: &T) -> Result<(), Error>
     where
         T: Serialize
      {
-        let mutex = self.marco_sparko.updated_profile.lock()?;
-        let mut updated_profile = mutex;
+        let path = self.marco_sparko.get_cache_file_path(module_id)?;
 
-        updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
+        serde_json::to_writer_pretty(fs::File::create(path)?, &profile)?;
+            
+
         Ok(())
      }
+
+
+
+    pub fn read_cache<T>(&self, module_id: &str) -> Option<T>
+    where
+        T: DeserializeOwned
+     {
+        if let Ok(path) = self.marco_sparko.get_cache_file_path(module_id) {
+            if let Ok(reader) = fs::File::open(path) {
+                if let Ok(result) = serde_json::from_reader(reader) {
+                    return Some(result)
+                }
+            }
+        }
+        return None
+    }
+
+    //     let path = ContextImpl::get_cache_file_path(module_id).unwrap();
+    //     let reader = fs::File::open(path).unwrap();
+    //     let result = serde_json::from_reader(reader).unwrap();
+        
+    //                 return Some(result)
+    // }
+       
+
+     pub fn update_profile<T>(&mut self, module_id: &str, profile: T) -> Result<(), Error>
+     where
+         T: Serialize
+      {
+         let mutex = self.marco_sparko.updated_profile.lock()?;
+         let mut updated_profile = mutex;
+ 
+         updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
+         Ok(())
+      }
 }
 
 #[derive(Debug)]
@@ -342,6 +379,22 @@ impl ContextImpl {
             })
         }
     }
+
+    fn get_cache_file_path(&self, module_id: &str) -> Result<PathBuf, Error> {
+        let profile_name = if let Some(active_profile) = &self.active_profile {
+            &active_profile.name
+        }
+        else {
+            return Err(Error::InternalError("No Active Profile".to_string()))
+        };
+
+        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        path.push(".marco-sparko-cache");
+        path.push(format!("{}-{}.json", profile_name, module_id));
+
+        println!("Path is {:?}", &path);
+                Ok(path)
+     }
 
     fn get_file_path() -> Result<PathBuf, Error> {
         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;

@@ -478,8 +478,11 @@ impl ClientBuilder {
                 .with_url_if_not_set(String::from("https://api.octopus.energy/v1/graphql/"))?
                 .build()?);
 
-        let client = Client::new(self.context, option_profile, gql_client.clone(), 
-        self.token_manager_builder.with_gql_client(gql_client).build(init)?);
+        let client = Client::new(self.context.clone(), option_profile, gql_client.clone(), 
+        self.token_manager_builder
+          .with_context(self.context)
+          .with_gql_client(gql_client)
+          .build(init)?);
 
         Ok(client)
     }

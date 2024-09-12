@@ -29,7 +29,22 @@ use std::io::Write;
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
+use crate::Context;
+
 use super::{error::Error, PossibleErrorType};
+
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct JWT {
+    sub: String,
+    gty: String,
+    email: String,
+    token_use: String,
+    iss: String,
+    iat: u32,
+    exp: u32,
+    orig_iat: u32
+  }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +58,7 @@ struct ObtainKrakenJSONWebToken {
     refresh_expires_in: Option<u32>,
     // "The Kraken Token. Can be used in the Authorization header for subsequent calls to the API to access protected resources."
     token: String,
+    payload: JWT
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -92,12 +108,32 @@ const GRACE_PERIOD: u32 = 300;
 // 60*60*24*10;
 
 struct Token {
-    token_expires:  u32,
-    token:          Arc<String>,
-    refresh_token:  ObtainJSONWebTokenInput,
+    token_expires:      u32,
+    refresh_expires:    u32,
+    token:              Arc<String>,
+    refresh_token:      ObtainJSONWebTokenInput,
+}
+
+impl Token {
+    fn new(token: ObtainKrakenJSONWebToken) -> Token {
+        Token {
+            refresh_expires: token.refresh_expires_in.unwrap(),
+            token_expires: token.payload.exp,
+            token:          Arc::new(token.token),
+            refresh_token:  ObtainJSONWebTokenInput {
+                api_key: None,
+                email: None,
+                organization_secret_key: None,
+                password: None,
+                pre_signed_key: None,
+                refresh_token: Some(token.refresh_token.unwrap()),
+            }
+        }
+    }
 }
 
 pub struct TokenManager {
+    context:        Context,
     gql_client:     Arc<sparko_graphql::Client>,
     authenticator:  ObtainJSONWebTokenInput,
     token:          Option<Token>
@@ -108,12 +144,19 @@ impl TokenManager{
         TokenManagerBuilder::new()
     }
 
-    fn new(gql_client: Arc<sparko_graphql::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
+    fn new(context: Context, gql_client: Arc<sparko_graphql::Client>, authenticator:  ObtainJSONWebTokenInput) -> TokenManager {
+        let token = if let Some(json_web_token) =  context.read_cache(crate::octopus::MODULE_ID) {
+            Some(Token::new(json_web_token))
+        }
+        else {
+            None
+        };
+
         TokenManager {
+            context,
             gql_client,
             authenticator,
-            token:  None,
-
+            token,
         }
     }
 
@@ -149,10 +192,35 @@ impl TokenManager{
                     refreshToken
                     refreshExpiresIn
                     token
+                    payload
     }}
     }}"#, query_name);
 
         println!("QUERY {}", query);
+
+
+    //     let test=r#"{
+    //   "payload": {
+    //     "email": "bruce@skingle.org",
+    //     "exp": 1726177099,
+    //     "gty": "API-KEY",
+    //     "iat": 1726173499,
+    //     "iss": "https://api.octopus.energy/v1/graphql/",
+    //     "origIat": 1726173499,
+    //     "sub": "kraken|account-user:3235447",
+    //     "tokenUse": "access"
+    //   },
+    //   "refreshExpiresIn": 1726778299,
+    //   "refreshToken": "6373508f837148059aa019fca7961d8267663ca030038d28f6e673f40e86c5d4",
+    //   "token": "eyJhbGciOiJSUzI1NiIsImlzcyI6Imh0dHBzOi8vYXBpLm9jdG9wdXMuZW5lcmd5L3YxL2dyYXBocWwvIiwiamt1IjoiaHR0cHM6Ly9hdXRoLm9jdG9wdXMuZW5lcmd5Ly53ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6InFRb3hIbzhiTF91Wi1NdE9kQ2labDZacjFaMWsyM1l2Y0taZnU5QldHNkEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJrcmFrZW58YWNjb3VudC11c2VyOjMyMzU0NDciLCJndHkiOiJBUEktS0VZIiwiZW1haWwiOiJicnVjZUBza2luZ2xlLm9yZyIsInRva2VuVXNlIjoiYWNjZXNzIiwiaXNzIjoiaHR0cHM6Ly9hcGkub2N0b3B1cy5lbmVyZ3kvdjEvZ3JhcGhxbC8iLCJpYXQiOjE3MjYxNzM0OTksImV4cCI6MTcyNjE3NzA5OSwib3JpZ0lhdCI6MTcyNjE3MzQ5OX0.NmuMM6xlvO7Qa2pVf0os-wa9bBr5hME04kV6wf1wJg2FTarwz6qkjcuQK9OndDSBZ99WXdpJiMEHOqFNCxZovV7qmcPQks4Jk8HBkBvgY8LoosE_HFwg29wY4uZ59XSXmZsrvE8twyaZACSAxefSqUdULn-Cd_A0Ed30Z1Gv3TKIkyc9e0WfAICu9fIefz1eUcmAWkwvKVtIvgccYO9WjYvUYYG_5Xmfl3tQIHsLl2ynlkmCUD7pYQVkncejFWBCi9fLqMQis8lpoL-GSCWhGKyBTwBAGu9FcJ89IFE9Q6pU-Tq1leK60cdRUWGOi5BUqrQmC6KJ5cOJ5S_263gvsA"
+    // }"#;
+    //     let token: ObtainKrakenJSONWebToken = serde_json::from_str(test)?;
+
+    //     println!("TEST token {}", token);
+    //     self.context.update_cache(crate::octopus::MODULE_ID, &token)?;
+
+
+    //     panic!("TEST");
 
         let variables = Variables {
             input: if let Some(token) = &self.token { &token.refresh_token } else { &self.authenticator }
@@ -167,18 +235,10 @@ impl TokenManager{
                     return Err(Error::StringError(PossibleErrorType::to_string(errors)))
                 }
 
-                self.token = Some(Token {
-                    token_expires: token.refresh_expires_in.unwrap(),
-                    token:          Arc::new(token.token),
-                    refresh_token:  ObtainJSONWebTokenInput {
-                        api_key: None,
-                        email: None,
-                        organization_secret_key: None,
-                        password: None,
-                        pre_signed_key: None,
-                        refresh_token: Some(token.refresh_token.unwrap()),
-                    }
-                });
+                self.context.update_cache(crate::octopus::MODULE_ID, &token)?;
+
+                self.token = Some(Token::new(token));
+                 
         } else {
             return Err(Error::InternalError("No result found"));
         }
@@ -191,6 +251,7 @@ impl TokenManager{
 }
 
 pub struct TokenManagerBuilder {
+    context:            Option<Context>,
     gql_client:         Option<Arc<sparko_graphql::Client>>,
     authenticator:      Option<ObtainJSONWebTokenInput>,
 
@@ -199,9 +260,15 @@ pub struct TokenManagerBuilder {
 impl TokenManagerBuilder{
     fn new() -> TokenManagerBuilder {
         TokenManagerBuilder {
+            context: None,
             gql_client:     None,
             authenticator:  None
         }
+    }
+    
+    pub fn with_context(mut self, context: Context) -> TokenManagerBuilder {
+        self.context = Some(context);
+        self
     }
     
     pub fn with_gql_client(mut self, gql_client: Arc<sparko_graphql::Client>) -> TokenManagerBuilder {
@@ -260,6 +327,7 @@ impl TokenManagerBuilder{
         }
 
         Ok(TokenManager::new(
+            self.context.ok_or(Error::CallerError("Context must be provided"))?, 
             self.gql_client.ok_or(Error::CallerError("GQL Client must be provided"))?, 
             self.authenticator.ok_or(Error::CallerError("Credentials must be specified"))?)
         )
