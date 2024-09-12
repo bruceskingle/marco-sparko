@@ -63,7 +63,7 @@ If you intend to store the authentication credential, for unattended operation o
 ```json
 {
     "input": {
-        "APIKey": "sk_XXXX_XXXXXXXXXXXXXXXXXXXXXXXX"
+        "APIKey": "redacted_api_key_AAAAAAAAAAAAAAA"
     }
 }
 ```
@@ -593,58 +593,54 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
     balance
     electricityAgreements(active: true) {
       tariff {
-        ... on StandardTariff {
+        ... on TariffType {
           id
-        	fullName
+          displayName
+          fullName
+          description
           productCode
           standingCharge
           preVatStandingCharge
+          tariffCode
+        }
+        ... on StandardTariff {
           unitRate
+          unitRateEpgApplied
           preVatUnitRate
         }
         ... on DayNightTariff {
-          id
-        	fullName
-          productCode
-          standingCharge
-          preVatStandingCharge
           dayRate
-          preVatDayRate
+          dayRateEpgApplied
           nightRate
+          nightRateEpgApplied
+          preVatDayRate
           preVatNightRate
         }
         ... on ThreeRateTariff {
-          id
-        	fullName
-          productCode
-          standingCharge
-          preVatStandingCharge
           dayRate
-          preVatDayRate
+          dayRateEpgApplied
           nightRate
-          preVatNightRate
+          nightRateEpgApplied
           offPeakRate
+          offPeakRateEpgApplied
+          preVatDayRate
+          preVatNightRate
           preVatOffPeakRate
         }
         ... on HalfHourlyTariff {
-          id
-        	fullName
-          productCode
-          standingCharge
-          preVatStandingCharge
           unitRates {
             validFrom
             validTo
             value
             preVatValue
           }
+    			agileCalculationInfo {
+            priceCap
+            peakOffset
+            gspCoefficient
+          }
         }
         ... on PrepayTariff {
-          id
-        	fullName
-          productCode
-          standingCharge
-          preVatStandingCharge
           unitRate
           preVatUnitRate
         }
@@ -653,10 +649,22 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
     }
     gasAgreements(active:true) {
       tariff {
-        fullName
-        productCode
-        standingCharge
-        unitRate
+        ... on TariffType {
+          id
+          displayName
+          fullName
+          description
+          productCode
+          standingCharge
+          preVatStandingCharge
+          tariffCode
+        }
+        ... on GasTariffType {
+          unitRate
+          unitRateEpgApplied
+          preVatUnitRate
+        }
+        __typename
       }
     }
     properties(activeFrom: $propertiesActiveFrom) {
@@ -706,16 +714,20 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
     "account": {
       "status": "ACTIVE",
       "number": "A-B1C2D34E",
-      "balance": 39303,
+      "balance": 39305,
       "electricityAgreements": [
         {
           "tariff": {
             "id": "11353",
+            "displayName": "Outgoing Octopus 12M Fixed",
             "fullName": "Outgoing Octopus 12M Fixed May 2019",
+            "description": "Outgoing Octopus flat rate pays you for all exported energy at a flat rate.",
             "productCode": "OUTGOING-FIX-12M-19-05-13",
             "standingCharge": 0,
             "preVatStandingCharge": 0,
+            "tariffCode": "E-1R-OUTGOING-FIX-12M-19-05-13-A",
             "unitRate": 15,
+            "unitRateEpgApplied": null,
             "preVatUnitRate": 15,
             "__typename": "StandardTariff"
           }
@@ -723,30 +735,46 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
         {
           "tariff": {
             "id": "175911",
+            "displayName": "Intelligent Octopus Go",
             "fullName": "Intelligent Octopus Go",
+            "description": "With Intelligent Octopus Go EV tariff, you have access to a super low electricity rate between 23:30 - 05:30 every night, plus it smart-charges your car at the cheapest and greenest times overnight.",
             "productCode": "INTELLI-VAR-22-10-14",
             "standingCharge": 47.8485,
             "preVatStandingCharge": 45.57,
+            "tariffCode": "E-1R-INTELLI-VAR-22-10-14-A",
             "unitRates": [
               {
-                "validFrom": "2024-08-24T22:30:00+00:00",
-                "validTo": "2024-08-25T04:30:00+00:00",
+                "validFrom": "2024-08-29T22:30:00+00:00",
+                "validTo": "2024-08-30T04:30:00+00:00",
                 "value": 7.00035,
                 "preVatValue": 6.667
               },
               {
-                "validFrom": "2024-08-25T04:30:00+00:00",
-                "validTo": "2024-08-25T22:30:00+00:00",
+                "validFrom": "2024-08-30T04:30:00+00:00",
+                "validTo": "2024-08-30T22:30:00+00:00",
                 "value": 24.39255,
                 "preVatValue": 23.231
               },
               {
-                "validFrom": "2024-08-25T22:30:00+00:00",
-                "validTo": "2024-08-26T04:30:00+00:00",
+                "validFrom": "2024-08-30T22:30:00+00:00",
+                "validTo": "2024-08-31T04:30:00+00:00",
+                "value": 7.00035,
+                "preVatValue": 6.667
+              },
+              {
+                "validFrom": "2024-08-31T04:30:00+00:00",
+                "validTo": "2024-08-31T22:30:00+00:00",
+                "value": 24.39255,
+                "preVatValue": 23.231
+              },
+              {
+                "validFrom": "2024-08-31T22:30:00+00:00",
+                "validTo": "2024-09-01T04:30:00+00:00",
                 "value": 7.00035,
                 "preVatValue": 6.667
               }
             ],
+            "agileCalculationInfo": null,
             "__typename": "HalfHourlyTariff"
           }
         }
@@ -754,10 +782,18 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
       "gasAgreements": [
         {
           "tariff": {
+            "id": "49383",
+            "displayName": "Flexible Octopus",
             "fullName": "Flexible Octopus",
+            "description": "Flexible Octopus prices follow wholesale costs and update every 3 months.\r\n\r\nGood to know: Ofgem has announced the energy price cap will rise from October 1. Flexible Octopus rates will also rise in October – we'll share details soon.",
             "productCode": "VAR-22-11-01",
             "standingCharge": 28.9485,
-            "unitRate": 5.401725
+            "preVatStandingCharge": 27.57,
+            "tariffCode": "G-1R-VAR-22-11-01-A",
+            "unitRate": 5.401725,
+            "unitRateEpgApplied": null,
+            "preVatUnitRate": 5.1445,
+            "__typename": "GasTariffType"
           }
         }
       ],

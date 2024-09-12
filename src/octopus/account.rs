@@ -26,13 +26,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
+use sparko_graphql_derive::{GraphQLQueryParams};
 use time::OffsetDateTime;
 
-use sparko_graphql::{types::Int, GraphQLType};
+use sparko_graphql::{types::Int, GraphQLQuery, ParamBuffer, VariableBuffer};
+use sparko_graphql::GraphQLQueryParams;
 
 use crate::octopus::bill::{AccountBillsQuery, AccountBillsQueryParams, AccountBillsViewParams, BillQueryParams};
 
 use super::{bill::AccountBillsView, error::Error, token::TokenManager};
+
+
 
 
 pub struct AccountManager {
@@ -51,17 +55,22 @@ impl AccountManager {
         gql_client: &Arc<sparko_graphql::Client>,
         token_manager: &mut TokenManager,
     ) -> Result<AccountBillsView, Error> {
-    let params = AccountBillsQueryParams {
+    let variables = AccountBillsQueryParams {
         account: AccountBillsViewParams {
             account_number: self.account_number.clone(),
             bills: BillQueryParams {
                 first: Some(Int::new(1)),
+                transactions: crate::octopus::bill::StatementTransactionParams { 
+                    first: Some(Int::new(100)),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         }
     };
+
     let operation_name = "getAccountLatestBill";
-    let query = AccountBillsQuery::get_query(&operation_name, &params);
+    let query = AccountBillsQuery::get_query(&operation_name, &variables);
     
     
     
@@ -85,36 +94,30 @@ impl AccountManager {
 
     let href = Some(&headers);
 
-    let variables = GetAccountVar {
-        account_number: &self.account_number,
-    };
 
-    let mut response = gql_client
-        .call(operation_name, &query, &variables, href)
+    println!("NEW params {:?}", &variables);
+    println!("NEW params.get_actual {:?}", &variables.get_actual("TEST"));
+
+    let mut result_json = gql_client
+        .new_call::<AccountBillsQuery, AccountBillsQueryParams>(operation_name, variables, href)
         .await?;
 
-        println!("\nHashMap response\n===========================\n{:?}\n===========================\n", response);
+        println!("\nHashMap response\n===========================\n{:?}\n===========================\n", result_json);
 
 
-    if let Some(result_json) = response.remove("account") {
         let result: AccountBillsView = serde_json::from_value(result_json)?;
 
         Ok(result)
-    } else {
-        return Err(Error::InternalError("No result found"));
-    }
     }
 }
 
 
-// #[derive(GraphQLQueryParams)]
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct AccountBillsViewParams {
-//     #[graphql(required)]
-//     pub account_number: String,
-//     pub bills: BillQueryParams
-// }
+#[derive(GraphQLQueryParams)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountParams {
+   account_number: String,
+}
 
 // #[derive(GraphQLType)]
 // #[graphql(params = "AccountBillsViewParams")]
@@ -385,7 +388,7 @@ billingEmail
     pub async fn get_account(
         gql_client: &Arc<sparko_graphql::Client>,
         token_manager: &mut TokenManager,
-        account_number: &str
+        account_number: String
     ) -> Result<AccountInterface, Error> {
         let operation_name = "getAccount";
         let query = format!(
@@ -408,12 +411,12 @@ billingEmail
 
         let href = Some(&headers);
 
-        let variables = GetAccountVar {
+        let variables = AccountParams {
             account_number,
         };
 
         let mut response = gql_client
-            .call(operation_name, &query, &variables, href)
+            .call(operation_name, &query, &variables.get_actual(""), href)
             .await?;
 
         if let Some(result_json) = response.remove("account") {
@@ -468,3 +471,566 @@ billingEmail
         }
     }
 }
+
+
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct Request<'a, T>
+    where T: Serialize
+{
+    query:          &'a str,
+    variables:      T,
+    operation_name:  &'a str,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_account_bills_query() {
+
+    let params = AccountBillsQueryParams {
+        account: AccountBillsViewParams {
+            account_number: "A-B1D2C34D".to_string(),
+            bills: BillQueryParams {
+                first: Some(Int::new(1)),
+                ..Default::default()
+            },
+        }
+    };
+   
+
+    let operation_name = "getAccountLatestBill";
+    let query = AccountBillsQuery::get_query(&operation_name, &params);
+    let variables = params.get_variables().unwrap();
+
+    let payload = Request {
+        query: &query,
+        variables: &variables,
+        operation_name,
+    };
+
+    let serialized = serde_json::to_string(&payload).unwrap();
+
+    println!("payload {}", &serialized);
+
+
+
+
+    
+
+    let expected_variables = r#"{
+  "account_bills_last": null,
+  "account_bills_includeOpenStatements": false,
+  "account_bills_includeBillsWithoutPDF": false,
+  "account_bills_includeHistoricStatements": true,
+  "account_bills_issuedFromDate": null,
+  "account_bills_before": null,
+  "account_bills_transactions_before": null,
+  "account_bills_transactions_first": null,
+  "account_bills_issuedToDate": null,
+  "account_bills_onlyCurrentEmail": false,
+  "account_bills_toDate": null,
+  "account_bills_offset": null,
+  "account_bills_transactions_last": null,
+  "account_bills_includeHeldStatements": false,
+  "account_bills_fromDate": null,
+  "account_bills_after": null,
+  "account_bills_first": 1,
+  "account_bills_transactions_after": null,
+  "account_accountNumber": "A-B1D2C34D"
+}"#;
+
+/*
+assertion `left == right` failed
+  left: "\n            query getAccountLatestBill($account_accountNumber: String!, $account_bills_includeBillsWithoutPDF: Boolean, $account_bills_includeOpenStatements: Boolean, $account_bills_includeHeldStatements: Boolean, $account_bills_includeHistoricStatements: Boolean, $account_bills_onlyCurrentEmail: Boolean, $account_bills_fromDate: Date, $account_bills_toDate: Date, $account_bills_issuedFromDate: Date, $account_bills_issuedToDate: Date, $account_bills_offset: Int, $account_bills_before: String, $account_bills_after: String, $account_bills_first: Int, $account_bills_last: Int, $account_bills_transactions_before: String, $account_bills_transactions_after: String, $account_bills_transactions_first: Int, $account_bills_transactions_last: Int) {\n                getAccountLatestBill: account(accountNumber: $account_accountNumber) { #get_query_part\n  id\nstatus\nnumber\nbalance\nbills(includeBillsWithoutPDF: $account_bills_includeBillsWithoutPDF, includeOpenStatements: $account_bills_includeOpenStatements, includeHeldStatements: $account_bills_includeHeldStatements, includeHistoricStatements: $account_bills_includeHistoricStatements, onlyCurrentEmail: $account_bills_onlyCurrentEmail, fromDate: $account_bills_fromDate, toDate: $account_bills_toDate, issuedFromDate: $account_bills_issuedFromDate, issuedToDate: $account_bills_issuedToDate, offset: $account_bills_offset, before: $account_bills_before, after: $account_bills_after, first: $account_bills_first, last: $account_bills_last)\n  # pageOf \"bills\"\n  { # pageOf\n    pageInfo {\n        startCursor\n        hasNextPage\n    }\n    edges {\n  # node \"bills\"\n        node { #get_query_part\n  \n      #bill\n              \n          id\nfromDate\ntoDate\nissuedDate\n\n          ...on StatementType {\n            closingBalance\n            openingBalance\n            isExternalBill\n            transactions(before: $account_bills_transactions_before, after: $account_bills_transactions_after, first: $account_bills_transactions_first, last: $account_bills_transactions_last) {\n                pageInfo {\n                    startCursor\n                    hasNextPage\n                }\n                edges {\n                    node { #get_query_part\n  \n      # transaction\n              \n      # charge\n        id\npostedDate\ncreatedAt\naccountNumber\namounts\n  # object \"amounts\"\n    { #get_query_part\n  net\ntax\ngross\n\n} #/get_query_part\n\n  # /object \"amounts\"\nbalanceCarriedForward\nisHeld\nisIssued\ntitle\nbillingDocumentIdentifier\nisReversed\nhasStatement\nnote\n\n        ...on Charge {\n          consumption\n            { #get_query_part\n  startDate\nendDate\nquantity\nunit\nusageCost\nsupplyCharge\n\n} #/get_query_part\n\n          isExport\n        }\n        # /charge\n      \n      # /transaction\n      \n} #/get_query_part\n\n                }\n            }\n            userId\n            toAddress\n            paymentDueDate\n            consumptionStartDate\n            consumptionEndDate\n            reversalsAfterClose\n            status\n            heldStatus\n                { #get_query_part\n  isHeld\nreason\n\n} #/get_query_part\n\n            totalCharges\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n            totalCredits\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n          }\n        \n        #/bill\n      \n} #/get_query_part\n\n  # /node \"bills\"\n    } # /edges\n  } # /pageOf\n  # /pageOf \"bills\"\n\n} #/get_query_part\n\n            }\n        "
+ right: "\n            query getAccountLatestBill($account_accountNumber: String!, $account_bills_includeBillsWithoutPDF: Boolean, $account_bills_includeOpenStatements: Boolean, $account_bills_includeHeldStatements: Boolean, $account_bills_includeHistoricStatements: Boolean, $account_bills_onlyCurrentEmail: Boolean, $account_bills_fromDate: Date, $account_bills_toDate: Date, $account_bills_issuedFromDate: Date, $account_bills_issuedToDate: Date, $account_bills_offset: Int, $account_bills_before: String, $account_bills_after: String, $account_bills_first: Int, $account_bills_last: Int, $account_bills_transactions_before: String, $account_bills_transactions_after: String, $account_bills_transactions_first: Int, $account_bills_transactions_last: Int) {\n                getAccountLatestBill: account(accountNumber: $account_accountNumber) { #get_query_part\n  id\nstatus\nnumber\nbalance\nbills(includeBillsWithoutPDF: $account_bills_includeBillsWithoutPDF, includeOpenStatements: $account_bills_includeOpenStatements, includeHeldStatements: $account_bills_includeHeldStatements, includeHistoricStatements: $account_bills_includeHistoricStatements, onlyCurrentEmail: $account_bills_onlyCurrentEmail, fromDate: $account_bills_fromDate, toDate: $account_bills_toDate, issuedFromDate: $account_bills_issuedFromDate, issuedToDate: $account_bills_issuedToDate, offset: $account_bills_offset, before: $account_bills_before, after: $account_bills_after, first: $account_bills_first, last: $account_bills_last)\n  # pageOf \"bills\"\n  { # pageOf\n    pageInfo {\n        startCursor\n        hasNextPage\n    }\n    edges {\n  # node \"bills\"\n        node { #get_query_part\n  \n      #bill\n              \n          id\nfromDate\ntoDate\nissuedDate\n\n          ...on StatementType {\n            closingBalance\n            openingBalance\n            isExternalBill\n            transactions(before: $account_bills_transactions_before, after: $account_bills_transactions_after, first: $account_bills_transactions_first, last: $account_bills_transactions_last) {\n                pageInfo {\n                    startCursor\n                    hasNextPage\n                }\n                edges {\n                    node { #get_query_part\n  \n      # transaction\n              \n      # charge\n        id\npostedDate\ncreatedAt\naccountNumber\namounts\n  # object \"amounts\"\n    { #get_query_part\n  net\ntax\ngross\n\n} #/get_query_part\n\n  # /object \"amounts\"\nbalanceCarriedForward\nisHeld\nisIssued\ntitle\nbillingDocumentIdentifier\nisReversed\nhasStatement\nnote\n\n        ...on Charge {\n          consumption\n            { #get_query_part\n  startDate\nendDate\nquantity\nunit\nusageCost\nsupplyCharge\n\n} #/get_query_part\n\n          isExport\n        }\n        # /charge\n      \n      # /transaction\n      \n} #/get_query_part\n\n                }\n            }\n            userId\n            toAddress\n            paymentDueDate\n            consumptionStartDate\n            consumptionEndDate\n            reversalsAfterClose\n            status\n            heldStatus\n                { #get_query_part\n  isHeld\nreason\n\n} #/get_query_part\n\n            totalCharges\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n            totalCredits\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n          }\n        \n        #/bill\n      \n} #/get_query_part\n\n  # /node \"bills\"\n    } # /edges\n  } # /pageOf\n  # /pageOf \"bills\"\n\n} #/get_query_part\n\n            }\n        "
+stack
+*/
+    let expected_query = r#"
+            query getAccountLatestBill($account_accountNumber: String!, $account_bills_includeBillsWithoutPDF: Boolean, $account_bills_includeOpenStatements: Boolean, $account_bills_includeHeldStatements: Boolean, $account_bills_includeHistoricStatements: Boolean, $account_bills_onlyCurrentEmail: Boolean, $account_bills_fromDate: Date, $account_bills_toDate: Date, $account_bills_issuedFromDate: Date, $account_bills_issuedToDate: Date, $account_bills_offset: Int, $account_bills_before: String, $account_bills_after: String, $account_bills_first: Int, $account_bills_last: Int, $account_bills_transactions_before: String, $account_bills_transactions_after: String, $account_bills_transactions_first: Int, $account_bills_transactions_last: Int) {
+                getAccountLatestBill: account(accountNumber: $account_accountNumber) { #get_query_part
+  id
+status
+number
+balance
+bills(includeBillsWithoutPDF: $account_bills_includeBillsWithoutPDF, includeOpenStatements: $account_bills_includeOpenStatements, includeHeldStatements: $account_bills_includeHeldStatements, includeHistoricStatements: $account_bills_includeHistoricStatements, onlyCurrentEmail: $account_bills_onlyCurrentEmail, fromDate: $account_bills_fromDate, toDate: $account_bills_toDate, issuedFromDate: $account_bills_issuedFromDate, issuedToDate: $account_bills_issuedToDate, offset: $account_bills_offset, before: $account_bills_before, after: $account_bills_after, first: $account_bills_first, last: $account_bills_last)
+  # pageOf "bills"
+  { # pageOf
+    pageInfo {
+        startCursor
+        hasNextPage
+    }
+    edges {
+  # node "bills"
+        node { #get_query_part
+  
+      #bill
+              
+          id
+fromDate
+toDate
+issuedDate
+
+          ...on StatementType {
+            closingBalance
+            openingBalance
+            isExternalBill
+            transactions(before: $account_bills_transactions_before, after: $account_bills_transactions_after, first: $account_bills_transactions_first, last: $account_bills_transactions_last) {
+                pageInfo {
+                    startCursor
+                    hasNextPage
+                }
+                edges {
+                    node { #get_query_part
+  
+      # transaction
+              
+      # charge
+        id
+postedDate
+createdAt
+accountNumber
+amounts
+  # object "amounts"
+    { #get_query_part
+  net
+tax
+gross
+
+} #/get_query_part
+
+  # /object "amounts"
+balanceCarriedForward
+isHeld
+isIssued
+title
+billingDocumentIdentifier
+isReversed
+hasStatement
+note
+
+        ...on Charge {
+          consumption
+            { #get_query_part
+  startDate
+endDate
+quantity
+unit
+usageCost
+supplyCharge
+
+} #/get_query_part
+
+          isExport
+        }
+        # /charge
+      
+      # /transaction
+      
+} #/get_query_part
+
+                }
+            }
+            userId
+            toAddress
+            paymentDueDate
+            consumptionStartDate
+            consumptionEndDate
+            reversalsAfterClose
+            status
+            heldStatus
+                { #get_query_part
+  isHeld
+reason
+
+} #/get_query_part
+
+            totalCharges
+                { #get_query_part
+  netTotal
+taxTotal
+grossTotal
+
+} #/get_query_part
+
+            totalCredits
+                { #get_query_part
+  netTotal
+taxTotal
+grossTotal
+
+} #/get_query_part
+
+          }
+        
+        #/bill
+      
+} #/get_query_part
+
+  # /node "bills"
+    } # /edges
+  } # /pageOf
+  # /pageOf "bills"
+
+} #/get_query_part
+
+            }
+        "#;
+
+    println!("<QUERY>{}</QUERY>\n", &query);
+    println!("<VARIABLES>{}</VARIABLES>\n", &variables);
+
+    // assert_eq!(variables, expected_variables);
+
+    assert_eq!(query, expected_query);
+    }
+
+    #[test]
+    fn test_parse_account_bills_query() {
+
+        let json = r#"{
+            "account": {
+                "id": "3403670",
+                "status": "ACTIVE",
+                "number": "A-B1C2D34E",
+                "balance": 52020,
+                "bills": {
+                  "pageInfo": {
+                    "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                    "hasNextPage": true
+                  },
+                  "edges": [
+                    {
+                      "node": {
+                        "id": "236646425",
+                        "billType": "STATEMENT",
+                        "fromDate": "2024-07-22",
+                        "toDate": "2024-08-21",
+                        "issuedDate": "2024-08-22",
+                        "closingBalance": 39303,
+                        "openingBalance": 17791,
+                        "isExternalBill": false,
+                        "transactions": {
+                          "pageInfo": {
+                            "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+                            "hasNextPage": false
+                          },
+                          "edges": [
+                            {
+                              "node": {
+                                "id": "-1871040199",
+                                "postedDate": "2024-08-20",
+                                "createdAt": "2024-08-21T21:36:10.492186+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 2711,
+                                  "tax": 136,
+                                  "gross": 2847
+                                },
+                                "balanceCarriedForward": 39303,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Gas",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Charge",
+                                "consumption": {
+                                  "startDate": "2024-07-21",
+                                  "endDate": "2024-08-20",
+                                  "quantity": "360.7100",
+                                  "unit": "kWh",
+                                  "usageCost": 0,
+                                  "supplyCharge": 0
+                                },
+                                "isExport": false
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1871043601",
+                                "postedDate": "2024-08-20",
+                                "createdAt": "2024-08-21T21:32:19.902722+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": -2716,
+                                  "tax": 0,
+                                  "gross": -2716
+                                },
+                                "balanceCarriedForward": 42150,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Electricity",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Charge",
+                                "consumption": {
+                                  "startDate": "2024-08-13",
+                                  "endDate": "2024-08-20",
+                                  "quantity": "181.0500",
+                                  "unit": "kWh",
+                                  "usageCost": 0,
+                                  "supplyCharge": 0
+                                },
+                                "isExport": true
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1871044025",
+                                "postedDate": "2024-08-20",
+                                "createdAt": "2024-08-21T21:32:01.991119+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 2854,
+                                  "tax": 143,
+                                  "gross": 2997
+                                },
+                                "balanceCarriedForward": 39434,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Electricity",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Charge",
+                                "consumption": {
+                                  "startDate": "2024-08-08",
+                                  "endDate": "2024-08-20",
+                                  "quantity": "334.7100",
+                                  "unit": "kWh",
+                                  "usageCost": 0,
+                                  "supplyCharge": 0
+                                },
+                                "isExport": false
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1896251302",
+                                "postedDate": "2024-08-14",
+                                "createdAt": "2024-08-15T11:55:19.400763+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 478,
+                                  "tax": 24,
+                                  "gross": 502
+                                },
+                                "balanceCarriedForward": 42431,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Powerups Reward",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Credit"
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1871043620",
+                                "postedDate": "2024-08-12",
+                                "createdAt": "2024-08-21T21:32:19.073366+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": -2407,
+                                  "tax": 0,
+                                  "gross": -2407
+                                },
+                                "balanceCarriedForward": 41929,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Electricity",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Charge",
+                                "consumption": {
+                                  "startDate": "2024-07-21",
+                                  "endDate": "2024-08-12",
+                                  "quantity": "300.8200",
+                                  "unit": "kWh",
+                                  "usageCost": 0,
+                                  "supplyCharge": 0
+                                },
+                                "isExport": true
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1871044052",
+                                "postedDate": "2024-08-07",
+                                "createdAt": "2024-08-21T21:32:01.008991+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 4104,
+                                  "tax": 205,
+                                  "gross": 4309
+                                },
+                                "balanceCarriedForward": 39522,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Electricity",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Charge",
+                                "consumption": {
+                                  "startDate": "2024-07-21",
+                                  "endDate": "2024-08-07",
+                                  "quantity": "322.5100",
+                                  "unit": "kWh",
+                                  "usageCost": 0,
+                                  "supplyCharge": 0
+                                },
+                                "isExport": false
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1949392858",
+                                "postedDate": "2024-07-29",
+                                "createdAt": "2024-08-01T03:09:50.202838+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 24790,
+                                  "tax": 0,
+                                  "gross": 0
+                                },
+                                "balanceCarriedForward": 43831,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Direct debit",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": null,
+                                "__typename": "Payment"
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1973989678",
+                                "postedDate": "2024-07-24",
+                                "createdAt": "2024-07-25T10:53:30.897903+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 543,
+                                  "tax": 28,
+                                  "gross": 571
+                                },
+                                "balanceCarriedForward": 19041,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Powerups Reward",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Credit"
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1974036696",
+                                "postedDate": "2024-07-24",
+                                "createdAt": "2024-07-25T10:43:02.339290+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 177,
+                                  "tax": 9,
+                                  "gross": 186
+                                },
+                                "balanceCarriedForward": 18470,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Powerups Reward",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Credit"
+                              }
+                            },
+                            {
+                              "node": {
+                                "id": "-1974103763",
+                                "postedDate": "2024-07-24",
+                                "createdAt": "2024-07-25T10:17:07.255688+00:00",
+                                "accountNumber": "A-B1C2D34E",
+                                "amounts": {
+                                  "net": 469,
+                                  "tax": 24,
+                                  "gross": 493
+                                },
+                                "balanceCarriedForward": 18284,
+                                "isHeld": false,
+                                "isIssued": true,
+                                "title": "Powerups Reward",
+                                "billingDocumentIdentifier": "236646425",
+                                "isReversed": false,
+                                "hasStatement": true,
+                                "note": "",
+                                "__typename": "Credit"
+                              }
+                            }
+                          ]
+                        },
+                        "userId": 3235447,
+                        "toAddress": "dan@archer.org",
+                        "paymentDueDate": "2024-09-06",
+                        "consumptionStartDate": null,
+                        "consumptionEndDate": null,
+                        "reversalsAfterClose": "NONE",
+                        "status": "CLOSED",
+                        "heldStatus": {
+                          "isHeld": false,
+                          "reason": null
+                        },
+                        "totalCharges": {
+                          "netTotal": 4546,
+                          "taxTotal": 484,
+                          "grossTotal": 5030
+                        },
+                        "totalCredits": {
+                          "netTotal": 1667,
+                          "taxTotal": 85,
+                          "grossTotal": 1752
+                        }
+                      }
+                    }
+                  ]
+                }
+            }
+          }"#;
+
+        /*
+        assertion `left == right` failed
+  left: "\n            query getAccountLatestBill($account_accountNumber: String!, $account_bills_includeBillsWithoutPDF: Boolean, $account_bills_includeOpenStatements: Boolean, $account_bills_includeHeldStatements: Boolean, $account_bills_includeHistoricStatements: Boolean, $account_bills_onlyCurrentEmail: Boolean, $account_bills_fromDate: Date, $account_bills_toDate: Date, $account_bills_issuedFromDate: Date, $account_bills_issuedToDate: Date, $account_bills_offset: Int, $account_bills_before: String, $account_bills_after: String, $account_bills_first: Int, $account_bills_last: Int, $account_bills_transactions_before: String, $account_bills_transactions_after: String, $account_bills_transactions_first: Int, $account_bills_transactions_last: Int) {\n                getAccountLatestBill: account(accountNumber: $account_accountNumber) { #get_query_part\n  id\nstatus\nnumber\nbalance\nbills(includeBillsWithoutPDF: $account_bills_includeBillsWithoutPDF, includeOpenStatements: $account_bills_includeOpenStatements, includeHeldStatements: $account_bills_includeHeldStatements, includeHistoricStatements: $account_bills_includeHistoricStatements, onlyCurrentEmail: $account_bills_onlyCurrentEmail, fromDate: $account_bills_fromDate, toDate: $account_bills_toDate, issuedFromDate: $account_bills_issuedFromDate, issuedToDate: $account_bills_issuedToDate, offset: $account_bills_offset, before: $account_bills_before, after: $account_bills_after, first: $account_bills_first, last: $account_bills_last)\n  # pageOf \"bills\"\n  { # pageOf\n    pageInfo {\n        startCursor\n        hasNextPage\n    }\n    edges {\n  # node \"bills\"\n        node { #get_query_part\n  \n      #bill\n              \n          id\nfromDate\ntoDate\nissuedDate\n\n          ...on StatementType {\n            closingBalance\n            openingBalance\n            isExternalBill\n            transactions(before: $account_bills_transactions_before, after: $account_bills_transactions_after, first: $account_bills_transactions_first, last: $account_bills_transactions_last) {\n                pageInfo {\n                    startCursor\n                    hasNextPage\n                }\n                edges {\n                    node { #get_query_part\n  \n      # transaction\n              \n      # charge\n        id\npostedDate\ncreatedAt\naccountNumber\namounts\n  # object \"amounts\"\n    { #get_query_part\n  net\ntax\ngross\n\n} #/get_query_part\n\n  # /object \"amounts\"\nbalanceCarriedForward\nisHeld\nisIssued\ntitle\nbillingDocumentIdentifier\nisReversed\nhasStatement\nnote\n\n        ...on Charge {\n          consumption\n            { #get_query_part\n  startDate\nendDate\nquantity\nunit\nusageCost\nsupplyCharge\n\n} #/get_query_part\n\n          isExport\n        }\n        # /charge\n      \n      # /transaction\n      \n} #/get_query_part\n\n                }\n            }\n            userId\n            toAddress\n            paymentDueDate\n            consumptionStartDate\n            consumptionEndDate\n            reversalsAfterClose\n            status\n            heldStatus\n                { #get_query_part\n  isHeld\nreason\n\n} #/get_query_part\n\n            totalCharges\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n            totalCredits\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n          }\n        \n        #/bill\n      \n} #/get_query_part\n\n  # /node \"bills\"\n    } # /edges\n  } # /pageOf\n  # /pageOf \"bills\"\n\n} #/get_query_part\n\n            }\n        "
+ right: "\n            query getAccountLatestBill($account_accountNumber: String!, $account_bills_includeBillsWithoutPDF: Boolean, $account_bills_includeOpenStatements: Boolean, $account_bills_includeHeldStatements: Boolean, $account_bills_includeHistoricStatements: Boolean, $account_bills_onlyCurrentEmail: Boolean, $account_bills_fromDate: Date, $account_bills_toDate: Date, $account_bills_issuedFromDate: Date, $account_bills_issuedToDate: Date, $account_bills_offset: Int, $account_bills_before: String, $account_bills_after: String, $account_bills_first: Int, $account_bills_last: Int, $account_bills_transactions_before: String, $account_bills_transactions_after: String, $account_bills_transactions_first: Int, $account_bills_transactions_last: Int) {\n                getAccountLatestBill: account(accountNumber: $account_accountNumber) { #get_query_part\n  id\nstatus\nnumber\nbalance\nbills(includeBillsWithoutPDF: $account_bills_includeBillsWithoutPDF, includeOpenStatements: $account_bills_includeOpenStatements, includeHeldStatements: $account_bills_includeHeldStatements, includeHistoricStatements: $account_bills_includeHistoricStatements, onlyCurrentEmail: $account_bills_onlyCurrentEmail, fromDate: $account_bills_fromDate, toDate: $account_bills_toDate, issuedFromDate: $account_bills_issuedFromDate, issuedToDate: $account_bills_issuedToDate, offset: $account_bills_offset, before: $account_bills_before, after: $account_bills_after, first: $account_bills_first, last: $account_bills_last)\n  # pageOf \"bills\"\n  { # pageOf\n    pageInfo {\n        startCursor\n        hasNextPage\n    }\n    edges {\n  # node \"bills\"\n        node { #get_query_part\n  \n      #bill\n              \n          id\nbillType\nfromDate\ntoDate\nissuedDate\n\n          ...on StatementType {\n            closingBalance\n            openingBalance\n            isExternalBill\n            transactions(before: $account_bills_transactions_before, after: $account_bills_transactions_after, first: $account_bills_transactions_first, last: $account_bills_transactions_last) {\n                pageInfo {\n                    startCursor\n                    hasNextPage\n                }\n                edges {\n                    node { #get_query_part\n  \n      # transaction\n              \n      # charge\n        id\npostedDate\ncreatedAt\naccountNumber\namounts\n  # object \"amounts\"\n    { #get_query_part\n  net\ntax\ngross\n\n} #/get_query_part\n\n  # /object \"amounts\"\nbalanceCarriedForward\nisHeld\nisIssued\ntitle\nbillingDocumentIdentifier\nisReversed\nhasStatement\nnote\n__typename\n\n        ...on Charge {\n          consumption\n            { #get_query_part\n  startDate\nendDate\nquantity\nunit\nusageCost\nsupplyCharge\n\n} #/get_query_part\n\n          isExport\n        }\n        # /charge\n      \n      # /transaction\n      \n} #/get_query_part\n\n                }\n            }\n            userId\n            toAddress\n            paymentDueDate\n            consumptionStartDate\n            consumptionEndDate\n            reversalsAfterClose\n            status\n            heldStatus\n                { #get_query_part\n  isHeld\nreason\n\n} #/get_query_part\n\n            totalCharges\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n            totalCredits\n                { #get_query_part\n  netTotal\ntaxTotal\ngrossTotal\n\n} #/get_query_part\n\n          }\n        \n        #/bill\n      \n} #/get_query_part\n\n  # /node \"bills\"\n    } # /edges\n  } # /pageOf\n  # /pageOf \"bills\"\n\n} #/get_query_part\n\n            }\n        "
+stack backtrace:
+         */
+
+        // let bill = Bill::from_json(json).unwrap();
+        let result: AccountBillsQuery = serde_json::from_str(json).unwrap();
+        
+        //assert_eq!(result.account.balance, Int::new(52020)
+        assert_eq!(result.account.balance, Int::new(52020));
+        
+    }
+}
+
+/*
+assertion `left == right` failed
+  left: "{\n  \"account_bills_first\": 1,\n  \"account_bills_fromDate\": null,\n  \"account_bills_includeHeldStatements\": false,\n  \"account_bills_issuedFromDate\": null,\n  \"account_bills_issuedToDate\": null,\n  \"account_bills_after\": null,\n  \"account_bills_transactions_last\": null,\n  \"account_bills_includeOpenStatements\": false,\n  \"account_bills_last\": null,\n  \"account_bills_transactions_after\": null,\n  \"account_bills_transactions_first\": null,\n  \"account_bills_includeHistoricStatements\": true,\n  \"account_bills_before\": null,\n  \"account_bills_transactions_before\": null,\n  \"account_accountNumber\": \"A-B1D2C34D\",\n  \"account_bills_onlyCurrentEmail\": false,\n  \"account_bills_toDate\": null,\n  \"account_bills_offset\": null,\n  \"account_bills_includeBillsWithoutPDF\": false\n}"
+ right: "{\n  \"account_bills_last\": null,\n  \"account_bills_includeOpenStatements\": false,\n  \"account_bills_includeBillsWithoutPDF\": false,\n  \"account_bills_includeHistoricStatements\": true,\n  \"account_bills_issuedFromDate\": null,\n  \"account_bills_before\": null,\n  \"account_bills_transactions_before\": null,\n  \"account_bills_transactions_first\": null,\n  \"account_bills_issuedToDate\": null,\n  \"account_bills_onlyCurrentEmail\": false,\n  \"account_bills_toDate\": null,\n  \"account_bills_offset\": null,\n  \"account_bills_transactions_last\": null,\n  \"account_bills_includeHeldStatements\": false,\n  \"account_bills_fromDate\": null,\n  \"account_bills_after\": null,\n  \"account_bills_first\": 1,\n  \"account_bills_transactions_after\": null,\n  \"account_accountNumber\": \"A-B1D2C34D\"\n}"
+*/

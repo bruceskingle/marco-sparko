@@ -83,12 +83,14 @@ pub enum Transaction {
 }
 
 impl GraphQLType<NoParams> for Transaction {
-  fn get_query_part(params: &NoParams, prefix: &str) -> String {
+  fn get_query_attributes(params: &NoParams, prefix: &str) -> String {
       format!(r#"
+      # transaction
               {}
-              {}
-      "#, TransactionTypeInterface::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
-      Charge::get_query_part(&params, &GraphQL::prefix(prefix, "transactions"))
+      # /transaction
+      "#, 
+      //TransactionTypeInterface::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
+      Charge::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions"))
       )
   }
 }
@@ -136,6 +138,59 @@ pub struct TransactionTypeInterface {
     pub note: Option<String>
 }
 
+
+/*
+impl GraphQLType < NoParams > for TransactionTypeInterface
+{
+    fn get_query_part(params : & NoParams, prefix : & str) -> String
+    {
+        format!("#
+
+          get_graphql_type_parts
+          {{
+            id
+            postedDate
+            createdAt
+            accountNumber
+            amounts{}
+              # object \"amounts\"
+                {}
+              # /object \"amounts\"
+            balanceCarriedForward
+            isHeld
+            isIssued
+            title
+            billingDocumentIdentifier
+            isReversed
+            hasStatement
+            note
+          }}
+            # /get_graphql_type_parts
+          ",
+        "", TransactionAmountType ::
+        get_query_part(& NoParams, & GraphQL :: prefix(prefix, "amounts")),)
+    }
+}
+
+
+*/
+
+
+// impl GraphQLType < NoParams > for TransactionTypeInterface
+// {
+//     fn get_query_part(params : & NoParams, prefix : & str) -> String
+//     {
+
+//       let x = format!("NoParams  <{}>", & NoParams);
+
+//         format!
+//         ("id\npostedDate\ncreatedAt\naccountNumber\namounts{}{{\n    {}\n}}\nbalanceCarriedForward\nisHeld\nisIssued\ntitle\nbillingDocumentIdentifier\nisReversed\nhasStatement\nnote\n",
+//         "", TransactionAmountType ::
+//         get_query_part(& NoParams, & GraphQL :: prefix(prefix, "amounts")),)
+//     }
+// }
+
+
 // impl TransactionTypeInterface {
 //   pub fn get_field_names() -> String {
 //     format!(r#"
@@ -166,8 +221,10 @@ pub struct TransactionTypeInterface {
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AbstractTransaction{
+  // #[serde(rename = "__typename")]
+  // pub __typename: String,
   #[serde(flatten)]
-  pub transaction: TransactionTypeInterface,
+  pub transaction: TransactionTypeInterface
 }
 
 // impl GraphQLType<TransactionParams> for AbstractTransaction {
@@ -184,6 +241,8 @@ pub struct AbstractTransaction{
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Charge {
+  // #[serde(rename = "__typename")]
+  // pub __typename: String,
     #[serde(flatten)]
     pub transaction: TransactionTypeInterface,
     pub consumption: Consumption,
@@ -191,16 +250,17 @@ pub struct Charge {
 }
 
 impl GraphQLType<NoParams> for Charge {
-  fn get_query_part(params: &NoParams, prefix: &str) -> String {
+  fn get_query_attributes(params: &NoParams, prefix: &str) -> String {
       format!(r#"
+      # charge
         {}
         ...on Charge {{
-          consumption {{
+          consumption
             {}
-          }}
           isExport
         }}
-      "#, TransactionTypeInterface::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
+        # /charge
+      "#, TransactionTypeInterface::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions")), 
           Consumption::get_query_part(&NoParams, prefix)
       )
   }
@@ -265,6 +325,166 @@ pub struct TransactionAmountType {
 
 #[cfg(test)]
 mod tests {
+  use display_json::DisplayAsJsonPretty;
+use serde::{Deserialize, Serialize};
+use sparko_graphql::types::{Boolean, Date, Int};
+
+    #[test]
+    fn test_tagged_type() {
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(tag = "__typename")]
+      pub enum Transaction {
+        Charge(Charge),
+        Credit(AbstractTransaction),
+        // Payment(AbstractTransaction),
+        // Refund(AbstractTransaction)
+      }
+
+
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(rename_all = "camelCase")]
+      pub struct TransactionTypeInterface {
+          pub posted_date: Date,
+          pub account_number: String,
+          // pub tag: String,
+      }
+
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(rename_all = "camelCase")]
+      pub struct AbstractTransaction{
+        pub posted_date: Date,
+        pub account_number: String,
+        // pub tag: String,
+      }
+
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(rename_all = "camelCase")]
+      pub struct Charge {
+        
+        pub posted_date: Date,
+        pub account_number: String,
+        // pub tag: String,
+        pub consumption: Int,
+        pub is_export: Boolean
+      }
+
+      let charge = Charge {
+        posted_date: Date::from_calendar_date(2024,time::Month::April,12).unwrap(),
+        account_number: "1234".to_string(),
+        // tag: "Charge".to_string(),
+        consumption: Int::new(4),
+        is_export: false.into(),
+      };
+
+      let input_transaction: Transaction = Transaction::Charge(charge);
+
+      let serialized = serde_json::to_string(&input_transaction).unwrap();
+
+      println!("<Serialized>{}</Serialized>\n\n", &serialized);
+
+      
+
+      let abstract_transaction: AbstractTransaction = serde_json::from_str(&serialized).unwrap();
+
+      println!("<AbstractTransaction>{}</AbstractTransaction>\n\n", serde_json::to_string_pretty(&abstract_transaction).unwrap());
+      
+      let charge: Charge = serde_json::from_str(&serialized).unwrap();
+
+      println!("<Charge>{}</Charge>\n\n", serde_json::to_string_pretty(&charge).unwrap());
+
+      let transaction_type_interface: TransactionTypeInterface = serde_json::from_str(&serialized).unwrap();
+
+      println!("<TransactionTypeInterface>{}</TransactionTypeInterface>\n\n", serde_json::to_string_pretty(&transaction_type_interface).unwrap());
+
+      fn deserialize(name: &str, input: &str) {
+        let transaction: Transaction = serde_json::from_str(input).unwrap();
+
+        println!("<{}>{}</{}>\n\n", name, serde_json::to_string_pretty(&transaction).unwrap(), name);
+      }
+      
+      deserialize("Transaction", &serialized);
+      // deserialize("PreSnakeTransaction", r#"{"posted_date":"2024-04-12","account_number":"1234","__typename":"Charge","consumption":4,"is_export":false}"#);
+      deserialize("PreCamelTransaction", r#"{"postedDate":"2024-04-12","accountNumber":"1234","__typename":"Charge","consumption":4,"isExport":false}"#);
+
+    }
+
+
+
+    #[test]
+    fn test_flat_tagged_type() {
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(tag = "__typename")]
+      pub enum Transaction {
+        Charge(Charge),
+        Credit(AbstractTransaction),
+        // Payment(AbstractTransaction),
+        // Refund(AbstractTransaction)
+      }
+
+
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(rename_all = "camelCase")]
+      pub struct TransactionTypeInterface {
+          pub posted_date: Date,
+          pub account_number: String,
+      }
+
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(rename_all = "camelCase")]
+      pub struct AbstractTransaction{
+        #[serde(flatten)]
+        pub transaction: TransactionTypeInterface
+      }
+
+      #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+      #[serde(rename_all = "camelCase")]
+      pub struct Charge {
+        #[serde(flatten)]
+        pub transaction: TransactionTypeInterface,
+        pub consumption: Int,
+        pub is_export: Boolean
+      }
+
+      let charge = Charge {
+        transaction: TransactionTypeInterface {
+          posted_date: Date::from_calendar_date(2024,time::Month::April,12).unwrap(),
+          account_number: "1234".to_string(),
+        },
+        consumption: Int::new(4),
+        is_export: false.into(),
+      };
+
+      let input_transaction: Transaction = Transaction::Charge(charge);
+
+      let serialized = serde_json::to_string(&input_transaction).unwrap();
+
+      println!("<Serialized>{}</Serialized>\n\n", &serialized);
+
+      
+
+      let abstract_transaction: AbstractTransaction = serde_json::from_str(&serialized).unwrap();
+
+      println!("<AbstractTransaction>{}</AbstractTransaction>\n\n", serde_json::to_string_pretty(&abstract_transaction).unwrap());
+      
+      let charge: Charge = serde_json::from_str(&serialized).unwrap();
+
+      println!("<Charge>{}</Charge>\n\n", serde_json::to_string_pretty(&charge).unwrap());
+
+      let transaction_type_interface: TransactionTypeInterface = serde_json::from_str(&serialized).unwrap();
+
+      println!("<TransactionTypeInterface>{}</TransactionTypeInterface>\n\n", serde_json::to_string_pretty(&transaction_type_interface).unwrap());
+
+      fn deserialize(name: &str, input: &str) {
+        let transaction: Transaction = serde_json::from_str(input).unwrap();
+
+        println!("<{}>{}</{}>\n\n", name, serde_json::to_string_pretty(&transaction).unwrap(), name);
+      }
+      
+      deserialize("Transaction", &serialized);
+      // deserialize("PreSnakeTransaction", r#"{"posted_date":"2024-04-12","account_number":"1234","__typename":"Charge","consumption":4,"is_export":false}"#);
+      deserialize("PreCamelTransaction", r#"{"postedDate":"2024-04-12","accountNumber":"1234","__typename":"Charge","consumption":4,"isExport":false}"#);
+
+    }
     use sparko_graphql::types::ForwardPageOf;
 
     use crate::octopus::consumption::ConsumptionUnit;
@@ -387,32 +607,34 @@ fn test_parse_charge_transaction() {
 #[test]
 fn test_parse_credit_transaction() {
   let json = r#"
-  {
-    "id": "-1896251302",
-    "postedDate": "2024-08-14",
-    "createdAt": "2024-08-15T11:55:19.400763+00:00",
-    "accountNumber": "A-B3D8B29D",
-    "amounts": {
-      "net": 478,
-      "tax": 24,
-      "gross": 502
-    },
-    "balanceCarriedForward": 42431,
-    "isHeld": false,
-    "isIssued": true,
-    "title": "Powerups Reward",
-    "billingDocumentIdentifier": "236646425",
-    "isReversed": false,
-    "hasStatement": true,
-    "note": "",
-    "__typename": "Credit"
-  }
-  "#;
+{
+  "id": "-1896251302",
+  "postedDate": "2024-08-14",
+  "createdAt": "2024-08-15T11:55:19.400763+00:00",
+  "accountNumber": "A-B1C2D34E",
+  "amounts": {
+    "net": 478,
+    "tax": 24,
+    "gross": 502
+  },
+  "balanceCarriedForward": 42431,
+  "isHeld": false,
+  "isIssued": true,
+  "title": "Powerups Reward",
+  "billingDocumentIdentifier": "236646425",
+  "isReversed": false,
+  "hasStatement": true,
+  "note": "",
+  "__typename": "Credit"
+}
+"#;
 
   let credit: TransactionTypeInterface = serde_json::from_str(json).unwrap();
   assert_eq!(credit.amounts.net, Int::new(478));
   assert_eq!(credit.amounts.tax, Int::new(24));
   assert_eq!(credit.amounts.gross, Int::new(502));
+
+  println!("Got credit {}", &serde_json::to_string_pretty(&credit).unwrap());
 
   let transaction: Transaction = serde_json::from_str(json).unwrap();
 

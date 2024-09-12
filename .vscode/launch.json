@@ -60,7 +60,7 @@
             },
             "args": [
                 "--modules=octopus",
-                "summary"
+                "bill"
             ],
             "cwd": "${workspaceFolder}"
         },

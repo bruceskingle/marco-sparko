@@ -26,9 +26,9 @@ use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 
+use std::ops::Not;
 use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
-
-use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, GraphQLQuery, NoParams, ParamBuffer, VariableBuffer};
 use super::decimal::Decimal;
 use super::transaction::{Transaction, TransactionSimpleView, TransactionSimpleViewParams};
 
@@ -49,7 +49,7 @@ pub enum SimpleBill {
 }
 
 impl GraphQLType<SimpleBillParams> for SimpleBill {
-    fn get_query_part(params: &SimpleBillParams, prefix: &str) -> String {
+    fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
         format!(r#"
                 {}
                 {}
@@ -102,7 +102,7 @@ impl GraphQLType < SimpleBillParams > for SimpleStatementType
      */
 
 impl GraphQLType<SimpleBillParams> for SimpleStatementType {
-    fn get_query_part(params: &SimpleBillParams, prefix: &str) -> String {
+    fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
         format!(r#"
                 id
                 fromDate
@@ -117,9 +117,7 @@ impl GraphQLType<SimpleBillParams> for SimpleStatementType {
                         edges
                         {{
                             node
-                            {{
-                                {}
-                            }}
+                            {}
                         }}
                     }}
                 }}
@@ -151,6 +149,27 @@ pub struct AccountBillsQueryParams {
     pub account: AccountBillsViewParams
 }
 
+// impl GraphQLQueryParams for AccountBillsQueryParams
+// {
+//     fn get_formal_part(& self, params : & mut ParamBuffer, prefix : & str)
+//     {
+//         self.account.get_formal_part(params, & GraphQL ::
+//         prefix(prefix, "account"));
+//     }
+    
+//     fn get_actual_part(& self, params : & mut ParamBuffer, prefix : & str)
+//     { 
+//         params.push_actual(prefix, & GraphQL :: prefix(prefix, "account")); ; 
+//     }
+    
+//     fn get_variables_part(& self, variables : & mut VariableBuffer, prefix : &
+//     str) -> Result < (), serde_json :: Error >
+//     {
+//         self.account.get_variables_part(variables, & GraphQL ::
+//         prefix(prefix, "account")) ? ; Ok(())
+//     }
+// }
+
 // #[derive(GraphQLType)]
 // #[graphql(params = "AccountBillsQueryParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -159,15 +178,18 @@ pub struct AccountBillsQuery {
     pub account: AccountBillsView
 }
 
-impl GraphQLType<AccountBillsQueryParams> for AccountBillsQuery {
-    fn get_query_part(params: &AccountBillsQueryParams, prefix: &str) -> String {
+impl GraphQLQuery<AccountBillsQueryParams> for AccountBillsQuery {
+    fn get_query(request_name: &str, params: &AccountBillsQueryParams) -> String {
         format!(r#"
-            account{} {{
-                {}
+            query {}{} {{
+                {}: account{} {}
             }}
-        "#, params.account.get_actual(&GraphQL::prefix(prefix, "account")),
-            // params.properties.get_actual("properties_"),
-            AccountBillsView::get_query_part(&params.account, &GraphQL::prefix(prefix, "account"))
+        "#, 
+            request_name,
+            params.get_formal(),
+            request_name,
+            params.account.get_actual("account_"),
+            AccountBillsView::get_query_part(&params.account, "account_")
         )
     }
     
@@ -188,8 +210,12 @@ pub enum BillsOrderBy {
 #[derive(GraphQLQueryParams)]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
+// #[skip_serializing_none]
 pub struct BillQueryParams {
     // Include bills without PDFs.
+    #[serde(rename = "includeBillsWithoutPDF")]
+    #[graphql(rename = "includeBillsWithoutPDF")]
+    #[serde(skip_serializing_if = "<&bool>::not")]
     pub include_bills_without_pdf: Boolean,
 
     //
@@ -208,23 +234,32 @@ pub struct BillQueryParams {
     pub only_current_email: Boolean,
 
     // Optional date representing the beginning of the search results. This date value is inclusive.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub from_date: Option<Date>,
 
     // Optional date representing the end of the search results. This date value is exclusive.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub to_date: Option<Date>,
 
     // Optional date representing the beginning of the search results based on issued date. This date value is inclusive.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub issued_from_date: Option<Date>,
 
     // Optional date representing the end of the search results based on issued date. This date value is exclusive.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub issued_to_date: Option<Date>,
 
     // The order in which to return the bills.
     pub order_by: BillsOrderBy,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<Int>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub first: Option<Int>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last: Option<Int>,
 
     pub transactions: StatementTransactionParams
@@ -257,6 +292,7 @@ impl Default for BillQueryParams {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountBillsViewParams {
+    #[graphql(required)]
     pub account_number: String,
     pub bills: BillQueryParams
 }
@@ -269,7 +305,7 @@ pub struct AccountBillsView {
     pub id: String,
     pub status: String,
     pub number: String,
-    pub balance: i32,
+    pub balance: Int,
     pub bills: ForwardPageOf<Bill>
 }
 
@@ -380,12 +416,14 @@ pub enum Bill {
 }
 
 impl GraphQLType<BillQueryParams> for Bill {
-  fn get_query_part(params: &BillQueryParams, prefix: &str) -> String {
+  fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
       format!(r#"
+      #bill
               {}
-              {}
-      "#, BillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "bills")), 
-      StatementType::get_query_part(&params, &GraphQL::prefix(prefix, "bills"))
+        #/bill
+      "#, 
+      //BillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
+      StatementType::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions"))
       )
   }
 }
@@ -424,13 +462,14 @@ impl Bill {
 //     }
 // }
 
+
+
 #[derive(GraphQLType)]
 #[graphql(params = "BillQueryParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct BillInterfaceType {
     pub id: ID,
-    // bill_type: BillTypeEnum,
     pub from_date: Date,
     pub to_date: Date,
 
@@ -464,9 +503,13 @@ pub struct BillInterfaceType {
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StatementTransactionParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub first: Option<Int>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last: Option<Int>
 }
 
@@ -529,15 +572,21 @@ pub struct StatementType {
 
 
 impl GraphQLType<BillQueryParams> for StatementType {
-    fn get_query_part(params: &BillQueryParams, prefix: &str) -> String {
+    fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
         format!(r#"
           {}
-          ...on Statement {{
+          ...on StatementType {{
             closingBalance
             openingBalance
             isExternalBill
             transactions{} {{
-                {}
+                pageInfo {{
+                    startCursor
+                    hasNextPage
+                }}
+                edges {{
+                    node {}
+                }}
             }}
             userId
             toAddress
@@ -546,17 +595,14 @@ impl GraphQLType<BillQueryParams> for StatementType {
             consumptionEndDate
             reversalsAfterClose
             status
-            heldStatus {{
+            heldStatus
                 {}
-            }}
-            totalCharges {{
+            totalCharges
                 {}
-            }}
-            totalCredits {{
+            totalCredits
                 {}
-            }}
           }}
-        "#, BillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "bill")), 
+        "#, BillInterfaceType::get_query_attributes(&params, &GraphQL::prefix(prefix, "bill")), 
 
             params.transactions.get_actual(prefix),
             Transaction::get_query_part(&NoParams, prefix),
@@ -785,6 +831,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_bill_query_params() {
+
+    let variables = BillQueryParams {
+                first: Some(Int::new(1)),
+                transactions: StatementTransactionParams {
+                    first: Some(Int::new(100)),
+                    ..Default::default()
+                },
+                ..Default::default()
+    };
+    let variables_string =serde_json::to_string_pretty(&variables).unwrap();
+    //&variables.to_string();
+
+
+    let expected_variables = r#"{
+  "includeOpenStatements": false,
+  "includeHeldStatements": false,
+  "includeHistoricStatements": true,
+  "onlyCurrentEmail": false,
+  "orderBy": "FROM_DATE_DESC",
+  "first": 1,
+  "transactions": {
+    "first": 100
+  }
+}"#;
+
+    println!("\n\n\n\nVARIABLES\n\n\n\n{}", &variables_string);
+
+    assert_eq!(variables_string, expected_variables);
+    }
+
+
+    #[test]
     fn test_parse_statement_total() {
         let json = r#"
         {
@@ -804,313 +883,314 @@ mod tests {
 
     #[test]
     fn test_parse_statement() {
-        let json = r#"
+        
+let json = r#"
+{
+    "id": "236646425",
+    "billType": "STATEMENT",
+    "fromDate": "2024-07-22",
+    "toDate": "2024-08-21",
+    "issuedDate": "2024-08-22",
+    "__typename": "StatementType",
+    "closingBalance": 39303,
+    "openingBalance": 17791,
+    "isExternalBill": false,
+    "transactions": {
+    "pageInfo": {
+        "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
+        "hasNextPage": false
+    },
+    "edges": [
         {
-            "id": "236646425",
-            "billType": "STATEMENT",
-            "fromDate": "2024-07-22",
-            "toDate": "2024-08-21",
-            "issuedDate": "2024-08-22",
-            "__typename": "StatementType",
-            "closingBalance": 39303,
-            "openingBalance": 17791,
-            "isExternalBill": false,
-            "transactions": {
-            "pageInfo": {
-                "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
-                "hasNextPage": false
+        "node": {
+            "id": "-1871040199",
+            "postedDate": "2024-08-20",
+            "createdAt": "2024-08-21T21:36:10.492186+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 2711,
+            "tax": 136,
+            "gross": 2847
             },
-            "edges": [
-                {
-                "node": {
-                    "id": "-1871040199",
-                    "postedDate": "2024-08-20",
-                    "createdAt": "2024-08-21T21:36:10.492186+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 2711,
-                    "tax": 136,
-                    "gross": 2847
-                    },
-                    "balanceCarriedForward": 39303,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Gas",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "consumption": {
-                    "startDate": "2024-07-21",
-                    "endDate": "2024-08-20",
-                    "quantity": "360.7100",
-                    "unit": "kWh",
-                    "usageCost": 0,
-                    "supplyCharge": 0
-                    },
-                    "isExport": false,
-                    "__typename": "Charge"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1871043601",
-                    "postedDate": "2024-08-20",
-                    "createdAt": "2024-08-21T21:32:19.902722+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": -2716,
-                    "tax": 0,
-                    "gross": -2716
-                    },
-                    "balanceCarriedForward": 42150,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Electricity",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "consumption": {
-                    "startDate": "2024-08-13",
-                    "endDate": "2024-08-20",
-                    "quantity": "181.0500",
-                    "unit": "kWh",
-                    "usageCost": 0,
-                    "supplyCharge": 0
-                    },
-                    "isExport": true,
-                    "__typename": "Charge"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1871044025",
-                    "postedDate": "2024-08-20",
-                    "createdAt": "2024-08-21T21:32:01.991119+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 2854,
-                    "tax": 143,
-                    "gross": 2997
-                    },
-                    "balanceCarriedForward": 39434,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Electricity",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "consumption": {
-                    "startDate": "2024-08-08",
-                    "endDate": "2024-08-20",
-                    "quantity": "334.7100",
-                    "unit": "kWh",
-                    "usageCost": 0,
-                    "supplyCharge": 0
-                    },
-                    "isExport": false,
-                    "__typename": "Charge"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1896251302",
-                    "postedDate": "2024-08-14",
-                    "createdAt": "2024-08-15T11:55:19.400763+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 478,
-                    "tax": 24,
-                    "gross": 502
-                    },
-                    "balanceCarriedForward": 42431,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Powerups Reward",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "__typename": "Credit"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1871043620",
-                    "postedDate": "2024-08-12",
-                    "createdAt": "2024-08-21T21:32:19.073366+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": -2407,
-                    "tax": 0,
-                    "gross": -2407
-                    },
-                    "balanceCarriedForward": 41929,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Electricity",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "consumption": {
-                    "startDate": "2024-07-21",
-                    "endDate": "2024-08-12",
-                    "quantity": "300.8200",
-                    "unit": "kWh",
-                    "usageCost": 0,
-                    "supplyCharge": 0
-                    },
-                    "isExport": true,
-                    "__typename": "Charge"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1871044052",
-                    "postedDate": "2024-08-07",
-                    "createdAt": "2024-08-21T21:32:01.008991+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 4104,
-                    "tax": 205,
-                    "gross": 4309
-                    },
-                    "balanceCarriedForward": 39522,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Electricity",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "consumption": {
-                    "startDate": "2024-07-21",
-                    "endDate": "2024-08-07",
-                    "quantity": "322.5100",
-                    "unit": "kWh",
-                    "usageCost": 0,
-                    "supplyCharge": 0
-                    },
-                    "isExport": false,
-                    "__typename": "Charge"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1949392858",
-                    "postedDate": "2024-07-29",
-                    "createdAt": "2024-08-01T03:09:50.202838+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 24790,
-                    "tax": 0,
-                    "gross": 0
-                    },
-                    "balanceCarriedForward": 43831,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Direct debit",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": null,
-                    "__typename": "Payment"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1973989678",
-                    "postedDate": "2024-07-24",
-                    "createdAt": "2024-07-25T10:53:30.897903+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 543,
-                    "tax": 28,
-                    "gross": 571
-                    },
-                    "balanceCarriedForward": 19041,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Powerups Reward",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "__typename": "Credit"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1974036696",
-                    "postedDate": "2024-07-24",
-                    "createdAt": "2024-07-25T10:43:02.339290+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 177,
-                    "tax": 9,
-                    "gross": 186
-                    },
-                    "balanceCarriedForward": 18470,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Powerups Reward",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "__typename": "Credit"
-                }
-                },
-                {
-                "node": {
-                    "id": "-1974103763",
-                    "postedDate": "2024-07-24",
-                    "createdAt": "2024-07-25T10:17:07.255688+00:00",
-                    "accountNumber": "A-B3D8B29D",
-                    "amounts": {
-                    "net": 469,
-                    "tax": 24,
-                    "gross": 493
-                    },
-                    "balanceCarriedForward": 18284,
-                    "isHeld": false,
-                    "isIssued": true,
-                    "title": "Powerups Reward",
-                    "billingDocumentIdentifier": "236646425",
-                    "isReversed": false,
-                    "hasStatement": true,
-                    "note": "",
-                    "__typename": "Credit"
-                }
-                }
-            ]
-            },
-            "userId": 3235447,
-            "toAddress": "bruce@skingle.org",
-            "paymentDueDate": "2024-09-06",
-            "consumptionStartDate": null,
-            "consumptionEndDate": null,
-            "reversalsAfterClose": "NONE",
-            "status": "CLOSED",
-            "heldStatus": {
+            "balanceCarriedForward": 39303,
             "isHeld": false,
-            "reason": null
+            "isIssued": true,
+            "title": "Gas",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "consumption": {
+            "startDate": "2024-07-21",
+            "endDate": "2024-08-20",
+            "quantity": "360.7100",
+            "unit": "kWh",
+            "usageCost": 0,
+            "supplyCharge": 0
             },
-            "totalCharges": {
-            "netTotal": 4546,
-            "taxTotal": 484,
-            "grossTotal": 5030
-            },
-            "totalCredits": {
-            "netTotal": 1667,
-            "taxTotal": 85,
-            "grossTotal": 1752
-            }
+            "isExport": false,
+            "__typename": "Charge"
         }
-        "#;
+        },
+        {
+        "node": {
+            "id": "-1871043601",
+            "postedDate": "2024-08-20",
+            "createdAt": "2024-08-21T21:32:19.902722+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": -2716,
+            "tax": 0,
+            "gross": -2716
+            },
+            "balanceCarriedForward": 42150,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Electricity",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "consumption": {
+            "startDate": "2024-08-13",
+            "endDate": "2024-08-20",
+            "quantity": "181.0500",
+            "unit": "kWh",
+            "usageCost": 0,
+            "supplyCharge": 0
+            },
+            "isExport": true,
+            "__typename": "Charge"
+        }
+        },
+        {
+        "node": {
+            "id": "-1871044025",
+            "postedDate": "2024-08-20",
+            "createdAt": "2024-08-21T21:32:01.991119+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 2854,
+            "tax": 143,
+            "gross": 2997
+            },
+            "balanceCarriedForward": 39434,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Electricity",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "consumption": {
+            "startDate": "2024-08-08",
+            "endDate": "2024-08-20",
+            "quantity": "334.7100",
+            "unit": "kWh",
+            "usageCost": 0,
+            "supplyCharge": 0
+            },
+            "isExport": false,
+            "__typename": "Charge"
+        }
+        },
+        {
+        "node": {
+            "id": "-1896251302",
+            "postedDate": "2024-08-14",
+            "createdAt": "2024-08-15T11:55:19.400763+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 478,
+            "tax": 24,
+            "gross": 502
+            },
+            "balanceCarriedForward": 42431,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Powerups Reward",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "__typename": "Credit"
+        }
+        },
+        {
+        "node": {
+            "id": "-1871043620",
+            "postedDate": "2024-08-12",
+            "createdAt": "2024-08-21T21:32:19.073366+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": -2407,
+            "tax": 0,
+            "gross": -2407
+            },
+            "balanceCarriedForward": 41929,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Electricity",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "consumption": {
+            "startDate": "2024-07-21",
+            "endDate": "2024-08-12",
+            "quantity": "300.8200",
+            "unit": "kWh",
+            "usageCost": 0,
+            "supplyCharge": 0
+            },
+            "isExport": true,
+            "__typename": "Charge"
+        }
+        },
+        {
+        "node": {
+            "id": "-1871044052",
+            "postedDate": "2024-08-07",
+            "createdAt": "2024-08-21T21:32:01.008991+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 4104,
+            "tax": 205,
+            "gross": 4309
+            },
+            "balanceCarriedForward": 39522,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Electricity",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "consumption": {
+            "startDate": "2024-07-21",
+            "endDate": "2024-08-07",
+            "quantity": "322.5100",
+            "unit": "kWh",
+            "usageCost": 0,
+            "supplyCharge": 0
+            },
+            "isExport": false,
+            "__typename": "Charge"
+        }
+        },
+        {
+        "node": {
+            "id": "-1949392858",
+            "postedDate": "2024-07-29",
+            "createdAt": "2024-08-01T03:09:50.202838+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 24790,
+            "tax": 0,
+            "gross": 0
+            },
+            "balanceCarriedForward": 43831,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Direct debit",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": null,
+            "__typename": "Payment"
+        }
+        },
+        {
+        "node": {
+            "id": "-1973989678",
+            "postedDate": "2024-07-24",
+            "createdAt": "2024-07-25T10:53:30.897903+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 543,
+            "tax": 28,
+            "gross": 571
+            },
+            "balanceCarriedForward": 19041,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Powerups Reward",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "__typename": "Credit"
+        }
+        },
+        {
+        "node": {
+            "id": "-1974036696",
+            "postedDate": "2024-07-24",
+            "createdAt": "2024-07-25T10:43:02.339290+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 177,
+            "tax": 9,
+            "gross": 186
+            },
+            "balanceCarriedForward": 18470,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Powerups Reward",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "__typename": "Credit"
+        }
+        },
+        {
+        "node": {
+            "id": "-1974103763",
+            "postedDate": "2024-07-24",
+            "createdAt": "2024-07-25T10:17:07.255688+00:00",
+            "accountNumber": "A-B1D2C34D",
+            "amounts": {
+            "net": 469,
+            "tax": 24,
+            "gross": 493
+            },
+            "balanceCarriedForward": 18284,
+            "isHeld": false,
+            "isIssued": true,
+            "title": "Powerups Reward",
+            "billingDocumentIdentifier": "236646425",
+            "isReversed": false,
+            "hasStatement": true,
+            "note": "",
+            "__typename": "Credit"
+        }
+        }
+    ]
+    },
+    "userId": 3235447,
+    "toAddress": "dan@archer.org",
+    "paymentDueDate": "2024-09-06",
+    "consumptionStartDate": null,
+    "consumptionEndDate": null,
+    "reversalsAfterClose": "NONE",
+    "status": "CLOSED",
+    "heldStatus": {
+    "isHeld": false,
+    "reason": null
+    },
+    "totalCharges": {
+    "netTotal": 4546,
+    "taxTotal": 484,
+    "grossTotal": 5030
+    },
+    "totalCredits": {
+    "netTotal": 1667,
+    "taxTotal": 85,
+    "grossTotal": 1752
+    }
+}
+"#;
 
         // let bill = Bill::from_json(json).unwrap();
         let bill: Bill = serde_json::from_str(json).unwrap();
@@ -1131,7 +1211,7 @@ mod tests {
     //     let json = r#"
     //     {
     //         "status": "ACTIVE",
-    //         "number": "A-B3D8B29D",
+    //         "number": "A-B1D2C34D",
     //         "balance": 39303,
     //         "bills": {
     //             "pageInfo": {
@@ -1161,7 +1241,7 @@ mod tests {
     //                         "id": "-1871040199",
     //                         "postedDate": "2024-08-20",
     //                         "createdAt": "2024-08-21T21:36:10.492186+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 2711,
     //                             "tax": 136,
@@ -1192,7 +1272,7 @@ mod tests {
     //                         "id": "-1871043601",
     //                         "postedDate": "2024-08-20",
     //                         "createdAt": "2024-08-21T21:32:19.902722+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": -2716,
     //                             "tax": 0,
@@ -1223,7 +1303,7 @@ mod tests {
     //                         "id": "-1871044025",
     //                         "postedDate": "2024-08-20",
     //                         "createdAt": "2024-08-21T21:32:01.991119+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 2854,
     //                             "tax": 143,
@@ -1254,7 +1334,7 @@ mod tests {
     //                         "id": "-1896251302",
     //                         "postedDate": "2024-08-14",
     //                         "createdAt": "2024-08-15T11:55:19.400763+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 478,
     //                             "tax": 24,
@@ -1276,7 +1356,7 @@ mod tests {
     //                         "id": "-1871043620",
     //                         "postedDate": "2024-08-12",
     //                         "createdAt": "2024-08-21T21:32:19.073366+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": -2407,
     //                             "tax": 0,
@@ -1307,7 +1387,7 @@ mod tests {
     //                         "id": "-1871044052",
     //                         "postedDate": "2024-08-07",
     //                         "createdAt": "2024-08-21T21:32:01.008991+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 4104,
     //                             "tax": 205,
@@ -1338,7 +1418,7 @@ mod tests {
     //                         "id": "-1949392858",
     //                         "postedDate": "2024-07-29",
     //                         "createdAt": "2024-08-01T03:09:50.202838+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 24790,
     //                             "tax": 0,
@@ -1360,7 +1440,7 @@ mod tests {
     //                         "id": "-1973989678",
     //                         "postedDate": "2024-07-24",
     //                         "createdAt": "2024-07-25T10:53:30.897903+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 543,
     //                             "tax": 28,
@@ -1382,7 +1462,7 @@ mod tests {
     //                         "id": "-1974036696",
     //                         "postedDate": "2024-07-24",
     //                         "createdAt": "2024-07-25T10:43:02.339290+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 177,
     //                             "tax": 9,
@@ -1404,7 +1484,7 @@ mod tests {
     //                         "id": "-1974103763",
     //                         "postedDate": "2024-07-24",
     //                         "createdAt": "2024-07-25T10:17:07.255688+00:00",
-    //                         "accountNumber": "A-B3D8B29D",
+    //                         "accountNumber": "A-B1D2C34D",
     //                         "amounts": {
     //                             "net": 469,
     //                             "tax": 24,
@@ -1451,9 +1531,9 @@ mod tests {
     //     }
     //     "#;
 
-    //     let bill_results: BillResults = serde_json::from_str(json).unwrap();
+    //     let bill_results: AccountBillsView = serde_json::from_str(json).unwrap();
 
-    //     assert_eq!(bill_results.number, "A-B3D8B29D");
+    //     assert_eq!(bill_results.number, "A-B1D2C34D");
 
     // }
 }
