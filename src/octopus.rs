@@ -427,14 +427,14 @@ impl ClientBuilder {
     }
 
     #[cfg(test)]
-    fn new_test() -> ClientBuilder {
-        ClientBuilder {
-            context: Context::new_test(),
-            profile: None,
-            gql_client_builder:     sparko_graphql::Client::builder(),
-            token_manager_builder:  TokenManager::builder(),
-        }
-    }
+    // fn new_test() -> ClientBuilder {
+    //     ClientBuilder {
+    //         context: Context::new_test(),
+    //         profile: None,
+    //         gql_client_builder:     sparko_graphql::Client::builder(),
+    //         token_manager_builder:  TokenManager::builder(),
+    //     }
+    // }
 
     pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
         self.gql_client_builder = self.gql_client_builder.with_url(url)?;

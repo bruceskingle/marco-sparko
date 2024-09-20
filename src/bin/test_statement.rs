@@ -24,9 +24,7 @@ SOFTWARE.
 
 use marco_sparko::octopus::bill::AccountBillsView;
 use marco_sparko::octopus::Client;
-use marco_sparko::{Error, MarcoSparko};
-
-use marco_sparko::octopus::account::{AccountInterface, AccountManager, AccountUser};
+use marco_sparko::Error;
 
 fn main() -> Result<(), Error> {
     let json = r#"{

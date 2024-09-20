@@ -514,6 +514,8 @@ pub struct StatementTransactionParams {
     pub last: Option<Int>
 }
 
+// #[derive(GraphQLType)]
+// #[graphql(params = "BillQueryParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct StatementType {
@@ -569,6 +571,95 @@ pub struct StatementType {
     // The total amounts for all credits on the statement.
     pub total_credits: StatementTotalType
 }
+
+/*
+
+impl GraphQLType < BillQueryParams > for StatementType
+{
+    fn get_query_attributes(params : & BillQueryParams, prefix : & str) ->
+    String
+    {
+        format!
+        ("
+            bill{}
+              # object \"bill\"
+                {}
+              # /object \"bill\"
+            closingBalance
+            openingBalance
+            isExternalBill
+            transactions{}
+              # pageOf \"transactions\"
+              {{ # pageOf
+                pageInfo {{
+                    startCursor
+                    hasNextPage
+                }}
+                edges {{ # pageOf.edges
+              # pageOf.node \"transactions\"
+                    node {}
+              # /pageOf.node \"transactions\"
+                }} # /pageOf.edges
+              }} # /pageOf
+              # /pageOf \"transactions\"
+            userId
+            toAddress
+            paymentDueDate
+            consumptionStartDate
+            consumptionEndDate
+            reversalsAfterClose{}
+              # object \"reversalsAfterClose\"
+                {}
+              # /object \"reversalsAfterClose\"
+            status{}
+              # object \"status\"
+                {}
+              # /object \"status\"
+            heldStatus{}
+              # object \"heldStatus\"
+                {}
+              # /object \"heldStatus\"
+            totalCharges{}
+              # object \"totalCharges\"
+                {}
+              # /object \"totalCharges\"
+            totalCredits{}
+              # object \"totalCredits\"
+                {}
+              # /object \"totalCredits\"
+            ",
+        params.bill.get_actual(& GraphQL :: prefix(prefix, "bill")),
+        BillInterfaceType ::
+        get_query_part(& params.bill, & GraphQL :: prefix(prefix, "bill")),
+        params.transactions.get_actual(& GraphQL ::
+        prefix(prefix, "transactions")), Transaction ::
+        get_query_part(& params.transactions, & GraphQL ::
+        prefix(prefix, "transactions")),
+        params.reversals_after_close.get_actual(& GraphQL ::
+        prefix(prefix, "reversalsAfterClose")), StatementReversalsAfterClose
+        ::
+        get_query_part(& params.reversals_after_close, & GraphQL ::
+        prefix(prefix, "reversalsAfterClose")),
+        params.status.get_actual(& GraphQL :: prefix(prefix, "status")),
+        AccountStatementStatus ::
+        get_query_part(& params.status, & GraphQL ::
+        prefix(prefix, "status")),
+        params.held_status.get_actual(& GraphQL ::
+        prefix(prefix, "heldStatus")), HeldStatus ::
+        get_query_part(& params.held_status, & GraphQL ::
+        prefix(prefix, "heldStatus")),
+        params.total_charges.get_actual(& GraphQL ::
+        prefix(prefix, "totalCharges")), StatementTotalType ::
+        get_query_part(& params.total_charges, & GraphQL ::
+        prefix(prefix, "totalCharges")),
+        params.total_credits.get_actual(& GraphQL ::
+        prefix(prefix, "totalCredits")), StatementTotalType ::
+        get_query_part(& params.total_credits, & GraphQL ::
+        prefix(prefix, "totalCredits")),)
+    }
+}
+
+*/
 
 
 

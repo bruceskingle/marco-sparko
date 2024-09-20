@@ -73,6 +73,9 @@ pub struct TransactionSimpleView {
 //   pub consumption: NoParams,
 // }
 
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
+#[graphql(super_type = ["TransactionTypeInterface"])]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(tag = "__typename")]
 pub enum Transaction {
@@ -82,19 +85,49 @@ pub enum Transaction {
   Refund(AbstractTransaction)
 }
 
-impl GraphQLType<NoParams> for Transaction {
-  fn get_query_attributes(params: &NoParams, prefix: &str) -> String {
-      format!(r#"
-      # transaction
-              __typename
-              {}
-      # /transaction
-      "#, 
-      //TransactionTypeInterface::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
-      Charge::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions"))
-      )
-  }
+
+/*
+impl GraphQLType < NoParams > for Transaction
+{
+    fn get_query_attributes(params : & NoParams, prefix : & str) -> String
+    {
+        format!
+        ("  # enum variant charge
+  {}
+  # /enum variant charge
+  # enum variant credit
+  {}
+  # /enum variant credit
+  # enum variant payment
+  {}
+  # /enum variant payment
+  # enum variant refund
+  {}
+  # /enum variant refund
+",
+        Charge :: get_query_attributes(params, prefix), AbstractTransaction ::
+        get_query_attributes(params, prefix), AbstractTransaction ::
+        get_query_attributes(params, prefix), AbstractTransaction ::
+        get_query_attributes(params, prefix),)
+    }
 }
+
+*/
+
+// impl GraphQLType<NoParams> for Transaction {
+//   fn get_query_attributes(params: &NoParams, prefix: &str) -> String {
+//       format!(r#"
+//       # transaction
+//               __typename
+//               {}
+//               {}
+//       # /transaction
+//       "#,
+//       TransactionTypeInterface::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions")), 
+//       Charge::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions"))
+//       )
+//   }
+// }
 
 // impl GraphQLType<()> for Transaction {
 //   fn get_query(_:()) -> String {
@@ -217,8 +250,8 @@ impl GraphQLType < NoParams > for TransactionTypeInterface
 
 // Several variants have no additional fields so this implements for all of them
 
-// #[derive(GraphQLType)]
-// #[graphql(params = "StatementTransactionParams")]
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AbstractTransaction{
@@ -237,8 +270,8 @@ pub struct AbstractTransaction{
 //   }
 // }
 
-// #[derive(GraphQLType)]
-// #[graphql(params = "StatementTransactionParams")]
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Charge {
@@ -246,26 +279,110 @@ pub struct Charge {
   // pub __typename: String,
     #[serde(flatten)]
     pub transaction: TransactionTypeInterface,
+    #[graphql(no_params)]
     pub consumption: Consumption,
     pub is_export: Boolean
 }
 
-impl GraphQLType<NoParams> for Charge {
-  fn get_query_attributes(params: &NoParams, prefix: &str) -> String {
-      format!(r#"
-      # charge
-        {}
-        ...on Charge {{
-          consumption
-            {}
-          isExport
-        }}
-        # /charge
-      "#, TransactionTypeInterface::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions")), 
-          Consumption::get_query_part(&NoParams, prefix)
-      )
-  }
+// impl GraphQLType<NoParams> for Charge {
+//   fn get_query_attributes(params: &NoParams, prefix: &str) -> String {
+//       format!(r#"
+//       # charge
+//         ...on Charge {{
+//           consumption
+//             {}
+//           isExport
+//         }}
+//         # /charge
+//       "#, //TransactionTypeInterface::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions")), 
+//           Consumption::get_query_part(&NoParams, prefix)
+//       )
+//   }
+// }
+
+
+/*
+impl GraphQLType < NoParams > for Charge
+{
+    fn get_query_attributes(params : & NoParams, prefix : & str) -> String
+    {
+        format!
+        ("...on Charge {
+# flattened transaction
+consumption{}
+  # object "consumption"
+    {}
+  # /object "consumption"
+isExport
+
 }
+",
+        "", Consumption ::get_query_part(& NoParams, & GraphQL ::prefix(prefix, "consumption")),)
+    }
+}
+impl GraphQLType < NoParams > for Charge
+{
+    fn get_query_attributes(params : & NoParams, prefix : & str) -> String
+    {
+        format!
+        ("...on Charge {
+# flattened transaction
+consumption{}
+  # object "consumption"
+    {}
+  # /object "consumption"
+isExport
+
+}
+",
+        params.consumption.get_actual(& GraphQL ::
+        prefix(prefix, "consumption")), Consumption ::
+        get_query_part(& params.consumption, & GraphQL ::
+        prefix(prefix, "consumption")),)
+    }
+}
+
+
+impl GraphQLType < NoParams > for Charge
+{
+    fn get_query_attributes(params : & NoParams, prefix : & str) -> String
+    {
+        format!
+        ("# flattened transaction
+consumption{}
+  # object "consumption"
+    {}
+  # /object "consumption"
+isExport
+",
+        params.consumption.get_actual(& GraphQL ::        prefix(prefix, "consumption")), 
+        Consumption ::get_query_part(& params.consumption, & GraphQL ::prefix(prefix, "consumption")),)
+    }
+}
+
+impl GraphQLType < NoParams > for Charge
+{
+    fn get_query_attributes(params : & NoParams, prefix : & str) -> String
+    {
+        format!
+        ("transaction{}
+  # object "transaction"
+    {}
+  # /object "transaction"
+consumption{}
+  # object "consumption"
+    {}
+  # /object "consumption"
+isExport
+",
+        params.transaction.get_actual(& GraphQL::prefix(prefix, "transaction")), 
+        TransactionTypeInterface ::get_query_part(& params.transaction, & GraphQL ::prefix(prefix, "transaction")),
+        params.consumption.get_actual(& GraphQL ::prefix(prefix, "consumption")), 
+        Consumption ::get_query_part(& params.consumption, & GraphQL ::prefix(prefix, "consumption")),)
+    }
+}
+
+*/
 
 // impl GraphQLType<()> for Charge {
 //     fn get_query(params: ()) -> String {
@@ -407,6 +524,121 @@ use sparko_graphql::types::{Boolean, Date, Int};
       // deserialize("PreSnakeTransaction", r#"{"posted_date":"2024-04-12","account_number":"1234","__typename":"Charge","consumption":4,"is_export":false}"#);
       deserialize("PreCamelTransaction", r#"{"postedDate":"2024-04-12","accountNumber":"1234","__typename":"Charge","consumption":4,"isExport":false}"#);
 
+    }
+
+
+
+    #[test]
+    fn test_get_attributes() {
+      let result = Transaction::get_query_attributes(&NoParams, "");
+      let expected = r#"
+      # transaction
+              __typename
+              id
+postedDate
+createdAt
+accountNumber
+amounts
+  # object "amounts"
+    { #get_query_part
+  net
+tax
+gross
+
+} #/get_query_part
+
+  # /object "amounts"
+balanceCarriedForward
+isHeld
+isIssued
+title
+billingDocumentIdentifier
+isReversed
+hasStatement
+note
+
+              ...on Charge {
+# flattened transaction
+consumption
+  # object "consumption"
+    { #get_query_part
+  startDate
+endDate
+quantity
+unit
+usageCost
+supplyCharge
+
+} #/get_query_part
+
+  # /object "consumption"
+isExport
+
+}
+
+      # /transaction
+      "#;
+
+      let expected = r#"__typename
+id
+postedDate
+createdAt
+accountNumber
+amounts
+  # object "amounts"
+    { #get_query_part
+  net
+tax
+gross
+
+} #/get_query_part
+
+  # /object "amounts"
+balanceCarriedForward
+isHeld
+isIssued
+title
+billingDocumentIdentifier
+isReversed
+hasStatement
+note
+
+  # enum variant charge
+  ...on Charge {
+# flattened transaction
+consumption
+  # object "consumption"
+    { #get_query_part
+  startDate
+endDate
+quantity
+unit
+usageCost
+supplyCharge
+
+} #/get_query_part
+
+  # /object "consumption"
+isExport
+
+}
+
+  # /enum variant charge
+  # enum variant credit
+  # flattened transaction
+
+  # /enum variant credit
+  # enum variant payment
+  # flattened transaction
+
+  # /enum variant payment
+  # enum variant refund
+  # flattened transaction
+
+  # /enum variant refund
+"#;
+
+      assert_eq!(expected, result);
     }
 
 
