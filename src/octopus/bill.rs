@@ -210,7 +210,6 @@ pub enum BillsOrderBy {
 #[derive(GraphQLQueryParams)]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
-// #[skip_serializing_none]
 pub struct BillQueryParams {
     // Include bills without PDFs.
     #[serde(rename = "includeBillsWithoutPDF")]
