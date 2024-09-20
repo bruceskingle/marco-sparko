@@ -34,22 +34,22 @@ use super::consumption::Consumption;
 
 
 
-#[derive(GraphQLQueryParams)]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionSimpleViewParams {
-    pub first: Int
-}
+// #[derive(GraphQLQueryParams)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct TransactionSimpleViewParams {
+//     pub first: Int
+// }
 
-#[derive(GraphQLType)]
-#[graphql(params = "TransactionSimpleViewParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionSimpleView {
-    pub id: String,
-    pub posted_date: String,
-    pub __typename: String
-}
+// #[derive(GraphQLType)]
+// #[graphql(params = "TransactionSimpleViewParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct TransactionSimpleView {
+//     pub id: String,
+//     pub posted_date: String,
+//     pub __typename: String
+// }
 
 
 
@@ -73,8 +73,22 @@ pub struct TransactionSimpleView {
 //   pub consumption: NoParams,
 // }
 
+#[derive(GraphQLQueryParams)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementTransactionParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first: Option<Int>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last: Option<Int>
+}
+
 #[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
+#[graphql(params = "StatementTransactionParams")]
 #[graphql(super_type = ["TransactionTypeInterface"])]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(tag = "__typename")]
@@ -152,7 +166,7 @@ impl Transaction {
 }
 
 #[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
+#[graphql(params = "StatementTransactionParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionTypeInterface {
@@ -251,7 +265,7 @@ impl GraphQLType < NoParams > for TransactionTypeInterface
 // Several variants have no additional fields so this implements for all of them
 
 #[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
+#[graphql(params = "StatementTransactionParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AbstractTransaction{
@@ -271,7 +285,7 @@ pub struct AbstractTransaction{
 // }
 
 #[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
+#[graphql(params = "StatementTransactionParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct Charge {
@@ -530,7 +544,13 @@ use sparko_graphql::types::{Boolean, Date, Int};
 
     #[test]
     fn test_get_attributes() {
-      let result = Transaction::get_query_attributes(&NoParams, "");
+      let params = StatementTransactionParams {
+        before: None,
+        after: None,
+        first: None,
+        last: None,
+    };
+      let result = Transaction::get_query_attributes(&params, "");
       let expected = r#"
       # transaction
               __typename

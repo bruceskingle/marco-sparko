@@ -28,126 +28,126 @@ use serde::{Deserialize, Serialize};
 
 use std::ops::Not;
 use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
-use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, GraphQLQuery, NoParams, ParamBuffer, VariableBuffer};
-use super::decimal::Decimal;
-use super::transaction::{Transaction, TransactionSimpleView, TransactionSimpleViewParams};
+use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+use super::{decimal::Decimal, transaction::StatementTransactionParams};
+use super::transaction::Transaction;
 
 
-#[derive(GraphQLQueryParams)]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct SimpleBillParams {
-    pub first: Int,
-    pub transactions: TransactionSimpleViewParams
-}
+// #[derive(GraphQLQueryParams)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct SimpleBillParams {
+//     pub first: Int,
+//     pub transactions: TransactionSimpleViewParams
+// }
 
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "billType")]
-pub enum SimpleBill {
-    Statement(SimpleStatementType)
-}
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+// #[serde(tag = "billType")]
+// pub enum SimpleBill {
+//     Statement(SimpleStatementType)
+// }
 
-impl GraphQLType<SimpleBillParams> for SimpleBill {
-    fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
-        format!(r#"
-                {}
-                {}
-        "#, SimpleBillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
-            SimpleStatementType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions"))
-        )
-    }
-}
-
-#[derive(GraphQLType)]
-#[graphql(params = "SimpleBillParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct SimpleBillInterfaceType {
-    pub id: String,
-    pub from_date: String,
-    pub to_date: String
-}
+// impl GraphQLType<SimpleBillParams> for SimpleBill {
+//     fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
+//         format!(r#"
+//                 {}
+//                 {}
+//         "#, SimpleBillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
+//             SimpleStatementType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions"))
+//         )
+//     }
+// }
 
 // #[derive(GraphQLType)]
 // #[graphql(params = "SimpleBillParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct SimpleStatementType {
-    #[serde(flatten)]
-    // #[graphql(flatten)] maybe?
-    pub simple_bill_interface_type: SimpleBillInterfaceType,
-    pub transactions: ForwardPageOf<TransactionSimpleView>
-}
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct SimpleBillInterfaceType {
+//     pub id: String,
+//     pub from_date: String,
+//     pub to_date: String
+// }
+
+// // #[derive(GraphQLType)]
+// // #[graphql(params = "SimpleBillParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct SimpleStatementType {
+//     #[serde(flatten)]
+//     // #[graphql(flatten)] maybe?
+//     pub simple_bill_interface_type: SimpleBillInterfaceType,
+//     pub transactions: ForwardPageOf<TransactionSimpleView>
+// }
 
 
-/* This is what gets generated
-impl GraphQLType < SimpleBillParams > for SimpleStatementType
-{
-    fn get_query_part(params : & SimpleBillParams, prefix : String) -> String
-    {
-        format!
-        ("simpleBillInterfaceType({}){{\n    {}\n}}\ntransactions({}){{\n    {}\n}}\n",
-        params.simple_bill_interface_type.get_actual(GraphQL ::
-        prefix(& prefix, "simpleBillInterfaceType")), SimpleBillInterfaceType
-        ::
-        get_query_part(& params.simple_bill_interface_type, GraphQL ::
-        prefix(& prefix, "simpleBillInterfaceType")),
-        params.transactions.get_actual(GraphQL ::
-        prefix(& prefix, "transactions")), TransactionSimpleView ::
-        get_query_part(& params.transactions, GraphQL ::
-        prefix(& prefix, "transactions")),)
-    }
-}
-     */
+// /* This is what gets generated
+// impl GraphQLType < SimpleBillParams > for SimpleStatementType
+// {
+//     fn get_query_part(params : & SimpleBillParams, prefix : String) -> String
+//     {
+//         format!
+//         ("simpleBillInterfaceType({}){{\n    {}\n}}\ntransactions({}){{\n    {}\n}}\n",
+//         params.simple_bill_interface_type.get_actual(GraphQL ::
+//         prefix(& prefix, "simpleBillInterfaceType")), SimpleBillInterfaceType
+//         ::
+//         get_query_part(& params.simple_bill_interface_type, GraphQL ::
+//         prefix(& prefix, "simpleBillInterfaceType")),
+//         params.transactions.get_actual(GraphQL ::
+//         prefix(& prefix, "transactions")), TransactionSimpleView ::
+//         get_query_part(& params.transactions, GraphQL ::
+//         prefix(& prefix, "transactions")),)
+//     }
+// }
+//      */
 
-impl GraphQLType<SimpleBillParams> for SimpleStatementType {
-    fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
-        format!(r#"
-                id
-                fromDate
-                toDate
-                ...on StatementType {{
-                    transactions{} {{
-                        pageInfo
-                        {{
-                            startCursor
-                            hasNextPage
-                        }}
-                        edges
-                        {{
-                            node
-                            {}
-                        }}
-                    }}
-                }}
-        "#, params.transactions.get_actual(&GraphQL::prefix(prefix, "transactions")), TransactionSimpleView::get_query_part(&params.transactions, &GraphQL::prefix(prefix, "transactions"))
-        )
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
+// impl GraphQLType<SimpleBillParams> for SimpleStatementType {
+//     fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
+//         format!(r#"
+//                 id
+//                 fromDate
+//                 toDate
+//                 ...on StatementType {{
+//                     transactions{} {{
+//                         pageInfo
+//                         {{
+//                             startCursor
+//                             hasNextPage
+//                         }}
+//                         edges
+//                         {{
+//                             node
+//                             {}
+//                         }}
+//                     }}
+//                 }}
+//         "#, params.transactions.get_actual(&GraphQL::prefix(prefix, "transactions")), TransactionSimpleView::get_query_part(&params.transactions, &GraphQL::prefix(prefix, "transactions"))
+//         )
+//     }
+// }
 
 
 
 
-#[derive(GraphQLQueryParams)]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountBillsQueryParams {
-    pub account: AccountBillsViewParams
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+// #[derive(GraphQLQueryParams)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AccountBillsQueryParams {
+//     pub account: AccountBillsViewParams
+// }
 
 // impl GraphQLQueryParams for AccountBillsQueryParams
 // {
@@ -170,33 +170,33 @@ pub struct AccountBillsQueryParams {
 //     }
 // }
 
-// #[derive(GraphQLType)]
-// #[graphql(params = "AccountBillsQueryParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountBillsQuery {
-    pub account: AccountBillsView
-}
+// // #[derive(GraphQLType)]
+// // #[graphql(params = "AccountBillsQueryParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AccountBillsQuery {
+//     pub account: AccountBillsView
+// }
 
-impl GraphQLQuery<AccountBillsQueryParams> for AccountBillsQuery {
-    fn get_query(request_name: &str, params: &AccountBillsQueryParams) -> String {
-        format!(r#"
-            query {}{} {{
-                {}: account{} {}
-            }}
-        "#, 
-            request_name,
-            params.get_formal(),
-            request_name,
-            params.account.get_actual("account_"),
-            AccountBillsView::get_query_part(&params.account, "account_")
-        )
-    }
+// impl GraphQLQuery<AccountBillsQueryParams> for AccountBillsQuery {
+//     fn get_query(request_name: &str, params: &AccountBillsQueryParams) -> String {
+//         format!(r#"
+//             query {}{} {{
+//                 {}: account{} {}
+//             }}
+//         "#, 
+//             request_name,
+//             params.get_formal(),
+//             request_name,
+//             params.account.get_actual("account_"),
+//             AccountBillsView::get_query_part(&params.account, "account_")
+//         )
+//     }
     
-    // fn get_request_name() -> &'static str {
-    //     "getAccountPropertiesView"
-    // }
-}
+//     // fn get_request_name() -> &'static str {
+//     //     "getAccountPropertiesView"
+//     // }
+// }
 
 #[derive(GraphQLQueryParams)]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Default)]
@@ -309,105 +309,9 @@ pub struct AccountBillsView {
     pub bills: ForwardPageOf<Bill>
 }
 
-// impl AccountBillsView {
-//     pub fn query() -> &'static str {
-//         formatcp!(
-//             r#"query {}($accountNumber: String!)
-//             {{
-//                 account(accountNumber: $accountNumber)
-//                 {{
-//                     {}
-//                 }}
-//             }}"#,
-//             AccountBillsView::get_operation_name(), AccountBillsView::get_query_part()
-//         )
-//     }
-
-//     pub const fn get_query_part() -> &'static str {
-//         formatcp!(r#"
-//         status
-//         number
-//         balance
-//         bills (first: 1) {{
-//                 {}
-//         }}
-//         "#, PageOfBills::get_field_names())
-//     }
-
-//     pub const fn get_operation_name() -> &'static str {
-//         "accountBillsView"
-//     }
-// }
-
-// impl GraphQLType<BillQueryParams> for AccountBillsView {
-//     fn get_query(params: BillQueryParams) -> String {
-//         format!(r#"
-//         status
-//         number
-//         balance
-//         bills (first: 1) {{
-//                 {}
-//         }}
-//         "#, PageOfBills::get_field_names())
-//     }
-// }
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct PageOfBills {
-//     pub page_info: ForwardPageInfo,
-//     pub edges: Vec<BillEdge>
-// }
-
-// impl PageOfBills {
-//     pub const fn get_query_part() -> &'static str {
-//         formatcp!(r#"
-//         pageInfo {{
-//                 {}
-//         }}
-//         edges {{
-//                 {}
-//         }}
-//         "#, ForwardPageInfo::get_query_part(), BillEdge::get_query_part())
-//     }
-
-//     pub fn get_field_names() -> String {
-//         format!(r#"
-//         pageInfo {{
-//                 {}
-//         }}
-//         edges {{
-//                 {}
-//         }}
-//         "#, ForwardPageInfo::get_field_names(), BillEdge::get_field_names())
-//     }
-// }
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct BillEdge {
-//     pub node: Bill
-// }
-
-// impl BillEdge {
-//     pub fn get_field_names() -> String {
-//         format!(r#"
-//         node {{
-//             {}
-//         }}
-//         "#, Bill::get_field_names())
-//     }
-// }
-
-// #[derive(GraphQLQueryParams)]
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct BillParams {
-//     pub transactions: StatementTransactionParams
-// //   pub amounts: NoParams,
-// //   pub consumption: NoParams,
-// }
-
+#[derive(GraphQLType)]
+#[graphql(params = "BillQueryParams")]
+#[graphql(super_type = ["BillInterfaceType"])]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "billType")]
@@ -415,30 +319,21 @@ pub enum Bill {
     Statement(StatementType)
 }
 
-impl GraphQLType<BillQueryParams> for Bill {
-  fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
-      format!(r#"
-      #bill
-            billType
-            {}
-        #/bill
-      "#, 
-      //BillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
-      StatementType::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions"))
-      )
-  }
-}
+// impl GraphQLType<BillQueryParams> for Bill {
+//   fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
+//       format!(r#"
+//       #bill
+//             billType
+//             {}
+//         #/bill
+//       "#, 
+//       //BillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
+//       StatementType::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions"))
+//       )
+//   }
+// }
 
 impl Bill {
-    // pub fn get_field_names() -> String {
-    //     format!(r#"
-    //     {}
-    //     ...on StatementType {{
-    //         {}
-    //     }}
-    //     "#, BillInterfaceType::get_field_names(), StatementType::get_field_names())
-    // }
-
     pub fn print(&self) {
         match self {
             Bill::Statement(bill) => bill.print(),
@@ -488,34 +383,8 @@ pub struct BillInterfaceType {
     pub issued_date: Date
 }
 
-// impl BillInterfaceType {
-//     pub fn get_field_names() -> &'static str {
-//         r#"
-//         id
-//         fromDate
-//         toDate
-//         issuedDate
-//         billType
-//         "#
-//     }
-// }
-
-#[derive(GraphQLQueryParams)]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct StatementTransactionParams {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub before: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub after: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first: Option<Int>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last: Option<Int>
-}
-
-// #[derive(GraphQLType)]
-// #[graphql(params = "BillQueryParams")]
+#[derive(GraphQLType)]
+#[graphql(params = "BillQueryParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct StatementType {
@@ -557,21 +426,50 @@ pub struct StatementType {
     pub consumption_end_date: Option<Date>,
 
     // How many charges have been reversed after the close date.
+    #[graphql(no_params)]
+    #[graphql(scalar)]
     pub reversals_after_close: StatementReversalsAfterClose,
 
     // Current status of the associated statement.
+    #[graphql(no_params)]
+    #[graphql(scalar)]
     pub status: AccountStatementStatus,
 
     // Retrieve the held status of a account statement.
+    #[graphql(no_params)]
     pub held_status: HeldStatus,
 
     // The total amounts for all charges on the statement.
+    #[graphql(no_params)]
     pub total_charges: StatementTotalType,
 
     // The total amounts for all credits on the statement.
+    #[graphql(no_params)]
     pub total_credits: StatementTotalType
 }
 
+/*
+impl GraphQLType < BillQueryParams > for StatementType
+{
+    fn get_query_attributes(params : & BillQueryParams, prefix : & str) ->
+    String
+    {
+        format!
+        ("...on StatementType {{\n# flattened bill\nclosingBalance\nopeningBalance\nisExternalBill\ntransactions{}\n  # pageOf \"transactions\"\n  {{ # pageOf\n    pageInfo {{\n        startCursor\n        hasNextPage\n    }}\n    edges {{ # pageOf.edges\n  # pageOf.node \"transactions\"\n        node {}\n  # /pageOf.node \"transactions\"\n    }} # /pageOf.edges\n  }} # /pageOf\n  # /pageOf \"transactions\"\nuserId\ntoAddress\npaymentDueDate\nconsumptionStartDate\nconsumptionEndDate\nreversalsAfterClose\nstatus\nheldStatus{}\n  # object \"heldStatus\"\n    {}\n  # /object \"heldStatus\"\ntotalCharges{}\n  # object \"totalCharges\"\n    {}\n  # /object \"totalCharges\"\ntotalCredits{}\n  # object \"totalCredits\"\n    {}\n  # /object \"totalCredits\"\n\n}}\n",
+        params.transactions.get_actual(& GraphQL ::
+        prefix(prefix, "transactions")), Transaction ::
+        get_query_part(& params.transactions, & GraphQL ::
+        prefix(prefix, "transactions")), "", HeldStatus ::
+        get_query_part(& NoParams, & GraphQL :: prefix(prefix, "heldStatus")),
+        "", StatementTotalType ::
+        get_query_part(& NoParams, & GraphQL ::
+        prefix(prefix, "totalCharges")), "", StatementTotalType ::
+        get_query_part(& NoParams, & GraphQL ::
+        prefix(prefix, "totalCredits")),)
+    }
+}
+
+ */
 /*
 
 impl GraphQLType < BillQueryParams > for StatementType
@@ -663,79 +561,50 @@ impl GraphQLType < BillQueryParams > for StatementType
 
 
 
-impl GraphQLType<BillQueryParams> for StatementType {
-    fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
-        format!(r#"
-          {}
-          ...on StatementType {{
-            closingBalance
-            openingBalance
-            isExternalBill
-            transactions{} {{
-                pageInfo {{
-                    startCursor
-                    hasNextPage
-                }}
-                edges {{
-                    node {}
-                }}
-            }}
-            userId
-            toAddress
-            paymentDueDate
-            consumptionStartDate
-            consumptionEndDate
-            reversalsAfterClose
-            status
-            heldStatus
-                {}
-            totalCharges
-                {}
-            totalCredits
-                {}
-          }}
-        "#, BillInterfaceType::get_query_attributes(&params, &GraphQL::prefix(prefix, "bill")), 
+// impl GraphQLType<BillQueryParams> for StatementType {
+//     fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
+//         format!(r#"
+//           {}
+//           ...on StatementType {{
+//             closingBalance
+//             openingBalance
+//             isExternalBill
+//             transactions{} {{
+//                 pageInfo {{
+//                     startCursor
+//                     hasNextPage
+//                 }}
+//                 edges {{
+//                     node {}
+//                 }}
+//             }}
+//             userId
+//             toAddress
+//             paymentDueDate
+//             consumptionStartDate
+//             consumptionEndDate
+//             reversalsAfterClose
+//             status
+//             heldStatus
+//                 {}
+//             totalCharges
+//                 {}
+//             totalCredits
+//                 {}
+//           }}
+//         "#, BillInterfaceType::get_query_attributes(&params, &GraphQL::prefix(prefix, "bill")), 
 
-            params.transactions.get_actual(prefix),
-            Transaction::get_query_part(&NoParams, prefix),
+//             params.transactions.get_actual(prefix),
+//             Transaction::get_query_part(&NoParams, prefix),
 
-            HeldStatus::get_query_part(&NoParams, prefix),
-            StatementTotalType::get_query_part(&NoParams, prefix),
-            StatementTotalType::get_query_part(&NoParams, prefix),
-        )
-    }
-  }
+//             HeldStatus::get_query_part(&NoParams, prefix),
+//             StatementTotalType::get_query_part(&NoParams, prefix),
+//             StatementTotalType::get_query_part(&NoParams, prefix),
+//         )
+//     }
+//   }
 
 impl StatementType {
-    // pub fn get_field_names() -> String {
-    //     format!(r#"
-    //     closingBalance
-    //     openingBalance
-    //     isExternalBill
-    //     transactions(first: 100) {{
-    //         {}
-    //     }}
-    //     userId
-    //     toAddress
-    //     paymentDueDate
-    //     consumptionStartDate
-    //     consumptionEndDate
-    //     reversalsAfterClose
-    //     status
-    //     heldStatus {{
-    //         {}
-    //     }}
-    //     totalCharges {{
-    //         {}
-    //     }}
-    //     totalCredits {{
-    //         {}
-    //     }}
-    //     "#, Transaction::get_field_names(),
-    //         HeldStatus::get_field_names(),
-    //         StatementTotalType::get_field_names(),
-    //         StatementTotalType::get_field_names())
-    // }
 
     pub fn print(&self) {
         println!("Energy Account Statement");
