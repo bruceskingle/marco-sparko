@@ -86,12 +86,15 @@ pub struct ConsumptionType {
 #[serde(rename_all = "camelCase")]
 pub struct ConsumptionTypeQueryParams {
   // Earliest consumption reading to return. Must specify a timezone.
+  #[graphql(required)]
   pub start_at: DateTime,
 
   // Aggregate consumption according to this grouping.
+  // #[graphql(scalar)]
   pub grouping: ConsumptionGroupings,
 
   // Timezone to use for grouping.
+  #[graphql(required)]
   pub timezone: String,
   pub before: Option<String>,
   pub after: Option<String>,

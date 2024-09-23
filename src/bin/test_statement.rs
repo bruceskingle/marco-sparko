@@ -351,7 +351,7 @@ fn main() -> Result<(), Error> {
 
         let result: AccountBillsView = serde_json::from_str(json).unwrap();
         
-        let _ = Client::handle_bill(result);
+        let _ = Client::handle_bill(&result);
     
     Ok(())
 }

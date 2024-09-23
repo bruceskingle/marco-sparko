@@ -31,7 +31,10 @@ pub mod consumption;
 pub mod consumption_type;
 pub mod transaction;
 pub mod bill;
-// mod meter;
+pub mod meter;
+pub mod meter_property_view;
+pub mod meter_point;
+pub mod meter_point_property_view;
 
 use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
@@ -273,7 +276,7 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_bill(result: AccountBillsView) -> Result<(), crate::Error> {
+    pub fn handle_bill(result: &AccountBillsView) -> Result<(), crate::Error> {
         //println!("\n===========================\n{}\n===========================\n", result);
 
         match &result.bills.edges[0].node {
@@ -355,7 +358,16 @@ impl Module for Client {
 
             let result = account_manager.get_latest_bill(&self.gql_client, &mut self.token_manager).await?;
 
-            Self::handle_bill(result)
+            Self::handle_bill(&result)?;
+
+            if let  bill::Bill::Statement(statement) = &result.bills.edges[0].node {
+
+                let with_effect_from = None; // Some(statement.bill.from_date)
+                let meter_result = account_manager.get_account_properties_meters(
+                    &self.gql_client, &mut self.token_manager, with_effect_from).await?;
+                }
+
+            Ok(())
         }
         else {
             Err(crate::Error::InternalError(String::from("Unable to find default account number")))

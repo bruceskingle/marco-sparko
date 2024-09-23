@@ -25,50 +25,52 @@ SOFTWARE.
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
-use crate::{gql::{types::{Boolean, Date, Int, ID}, GraphQLType}, octopus::consumption_type::ConsumptionType};
+use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+use sparko_graphql::{types::{Boolean, Date, DateTime, Float, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+use crate::octopus::consumption_type::ConsumptionType;
 
-use super::consumption_type::{ConsumptionConnection, ConsumptionQueryParams};
+use super::{consumption_type::ConsumptionTypeQueryParams, decimal::Decimal};
 
+#[derive(GraphQLQueryParams)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct MeterQueryParams {
+  pub id: Option<Int>,
+  pub include_inactive: Option<bool>,
+  pub consumption: ConsumptionTypeQueryParams
+}
 
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct MeterIdView {
+  pub id: ID,
+  pub serial_number: String,
+}
 
-
+#[derive(GraphQLType)]
+#[graphql(params = "MeterQueryParams")]
+#[graphql(super_type = ["MeterInterface"])]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(tag = "__typename")]
 pub enum Meter {
   ElectricityMeterType(ElectricityMeterType),
-  GasMeterType(AbstractMeter)
-}
-
-impl GraphQLType<()> for Meter {
-  fn get_query(params: ()) -> String {
-        
-    format!(r#"
-    {}
-    ... on ElectricityMeterType {{
-      {}
-    }}
-    "#, MeterInterface::get_field_names(),
-        ElectricityMeterType::get_field_names())
-    }
+  GasMeterType(GasMeterType)
 }
 
 impl Meter {
-  pub fn as_meter_point_interface(&self) -> &MeterInterface {
+  pub fn as_meter_interface(&self) -> &MeterInterface {
     match self {
-      Meter::ElectricityMeterType(txn) => &txn.meter_point_interface,
-      Meter::GasMeterType(txn) => &txn.meter_point_interface,
+      Meter::ElectricityMeterType(txn) => &txn.meter_interface,
+      Meter::GasMeterType(txn) => &txn.meter_interface,
     }
   }
 }
 
-
-
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct MeterInterfaceQueryParams {
-  consumption: ConsumptionQueryParams
-}
-
+// interface Meter in the schema
+#[derive(GraphQLType)]
+#[graphql(params = "MeterQueryParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct MeterInterface {
@@ -78,7 +80,7 @@ pub struct MeterInterface {
   // Whether this meter requires a final change of tenancy (COT) reading.
   pub requires_cot_final_reading: Boolean,
   pub fuel_type: String,
-  pub consumption: ConsumptionConnection
+  pub consumption: ForwardPageOf<ConsumptionType>
 }
 
 /*
@@ -98,291 +100,15 @@ consumption(
   )
 */
 
-// This is an interface in the GraphQL schema
-impl GraphQLType<MeterInterfaceQueryParams> for  MeterInterface {
-  fn get_query(params: MeterInterfaceQueryParams) -> String {
-    format!(r#"
-    id
-    serialNumber
-    consumptionUnits
-    requiresCotFinalReading
-    fuelType
-    consumption({}) {{
-      {}
-    }}
-    "#, params.consumption, ConsumptionType::get_query(()))
-    }
-}
 
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(tag = "__typename")]
-// pub enum  ElectricityMeterPointType {
-//   StandardMeterPoint(StandardMeterPoint),
-//   DayNightMeterPoint(DayNightMeterPoint),
-//   ThreeRateMeterPoint(ThreeRateMeterPoint),
-//   HalfHourlyMeterPoint(HalfHourlyMeterPoint),
-//   PrepayMeterPoint(PrepayMeterPoint)
-// }
-
-// impl ElectricityMeterPointType {
-//   pub fn get_field_names() -> String {
-//     format!(r#"
-//     {{
-//       ... on MeterPointType {{
-//           id
-//           displayName
-//           fullName
-//           description
-//           productCode
-//           standingCharge
-//           preVatStandingCharge
-//           tariffCode
-//       }}
-//       ... on StandardMeterPoint {{
-//           unitRate
-//           unitRateEpgApplied
-//           preVatUnitRate
-//       }}
-//       ... on DayNightMeterPoint {{
-//           dayRate
-  
-//           # Is EPG applied to the unit rate.
-//           dayRateEpgApplied
-//           nightRate
-  
-//           # Is EPG applied to the unit rate.
-//           nightRateEpgApplied
-//           preVatDayRate
-//           preVatNightRate
-//       }}
-//       ... on ThreeRateMeterPoint {{
-//           dayRate
-  
-//           # Is EPG applied to the unit rate.
-//           dayRateEpgApplied
-//           nightRate
-  
-//           # Is EPG applied to the unit rate.
-//           nightRateEpgApplied
-//           offPeakRate
-  
-//           # Is EPG applied to the unit rate.
-//           offPeakRateEpgApplied
-//           preVatDayRate
-//           preVatNightRate
-//           preVatOffPeakRate
-//       }}
-//       __typename
-//     }}
-//   "#)
-//   }
-// }
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(tag = "__typename")]
-// pub enum EnergyMeterPointType {
-//   StandardMeterPoint(StandardMeterPoint),
-//   DayNightMeterPoint(DayNightMeterPoint),
-//   ThreeRateMeterPoint(ThreeRateMeterPoint),
-//   GasMeterPointType(GasMeterPointType)
-// }
-
-// impl EnergyMeterPointType {
-
-//  /*
-//  All field names
-
-//  {
-//       ... on MeterPointType {
-//           id
-//           displayName
-//           fullName
-//           description
-//           productCode
-//           standingCharge
-//           preVatStandingCharge
-//           tariffCode
-//       }
-//       ... on StandardMeterPoint {
-//           unitRate
-//           unitRateEpgApplied
-//           preVatUnitRate
-//       }
-//       ... on DayNightMeterPoint {
-//           dayRate
-
-//           # Is EPG applied to the unit rate.
-//           dayRateEpgApplied
-//           nightRate
-
-//           # Is EPG applied to the unit rate.
-//           nightRateEpgApplied
-//           preVatDayRate
-//           preVatNightRate
-//       }
-//       ... on ThreeRateMeterPoint {
-//           dayRate
-
-//           # Is EPG applied to the unit rate.
-//           dayRateEpgApplied
-//           nightRate
-
-//           # Is EPG applied to the unit rate.
-//           nightRateEpgApplied
-//           offPeakRate
-
-//           # Is EPG applied to the unit rate.
-//           offPeakRateEpgApplied
-//           preVatDayRate
-//           preVatNightRate
-//           preVatOffPeakRate
-//       }
-//       ... on HalfHourlyMeterPoint {
-//       unitRates {
-//           validFrom
-//           validTo
-
-//           # Price in pence (inc VAT).
-//           value
-
-//           # Price in pence (not including VAT).
-//           preVatValue
-//               # Information on how agile unit rates have been calculated.
-//           agileCalculationInfo  {
-//               # The maximum value/cap for the unit rate.
-//               priceCap
-
-//               # The peak offset for the unit rate.
-//               peakOffset
-
-//               # The price multiplier/coefficient used to calculate the unit rate.
-//               gspCoefficient
-//           }
-//       }
-
-      
-//       ... on PrepayMeterPoint {
-//           unitRate
-//           preVatUnitRate
-//       }
-//       __typename
-//       }
-//   }
- 
-//   */
-
-//  pub fn get_field_names() -> String {
-//   format!(r#"
-//   {{
-//     ... on MeterPointType {{
-//         id
-//         displayName
-//         fullName
-//         description
-//         productCode
-//         standingCharge
-//         preVatStandingCharge
-//         tariffCode
-//     }}
-//     ... on StandardMeterPoint {{
-//         unitRate
-//         unitRateEpgApplied
-//         preVatUnitRate
-//     }}
-//     ... on DayNightMeterPoint {{
-//         dayRate
-
-//         # Is EPG applied to the unit rate.
-//         dayRateEpgApplied
-//         nightRate
-
-//         # Is EPG applied to the unit rate.
-//         nightRateEpgApplied
-//         preVatDayRate
-//         preVatNightRate
-//     }}
-//     ... on ThreeRateMeterPoint {{
-//         dayRate
-
-//         # Is EPG applied to the unit rate.
-//         dayRateEpgApplied
-//         nightRate
-
-//         # Is EPG applied to the unit rate.
-//         nightRateEpgApplied
-//         offPeakRate
-
-//         # Is EPG applied to the unit rate.
-//         offPeakRateEpgApplied
-//         preVatDayRate
-//         preVatNightRate
-//         preVatOffPeakRate
-//     }}
-//     __typename
-//   }}
-// "#)
-// }
-// }
-
-
-
-// // Details of an ongoing enrolment process.
+// #[derive(GraphQLType)]
+// #[graphql(params = "MeterQueryParams")]
 // #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "camelCase")]
-// pub struct EnrolmentType {
-//   // Date the switch started.
-//   switch_start_date: Date,
-
-//   // Target date for supply to start.
-//   supply_start_date: Date,
-
-//   // The last company to supply this meter point.
-//   previous_supplier: String,
-
-//   // The enrolment status on a meter point.
-//   status: EnrolmentStatusOptions
+// pub struct AbstractMeter{
+//   #[serde(flatten)]
+//   pub meter_interface: MeterInterface,
 // }
-
-// impl GraphQLType for EnrolmentType {
-//   fn get_field_names() -> String {
-//     format!(r#"
-//     switchStartDate
-//     supplyStartDate
-//     previousSupplier
-//     "#)
-//   }
-// }
-
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-// pub enum EnrolmentStatusOptions {
-//   // The previous supplier objects to the switch. The have not has cancelled the switch yet, but in 99% cases, they will cancel the switch.
-//   ObjectionReceived,
-//   // The previous supplier cancelled the switch. This is a terminal state, and we will have to reapply before this can start again.
-//   RegistrationObjected,
-//   // The overseeing industry body has objected to the switch
-//   Rejected,
-//   // The request to bring the meter point on supply has been withdrawn.
-//   Withdrawn,
-//   // The meterpoint has been created but the enrolment process has not started yet.
-//   PreRegistration,
-//   // Enrolment has been requested. This is the default catch-all status, which is returned when no other defined process is happening.
-//   Requested,
-//   // Enrolment has been completed.
-//   Completed,
-//   // Enrolment has been disputed. This could be that the meter point details that have been provided have been disputed.
-//   Disputed,
-//   // Enrolment has been accepted by the industry, which means that it has all the information needed to switch supplier and if that information is correct (to it's knowledge)
-//   Accepted
-// }
-
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct AbstractMeter{
-  #[serde(flatten)]
-  pub meter_point_interface: MeterInterface,
-}
 
 /*
   An electricity meter is a collection of registers which store readings.
@@ -430,118 +156,262 @@ pub struct ReadingsQueryParams {
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct ElectricityMeterTypeQueryParams {
-  pub exportMeters: ExportMetersQueryParams,
+  pub export_meters: ExportMetersQueryParams,
   pub readings: ReadingsQueryParams,
 }
 
+
+#[derive(GraphQLType)]
+#[graphql(params = "MeterQueryParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct ElectricityMeterType {
   #[serde(flatten)]
-  pub meter_point_interface: MeterInterface,
+  pub meter_interface: MeterInterface,
 
   
-  requiresAccess: Boolean
-  isDigital: Boolean
-  installationDate: Date
-  lastInspectionDate: Date
-  createdAt: DateTime!
-  updatedAt: DateTime
-  activeFrom: Date!
-  activeTo: Date
-  meterPoint: ElectricityMeterPointType!
-  location: String
-  currentRating: Int
-  makeAndType: String
-  meterType: ElectricityMeterMeterType
-  certificationDate: Date
-  certifiedUntil: Date
-  retrievalMethod: String
-  importMeter: ElectricityMeterType
-  exportMeters: ElectricityMeterTypeConnection!
-  prepayLedgers: PrepayLedgersType
-  smartImportElectricityMeter: SmartMeterDeviceType
-  smartExportElectricityMeter: SmartMeterDeviceType
-  nodeId: ID!
-  readings: ElectricityMeterReadingConnectionTypeConnection
-  registers: [ElectricityMeterRegisterType]
-  hasAndAllowsHhReadings: Boolean
-  smartDevices: [SmartMeterDeviceType]
-  isTradPrepay: Boolean
-  isReadyForTopup: Boolean
+  pub requires_access: Boolean,
+  pub is_digital: Boolean,
+  pub installation_date: Date,
+  pub last_inspection_date: Date,
+  pub created_at: DateTime,
+  pub updated_at: Option<DateTime>,
+  pub active_from: Date,
+  pub active_to: Option<Date>,
+  // meter_point: ElectricityMeterPointType,
+  pub location: Option<String>,
+  pub current_rating: Option<Int>,
+  pub make_and_type: Option<String>,
+  #[graphql(no_params)]
+  #[graphql(scalar)]
+  pub meter_type: Option<ElectricityMeterMeterType>,
+  pub certification_date: Option<Date>,
+  pub certified_until: Option<Date>,
+  pub retrieval_method: Option<String>,
+  #[graphql(no_params)]
+  pub import_meter: Option<MeterIdView>,
+  #[graphql(no_params)]
+  #[graphql(scalar)]
+  pub export_meters: ForwardPageOf<ElectricityMeterType>,
+  // pub prepay_ledgers: Option<PrepayLedgersType>,
+  // pub smart_import_electricity_meter: Option<SmartMeterDeviceType>,
+  // pub smart_export_electricity_meter: Option<SmartMeterDeviceType>,
+  pub node_id: ID,
+  // pub readings: ForwardPageOf<ElectricityMeterReadingType>,
+  #[graphql(no_params)]
+  // pub registers: Vec<ElectricityMeterRegisterType>,
+  pub has_and_allows_hh_readings: Boolean,
+  // pub smart_devices: Vec<SmartMeterDeviceType>,
+  pub is_trad_prepay: Boolean,
+  pub is_ready_for_topup: Boolean,
 }
 
-impl ElectricityMeterType {
-  pub fn get_query() -> String {
-    format!(r#"
-    {}
-    requiresAccess
-    isDigital
-    installationDate
-    lastInspectionDate
-    createdAt
-    updatedAt
-    activeFrom
-    activeTo
-    meterPoint
-    location
-    currentRating
-    makeAndType
-    meterType
-    certificationDate
-    certifiedUntil
-    retrievalMethod
-    importMeter
-    exportMeters
-    prepayLedgers
-    smartImportElectricityMeter
-    smartExportElectricityMeter
-    nodeId
-    readings
-    registers: [ElectricityMeterRegisterType]
-    hasAndAllowsHhReadings
-    smartDevices: [SmartMeterDeviceType]
-    isTradPrepay
-    isReadyForTopup
-    "#,
-    
-  )
-  }
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+pub enum ElectricityMeterMeterType {
+  CHECK,
+  // Half Hourly
+  H,
+  // Key
+  K,
+  #[serde(rename = "LAG_")]
+  LAG,
+  #[serde(rename = "LEAD_")]
+  LEAD,
+  #[serde(rename = "MAIN_")]
+  MAIN,
+  // Non-Half Hourly
+  N,
+  // Non-remotely Configurable Automated Meter Reading
+  NCAMR,
+  // A meter that meets the definition of an ADM but is not compliant with any version of SMETS
+  NSS,
+  // Remotely Configurable Automated Meter Reading without remote enable/disable capability
+  RCAMR,
+  // Remotely Configurable Automated Meter Reading with remote enable/disable capability
+  RCAMY,
+  // Smartcard Prepayment
+  S,
+  // A meter that is compliant with the Smart Metering Equipment Technical Specifications 1 (SMETS1)
+  S1,
+  // A single element meter that is compliant with SMETS2
+  S2A,
+  // A twin element meter that is compliant with SMETS2
+  S2B,
+  // A polyphase meter that is compliant with SMETS2
+  S2C,
+  // A single element meter with one or more ALCS that is compliant with SMETS2
+  S2AD,
+  // A twin element meter with one or more ALCS that is compliant with SMETS2
+  S2BD,
+  // A polyphase meter with one or more ALCS that is compliant with SMETS2
+  S2CD,
+  // Single element meter with one or more ALCS and Boost Function that is compliant with SMETS2
+  S2ADE,
+  // A twin element meter with one or more ALCS and Boost Function that is compliant with SMETS2
+  S2BDE,
+  // A polyphase meter with one or more ALCS and Boost Function that is compliant with SMETS2
+  S2CDE,
+  // Special
+  SPECL,
+  // Token
+  T,
+  // Single Element with APC that is compliant with SMETS2
+  #[serde(rename = "A_2AF")]
+  A2af,
+  // Single Element with ALCS and APC that is compliant with SMETS2
+  #[serde(rename = "A_2ADF")]
+  A2adf,
+  // Single Element with Boost Function and APC that is compliant with SMETS2
+  #[serde(rename = "A_2AEF")]
+  A2aef,
+  // Single Element with ALCS, Boost Function and APC that is compliant with SMETS2
+  #[serde(rename = "A_2ADEF")]
+  A2adef,
+  // Twin Element  with APC that is compliant with SMETS2
+  #[serde(rename = "A_2BF")]
+  A2bf,
+  // Twin Element with ALCS and APC that is compliant with SMETS2
+  #[serde(rename = "A_2BDF")]
+  A2bdf,
+  // Twin Element with Boost Function and APC that is compliant with SMETS2
+  #[serde(rename = "A_2BEF")]
+  A2bef,
+  // Twin Element with ALCS, Boost Function and APC that is compliant with SMETS2
+  #[serde(rename = "A_2BDEF")]
+  A2bdef,
+  // Polyphase with APC that is compliant with SMETS2
+  #[serde(rename = "A_2CF")]
+  A2cf,
+  // Polyphase with ALCS and APC that is compliant with SMETS2
+  #[serde(rename = "A_2CDF")]
+  A2cdf,
+  // Polyphase with Boost Function and APC that is compliant with SMETS2
+  #[serde(rename = "A_2CEF")]
+  A2cef,
+  // Polyphase with ALCS, Boost Function and APC that is compliant with SMETS2
+  #[serde(rename = "A_2CDEF")]
+  A2cdef,
 }
 
 
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+pub enum GasMeterMechanism {
+  // Credit
+  CR,
+  // Electronic Token Meter
+  ET,
+  // Prepayment
+  PP,
+  // Mechanical Token Meter
+  MT,
+  // Coin Meter
+  CM,
+  // Thrift
+  TH,
+  // Non Compliant SMETS Smart Meter
+  NS,
+  // SMETS 1 compliant Smart Meter
+  S1,
+  // SMETS 2 compliant Smart Meter
+  S2,
+  // Unknown
+  U
+}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_standard_tariff() {
-        let json = r#"
-        {
-          "id": "242336",
-          "displayName": "Octopus 12M Fixed",
-          "fullName": "Octopus 12M Fixed August 2024 v3",
-          "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
-          "productCode": "OE-FIX-12M-24-08-20",
-          "standingCharge": 47.85,
-          "preVatStandingCharge": null,
-          "tariffCode": "E-1R-OE-FIX-12M-24-08-20-A",
-          "unitRate": 24.15,
-          "unitRateEpgApplied": false,
-          "preVatUnitRate": null,
-          "__typename": "StandardMeter"
-        }
-        "#;
-        let tariff: ElectricityMeterType = serde_json::from_str(json).unwrap();
-        // let tariff = Meter::from(serde_json::from_str(json).unwrap()).unwrap();
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+pub enum GasMeterStatus {
+  // Live
+  LI,
+  // Faulty
+  FA,
+  // Inactive
+  IN,
+  // Cut off
+  CU,
+  // Clamped
+  CL,
+  // Capped
+  CA,
+  // Spin Cap
+  SP,
+  // Removed
+  RE,
+  // Other
+  OT,
+  // Unknown
+  UN,
+  // Not Installed
+  NI
+}
 
-        match tariff {
-          ElectricityMeterType::StandardMeter(_) => {}
-          _ => { 
-            panic!("Expected StandardMeter but got {}", tariff);
-          }
-        }
-    }
+// A gas meter has a register which holds readings. We would expect this to be a one-to-one relationship between meter and register.
+// implements Node & Meter
+#[derive(GraphQLType)]
+#[graphql(params = "MeterQueryParams")]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct GasMeterType  {
+  #[serde(flatten)]
+  pub meter_interface: MeterInterface,
 
+  pub requires_access: Boolean,
+  pub is_digital: Boolean,
+  pub installation_date: Date,
+  pub last_inspection_date: Option<Date>,
+  pub created_at: DateTime,
+  pub updated_at: Option<DateTime>,
+  pub active_from: Date,
+  pub active_to: Option<Date>,
+  // meterPoint: GasMeterPointType,
+  pub manufacturer_code: String,
+  pub model_name: String,
+  pub manufactured_year: Option<Int>,
+  pub meter_type: String,
+  pub imperial: Boolean,
+  pub units: Int,
+  pub location: String,
+  #[graphql(no_params)]
+  #[graphql(scalar)]
+  pub mechanism: GasMeterMechanism,
+  pub correction: Float,
+  pub location_description: String,
+  pub reading_factor: Decimal,
+  pub instructions: String,
+  pub pulse_value: Decimal,
+  pub link_code: String,
+  pub collar_fitted: String,
+  pub bypass_fitted: String,
+  pub measuring_capacity: Option<Decimal>,
+  #[graphql(no_params)]
+  #[graphql(scalar)]
+  pub status: GasMeterStatus,
+  pub operational_status_date: Date,
+  pub owner: String,
+  pub current_meter_asset_manager: String,
+  // pub prepay_ledgers: PrepayLedgersType,
+  // pub smart_gas_meter: SmartMeterDeviceType,
+
+  
+
+  // This lets us get around the fact that we already use the field id as a primary key. We will migrate the id field over to be this id eventually.
+  pub node_id: ID,
+  // readings(
+  //   before: String
+  //   after: String
+  //   first: Int
+  //   last: Int
+  // )
+  // pub readings: ForwardPageOf<GasMeterReading>,
+
+  // #[graphql(no_params)]
+  // pub registers: Vec<GasMeterRegisterType>,
+
+  // Returns if the meter has and allows half hourly readings
+  pub has_and_allows_hh_readings: Boolean,
+
+  // #[graphql(no_params)]
+  // pub smart_devices: Vec<SmartMeterDeviceType>,
+  pub is_trad_prepay: Boolean,
+  pub is_ready_for_topup: Boolean
 }

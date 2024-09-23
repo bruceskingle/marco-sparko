@@ -26,16 +26,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
-use sparko_graphql_derive::GraphQLQueryParams;
 use time::OffsetDateTime;
 
-use sparko_graphql::{types::Int, ParamBuffer, VariableBuffer};
-use sparko_graphql::GraphQLQueryParams;
 
-use crate::octopus::bill::{AccountBillsViewParams, BillQueryParams};
+use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+use sparko_graphql::{types::{Boolean, Date, DateTime, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+
+
+use crate::octopus::{bill::{AccountBillsViewParams, BillQueryParams}, consumption_type::ConsumptionTypeQueryParams, meter::MeterQueryParams};
 use crate::octopus::transaction::StatementTransactionParams;
 
-use super::{bill::AccountBillsView, error::Error, token::TokenManager};
+use super::{bill::AccountBillsView, error::Error, meter_point::{ElectricityMeterPointType, MeterPointQueryParams}, meter_point_property_view::{ElectricityMeterPointPropertyView, GasMeterPointPropertyView}, token::TokenManager};
 
 
 
@@ -99,6 +100,90 @@ impl AccountManager {
 
     let result = gql_client
         .new_call::<AccountBillsView, AccountBillsViewParams>(operation_name, "account", variables, href)
+        .await?;
+
+        println!("\nHashMap response\n===========================\n{:?}\n===========================\n", result);
+
+
+        // let result: AccountBillsView = serde_json::from_value(result_json)?;
+
+        Ok(result)
+    }
+
+
+
+    pub async fn get_account_properties_meters(
+        &self,
+        gql_client: &Arc<sparko_graphql::Client>,
+        token_manager: &mut TokenManager,
+        active_from: Option<DateTime>,
+    ) -> Result<AccountPropertyView, Error> {
+    let variables = AccountPropertyQueryParams {
+        account_number: self.account_number.clone(),
+        properties: PropertyQueryParams {
+            active_from,
+            // electricity_meter_points: MeterPointQueryParams {
+            //     meters: MeterQueryParams {
+            //         id: None,
+            //         include_inactive: Boolean::from(false),
+            //         consumption: ConsumptionTypeQueryParams {
+            //             start_at: DateTime::from_calendar_date(year, month, day),
+            //             grouping: None,
+            //             timezone: None,
+            //             before: None,
+            //             after: None,
+            //             first: None,
+            //             last: None,
+            //         },
+            //     },
+            // },
+            // gas_meter_points: MeterPointQueryParams{
+            //     meters: MeterQueryParams {
+            //         id: None,
+            //         include_inactive: None,
+            //         consumption: None,
+            //     },
+            // },
+            // first: Some(Int::new(1)),
+            // transactions: StatementTransactionParams { 
+            //     first: Some(Int::new(100)),
+            //     ..Default::default()
+            // },
+            // ..Default::default()
+        },
+    };
+
+    let operation_name = "getAccountLatestBill";
+    // let query = AccountBillsView::get_query(&operation_name, &variables);
+    
+    
+    
+    // // format!(
+    // //     r#"query {}($accountNumber: String!)
+    // //                     {{
+    // //                         account(accountNumber: $accountNumber)
+    // //                         {{
+    // //                             {}
+    // //                         }}
+    // //                     }}"#,
+    // //     operation_name, AccountBillsView::get_field_names()
+    // // );
+
+    // println!("QUERY {}", query);
+
+    let mut headers = HashMap::new();
+    // let token = String::from(self.get_authenticator().await?);
+    let token = &*token_manager.get_authenticator().await?;
+    headers.insert("Authorization", token);
+
+    let href = Some(&headers);
+
+
+    println!("NEW params {:?}", &variables);
+    println!("NEW params.get_actual {:?}", &variables.get_actual("TEST"));
+
+    let result = gql_client
+        .new_call::<AccountPropertyView, AccountPropertyQueryParams>(operation_name, "account", variables, href)
         .await?;
 
         println!("\nHashMap response\n===========================\n{:?}\n===========================\n", result);
@@ -470,3 +555,196 @@ billingEmail
         }
     }
 }
+
+
+#[derive(GraphQLQueryParams)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountPropertyQueryParams {
+    #[graphql(required)]
+    pub account_number: String,
+    pub properties: PropertyQueryParams,
+}
+
+#[derive(GraphQLType)]
+#[graphql(params = "AccountPropertyQueryParams")]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountPropertyView {
+    pub id: ID,
+    pub properties: Vec<PropertyMeterView>,
+}
+
+#[derive(GraphQLQueryParams)]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct PropertyQueryParams {
+    pub active_from: Option<DateTime>,
+}
+
+#[derive(GraphQLType)]
+#[graphql(params = "PropertyQueryParams")]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct PropertyMeterView {
+    pub id: ID,
+    pub address: Option<String>,
+    pub postcode: Option<String>,
+    #[graphql(no_params)]
+    pub electricity_meter_points: Vec<ElectricityMeterPointPropertyView>,
+    #[graphql(no_params)]
+    pub gas_meter_points: Vec<GasMeterPointPropertyView>,
+    #[graphql(no_params)]
+    pub smart_device_networks: Vec<SmartMeterDeviceNetworkPropertyView>,
+}
+
+// #[derive(GraphQLType)]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct ElectricityMeterPointMeterView {
+//     pub id: ID,
+//     pub address: Option<String>,
+//     pub postcode: Option<String>,
+//     #[graphql(no_params)]
+//     pub electricity_meter_points: Vec<ElectricityMeterPoint>,
+//     #[graphql(no_params)]
+//     pub gas_meter_points: Vec<GasMeterPointType>,
+//     #[graphql(no_params)]
+//     pub smart_device_networks: Vec<SmartDeviceNetwork>,
+// }
+
+
+
+// #[derive(GraphQLQueryParams)]
+// #[serde(rename_all = "camelCase")]
+// pub struct SmartMeterDeviceNetworkQueryParams {
+//     #[graphql(scalar)]
+//     pub statuses: Vec<DeviceStatus>
+// }
+
+// #[derive(GraphQLType)]
+// #[graphql(params = "SmartMeterDeviceNetworkQueryParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// // This is the network through which a set of SMETS2 devices communicates.
+// pub struct SmartMeterDeviceNetworkType {
+//   id: ID,
+
+//   // A list of devices attached to one network.
+//   smart_devices: Vec<SmartMeterDeviceType>
+// }
+
+
+
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+// This is the network through which a set of SMETS2 devices communicates.
+pub struct SmartMeterDeviceNetworkPropertyView {
+  id: ID,
+
+  // A list of devices attached to one network.
+  #[graphql(no_params)]
+  smart_devices: Vec<SmartMeterDevicePropertyView>
+}
+
+
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+// This is the network through which a set of SMETS2 devices communicates.
+pub struct SmartMeterDevicePropertyView {
+  id: ID,
+//   importElectricityMeter: ElectricityMeterType
+//   exportElectricityMeter: ElectricityMeterType
+//   gasMeter: GasMeterType
+//   deviceNetwork: SmartMeterDeviceNetworkType
+  serial_number: String,
+  device_id: String,
+  #[graphql(no_params)]
+  #[graphql(scalar)]
+  #[serde(rename = "type")]
+  device_type: DeviceType,
+  #[graphql(no_params)]
+  #[graphql(scalar)]
+  status: DeviceStatus,
+  manufacturer: String,
+  model: String,
+  firmware_version: String,
+
+  // The payment mode (e.g. credit or prepayment) that the device is currently operating in.
+  #[graphql(no_params)]
+  #[graphql(scalar)]
+  payment_mode: PaymentMode,
+
+  // The rate, in pence per week, that debt is being recovered from this device.
+  weekly_debt_recovery_rate_in_pence: Int
+}
+
+
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DeviceType {
+  // Electricity Smart Meter (ESME)
+  ESME,
+  // Gas Smart Meter (GSME)
+  GSME,
+  // Gas Proxy Function (GPF)
+  GPF,
+  // Communications Hub Function (CHF)
+  CHF,
+  // HAN Connected Auxiliary Load Control Switch (HCALCS)
+  HCALCS,
+  // Prepayment Interface Device (PPMID)
+  PPMID,
+  // In-House Display (IHD)
+  IHD,
+  // Consumer Access Device (CAD)
+  CAD,
+  // IHD or CAD (a type 2 device)
+  IhdOrCad
+}
+
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DeviceStatus {
+  PENDING,
+  WHITELISTED,
+  InstalledNotCommissioned,
+  COMMISSIONED,
+  DECOMMISSIONED,
+  WITHDRAWN,
+  SUSPENDED,
+  RECOVERY,
+  NotApplicable
+}
+
+//
+//     The mode used by a SMETS2 meter to charge for energy consumed.
+//
+//     Energy consumption can either be paid for in advance (i.e. prepay / pay-as-you-go)
+//     or at some time later (i.e. credit).
+//
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PaymentMode {
+  PREPAY,
+  CREDIT
+}
+
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+// pub enum DeviceStatuses {
+//   PENDING,
+//   WHITELISTED,
+//   INSTALLED_NOT_COMMISSIONED,
+//   COMMISSIONED,
+//   DECOMMISSIONED,
+//   WITHDRAWN,
+//   SUSPENDED,
+//   RECOVERY,
+//   RECOVERED,
+//   NOT_APPLICABLE
+// }
