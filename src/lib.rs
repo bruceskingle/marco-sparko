@@ -25,6 +25,10 @@ SOFTWARE.
 // pub mod gql;
 pub mod octopus;
 pub mod system;
+pub mod request_manager;
+pub use request_manager::RequestManager;
+pub mod authenticated_request_manager;
+pub use authenticated_request_manager::AuthenticatedRequestManager;
 
 use std::error::Error as StdError;
 use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};
@@ -41,7 +45,8 @@ pub enum Error {
     IOError(std::io::Error),
     InternalError(String),
     UserError(String),
-    WrappedError(Box<dyn StdError>)
+    WrappedError(Box<dyn StdError>),
+    GraphQLError(Vec<graphql_client::Error>)
 }
 
 impl Display for Error {
@@ -52,7 +57,13 @@ impl Display for Error {
             Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
             Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
             Error::UserError(err) => f.write_fmt(format_args!("UserError({})", err)),
-            Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err))
+            Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err)),
+            Error::GraphQLError(err) => {
+                match  serde_json::to_string_pretty(err)  {
+                    Ok(s) => f.write_str(&s),
+                    Err(e) => f.write_fmt(format_args!("Failed to parse JSON: {}", e)),
+                }
+            }
         }
     }
 }
@@ -67,11 +78,23 @@ impl StdError for Error {
 //     }
 // }
 
-// impl From<Box<dyn StdError>> for Error {
-//     fn from(err: Box<dyn StdError>) -> Error {
-//         Error::WrappedError(err)
-//     }
-// }
+impl From<Box<dyn StdError>> for Error {
+    fn from(err: Box<dyn StdError>) -> Error {
+        Error::WrappedError(err)
+    }
+}
+
+impl From<Vec<graphql_client::Error>>  for Error {
+    fn from(err: Vec<graphql_client::Error>) -> Error {
+        Error::GraphQLError(err)
+    }
+}
+
+impl From<reqwest::Error> for Error {
+        fn from(err: reqwest::Error) -> Error {
+            Error::WrappedError(Box::new(err))
+        }
+}
 
 impl From<crate::octopus::error::Error> for Error {
     fn from(err: crate::octopus::error::Error) -> Error {
@@ -513,3 +536,8 @@ impl ContextImpl {
 
     }
 }
+
+// pub trait Token {
+//     fn fetch(&self) -> Arc<String>;
+//     fn has_expired(&self) -> bool;
+// }

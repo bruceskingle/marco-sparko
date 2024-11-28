@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 
 use simple::gql::{ForwardPageOf, GraphQLQueryParams, GraphQLType, GraphQL, ParamBuffer, VariableBuffer};
 
-use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+// use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 
 type ID = String;
 type Date = String;

@@ -46,7 +46,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'marco-sparko'",
+            "name": "Debug executable 'marco-sparko bill'",
             "cargo": {
                 "args": [
                     "build",
@@ -61,6 +61,27 @@
             "args": [
                 "--modules=octopus",
                 "bill"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'marco-sparko summary'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--modules=octopus",
+                "summary"
             ],
             "cwd": "${workspaceFolder}"
         },

@@ -35,6 +35,7 @@ pub mod meter;
 pub mod meter_property_view;
 pub mod meter_point;
 pub mod meter_point_property_view;
+pub mod account_property_meters;
 
 use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
@@ -45,10 +46,11 @@ use serde::{Deserialize, Serialize};
 
 use account::{AccountInterface, AccountManager, AccountUser};
 pub use error::Error;
-use token::{TokenManager, TokenManagerBuilder};
+use sparko_graphql::types::Date;
+use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use crate::{Context, Module, ModuleBuilder, ModuleConstructor};
+use crate::{AuthenticatedRequestManager, Context, Module, ModuleBuilder, ModuleConstructor, RequestManager};
 
 #[derive(Parser, Debug)]
 pub struct OctopusArgs {
@@ -173,8 +175,9 @@ impl Profile {
 pub struct Client{
     context: Context, 
     profile: Option<Profile>,
+    authenticated_request_manager: AuthenticatedRequestManager<OctopusTokenManager>,
     gql_client: Arc<sparko_graphql::Client>,
-    pub(crate) token_manager:  TokenManager,
+    pub(crate) token_manager:  OctopusTokenManager,
     default_account: Option<Arc<AccountInterface>>
 }
 
@@ -200,10 +203,14 @@ impl Client {
         ClientBuilder::new(context, json_profile)
     }
 
-    fn new(context: Context, profile: Option<Profile>, gql_client: Arc<sparko_graphql::Client>, token_manager: TokenManager) -> Client {        
+    fn new(context: Context, profile: Option<Profile>, 
+        authenticated_request_manager: AuthenticatedRequestManager<OctopusTokenManager>,
+        gql_client: Arc<sparko_graphql::Client>, token_manager: OctopusTokenManager) -> Client {        
+
         Client {
             context,
             profile,
+            authenticated_request_manager,
             gql_client,
             token_manager,
             default_account: None
@@ -332,7 +339,6 @@ impl Client {
         };
 
 
-
         Ok(())
     }
 }
@@ -360,12 +366,32 @@ impl Module for Client {
 
             Self::handle_bill(&result)?;
 
+            
+
+
+            
+
             if let  bill::Bill::Statement(statement) = &result.bills.edges[0].node {
 
-                let with_effect_from = None; // Some(statement.bill.from_date)
-                let meter_result = account_manager.get_account_properties_meters(
-                    &self.gql_client, &mut self.token_manager, with_effect_from).await?;
-                }
+                // let with_effect_from = None; // Some(statement.bill.from_date)
+                // let meter_result = account_manager.get_account_properties_meters(
+                //     &self.gql_client, &mut self.token_manager, with_effect_from).await?;
+
+                let foo = &statement.consumption_start_date;
+
+                println!("consumption_start_date={:?}", foo);
+
+                let start_date = Date::from_calendar_date(2024, time::Month::October, 30).unwrap();
+
+                // if let Some(start_date) = &statement.consumption_start_date 
+                {
+                    let meters = account_manager.get_account_properties_meters(
+                        &mut self.authenticated_request_manager,
+                        &start_date,
+                        &statement.consumption_end_date).await?;
+                    }
+
+            }
 
             Ok(())
         }
@@ -381,6 +407,7 @@ pub struct ClientBuilder {
     profile: Option<Profile>,
     gql_client_builder:         sparko_graphql::ClientBuilder,
     token_manager_builder:      TokenManagerBuilder,
+    url:                        Option<String>,
 }
 
 impl ClientBuilder {
@@ -426,7 +453,8 @@ impl ClientBuilder {
             context: context.clone(),
             profile,
             gql_client_builder:     sparko_graphql::Client::builder(),
-            token_manager_builder:  TokenManager::builder(),
+            token_manager_builder:  OctopusTokenManager::builder(),
+            url:                    None,
         };
 
         if let Some(api_key) = option_api_key {
@@ -449,12 +477,17 @@ impl ClientBuilder {
     // }
 
     pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
-        self.gql_client_builder = self.gql_client_builder.with_url(url)?;
+        self.gql_client_builder = self.gql_client_builder.with_url(url.clone())?;
+        self.url = Some(url);
         Ok(self)
     }
 
     pub fn with_url_if_not_set(mut self, url: String) -> Result<ClientBuilder, Error> {
-        self.gql_client_builder = self.gql_client_builder.with_url_if_not_set(url)?;
+        self.gql_client_builder = self.gql_client_builder.with_url_if_not_set(url.clone())?;
+
+        if let None = self.url {
+            self.url = Some(url);
+        }
         Ok(self)
     }
 
@@ -489,12 +522,30 @@ impl ClientBuilder {
             self.gql_client_builder
                 .with_url_if_not_set(String::from("https://api.octopus.energy/v1/graphql/"))?
                 .build()?);
+        
+        let url = if let Some(url) = self.url {
+            url
+        }
+        else {
+            "https://api.octopus.energy/v1/graphql/".to_string()
+        };
 
-        let client = Client::new(self.context.clone(), option_profile, gql_client.clone(), 
-        self.token_manager_builder
-          .with_context(self.context)
-          .with_gql_client(gql_client)
-          .build(init)?);
+        let request_manager = Arc::new(RequestManager::new(url)?);
+
+        let token_manager = self.token_manager_builder
+            .with_request_manager(request_manager.clone())
+            .with_context(self.context.clone())
+            .with_request_manager(request_manager.clone())
+            .build(init)?;
+
+        let cloned_token_manager = token_manager.clone_delete_me();
+        let authenticated_request_manager = AuthenticatedRequestManager::new(request_manager, token_manager)?;
+
+        let client = Client::new(self.context, option_profile, 
+            authenticated_request_manager,
+            gql_client.clone(), 
+            cloned_token_manager
+          );
 
         Ok(client)
     }

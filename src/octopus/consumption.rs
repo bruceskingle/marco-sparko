@@ -29,7 +29,7 @@ use sparko_graphql::NoParams;
 use sparko_graphql::GraphQLType;
 use sparko_graphql::types::Date;
 
-use sparko_graphql_derive::GraphQLType;
+// use sparko_graphql_derive::GraphQLType;
 
 use super::decimal::Decimal;
 

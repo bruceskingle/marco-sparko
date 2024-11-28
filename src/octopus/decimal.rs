@@ -45,6 +45,10 @@ impl Decimal {
   pub fn from_int(i: &Int) -> Decimal {
     Decimal::new(**i as i64, 0)
   }
+
+  pub fn is_positive(&self)-> bool {
+    self.0.gt(&rust_decimal::Decimal::from(0)) //.gt(&0)
+  }
 }
 
 impl Div for Decimal {

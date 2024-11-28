@@ -34,7 +34,8 @@ pub enum Error {
     JsonError(serde_json::Error),
     InternalError(&'static str),
     CallerError(&'static str),
-    StringError(String)
+    StringError(String),
+    WrappedError(Box<dyn StdError>)
 }
 
 impl Display for Error {
@@ -45,7 +46,8 @@ impl Display for Error {
             Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
             Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
             Error::CallerError(err) => f.write_fmt(format_args!("CallerError({})", err)),
-            Error::StringError(err) => f.write_fmt(format_args!("StringError({})", err))
+            Error::StringError(err) => f.write_fmt(format_args!("StringError({})", err)),
+            Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err))
         }
     }
 }
@@ -55,6 +57,17 @@ impl StdError for Error {
 }
 
 
+
+impl From<Box<dyn StdError>> for Error {
+    fn from(err: Box<dyn StdError>) -> Error {
+        Error::WrappedError(err)
+    }
+}
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Error {
+        Error::WrappedError(Box::new(err))
+    }
+}
 
 impl From<rust_decimal::Error> for Error {
     fn from(err: rust_decimal::Error) -> Error {

@@ -26,7 +26,7 @@ use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use sparko_graphql::NoParams;
-use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+// use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 
 use sparko_graphql::{types::{Boolean, Date, DateTime, Int, ID}, GraphQLQueryParams, GraphQLType, GraphQL, ParamBuffer, VariableBuffer};
 use super::consumption::Consumption;

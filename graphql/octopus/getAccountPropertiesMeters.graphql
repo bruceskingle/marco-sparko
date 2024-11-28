@@ -1,0 +1,47 @@
+query GetAccountPropertiesMeters($accountNumber: String!) {
+  account(accountNumber: $accountNumber) {
+    properties {
+      id
+      address
+      postcode
+      electricityMeterPoints {
+        __typename
+        mpan
+        status
+        meters(includeInactive: false) {
+          nodeId
+          serialNumber
+          consumptionUnits
+          hasAndAllowsHhReadings
+          importMeter {
+            id
+            __typename
+          }
+          __typename
+        }
+      }
+      gasMeterPoints {
+        __typename
+        mprn
+        status
+        meters(includeInactive: false) {
+          nodeId
+          serialNumber
+          consumptionUnits
+          hasAndAllowsHhReadings
+          __typename
+        }
+      }
+      smartDeviceNetworks {
+        smartDevices {
+          deviceId
+          type
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}

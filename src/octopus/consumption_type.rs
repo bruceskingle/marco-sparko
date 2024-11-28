@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use sparko_graphql::{GraphQL, GraphQLQueryParams, GraphQLType, ParamBuffer, VariableBuffer};
 use sparko_graphql::types::{DateTime, Int};
-use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+// use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 
 use super::decimal::Decimal;
 

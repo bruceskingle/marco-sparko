@@ -28,18 +28,70 @@ use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-
-use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
-use sparko_graphql::{types::{Boolean, Date, DateTime, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+use crate::AuthenticatedRequestManager;
+// use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+use sparko_graphql::{types::{Boolean, Date, DateTime, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, TokenManager, VariableBuffer};
 
 
 use crate::octopus::{bill::{AccountBillsViewParams, BillQueryParams}, consumption_type::ConsumptionTypeQueryParams, meter::MeterQueryParams};
 use crate::octopus::transaction::StatementTransactionParams;
 
-use super::{bill::AccountBillsView, error::Error, meter_point::{ElectricityMeterPointType, MeterPointQueryParams}, meter_point_property_view::{ElectricityMeterPointPropertyView, GasMeterPointPropertyView}, token::TokenManager};
+use super::{bill::AccountBillsView, decimal::Decimal, error::Error, meter_point::{ElectricityMeterPointType, MeterPointQueryParams}, meter_point_property_view::{ElectricityMeterPointPropertyView, GasMeterPointPropertyView}, token::OctopusTokenManager};
 
 
+use graphql_client::{reqwest::post_graphql as post_graphql, GraphQLQuery};
 
+
+#[allow(clippy::upper_case_acronyms)]
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/octopus/octopus-schema.graphql",
+    query_path = "graphql/octopus/getAccountPropertiesMeters.graphql",
+    response_derives = "Debug",
+)]
+pub struct GetAccountPropertiesMeters;
+
+
+// #[allow(clippy::upper_case_acronyms)]
+// #[derive(GraphQLQuery)]
+// #[graphql(
+//     schema_path = "graphql/octopus/octopus-schema.graphql",
+//     query_path = "graphql/octopus/MeterConsumption.graphql",
+//     response_derives = "Debug",
+// )]
+// pub struct MeterConsumption;
+
+
+#[allow(clippy::upper_case_acronyms)]
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/octopus/octopus-schema.graphql",
+    query_path = "graphql/octopus/MeterAgreements.graphql",
+    response_derives = "Debug",
+)]
+pub struct MeterAgreements;
+
+#[allow(clippy::upper_case_acronyms)]
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/octopus/octopus-schema.graphql",
+    query_path = "graphql/octopus/ElectricityAgreementLineItems.graphql",
+    response_derives = "Debug",
+)]
+pub struct ElectricityAgreementLineItems;
+
+#[allow(clippy::upper_case_acronyms)]
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/octopus/octopus-schema.graphql",
+    query_path = "graphql/octopus/GasAgreementLineItems.graphql",
+    response_derives = "Debug",
+)]
+pub struct GasAgreementLineItems;
+
+fn missing(item: &str) -> Result<get_account_properties_meters::GetAccountPropertiesMetersAccount, Box<dyn std::error::Error>> {
+    Err(Box::new(Error::StringError(format!("No {} found in result", item))))
+}
 
 pub struct AccountManager {
     pub account_number: String
@@ -55,7 +107,7 @@ impl AccountManager {
     pub async fn get_latest_bill(
         &self,
         gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut TokenManager,
+        token_manager: &mut OctopusTokenManager,
     ) -> Result<AccountBillsView, Error> {
     let variables = AccountBillsViewParams {
         account_number: self.account_number.clone(),
@@ -109,90 +161,285 @@ impl AccountManager {
 
         Ok(result)
     }
+ 
+    pub async fn get_electric_line_items (
+        &self,
+        authenticated_request_manager: &mut AuthenticatedRequestManager<OctopusTokenManager>,
+        agreement_id: String,
+        from: &Date,
+        to: &Option<Date>,
+    ) -> Result<get_account_properties_meters::GetAccountPropertiesMetersAccount, Box<dyn std::error::Error>> {
+
+        let variables = electricity_agreement_line_items::Variables {
+            agreement_id,
+            start_at: from.at_midnight(),
+            first: Some(5),
+            timezone: String::from("Europe/London"),
+            item_type: electricity_agreement_line_items::LineItemTypeOptions::CONSUMPTION_CHARGE,
+            line_item_grouping: electricity_agreement_line_items::LineItemGroupingOptions::NONE,
+            last_cursor: None,
+        };
+
+        let response = authenticated_request_manager.call::<ElectricityAgreementLineItems>(variables).await?;
+        
+        let x: electricity_agreement_line_items::ElectricityAgreementLineItemsElectricityAgreement = unexpected_none(response.electricity_agreement)?;
+
+        let agreement = if let electricity_agreement_line_items::ElectricityAgreementLineItemsElectricityAgreement::ElectricityAgreementType(agreement) = x {
+            agreement
+        }
+        else {
+            return Err(Box::new(Error::StringError(String::from("Unexpected graphql response"))));
+        };
+
+        for item in unexpected_none(agreement.line_items)?.line_items.edges.into_iter().flatten() {
+            let l: electricity_agreement_line_items::LineItemsEdgesNode = unexpected_none(item.node)?;
+            
+        }
+        unimplemented!();
+    }
+ 
+    pub async fn get_meter_agreements (
+        &self,
+        authenticated_request_manager: &mut AuthenticatedRequestManager<OctopusTokenManager>,
+        meter_node_id: String,
+        from: &Date,
+        to: &Option<Date>,
+    ) -> Result<get_account_properties_meters::GetAccountPropertiesMetersAccount, Box<dyn std::error::Error>> {
+
+        let variables = meter_agreements::Variables {
+            meter_node_id,
+            valid_after: Some(from.at_midnight())
+        };
+
+        // let from_time = from.at_midnight();
+        // let to_time = if let Some(to) = to { Some(to.at_midnight())} else {None};
+        let response = authenticated_request_manager.call::<MeterAgreements>(variables).await?;
+
+
+        let mut meter_agreements = if let Some(node) = response.node {
+            match node {
+
+                meter_agreements::MeterAgreementsNode::ElectricityMeterType(electricity_agreement) => {
+                    for agreement in electricity_agreement.meter_point.agreements
+                    .into_iter()
+                    .flatten() 
+                    .flatten() 
+                    {
+                        println!("Agreement {:?}", &agreement);
+                        if in_scope(&from, &to, &agreement.valid_from, &agreement.valid_to) {
+                            let agreement_id = unexpected_none(agreement.id)?.to_string();
+                            println!("Electricity agreement {}", agreement_id);
+
+                            self.get_electric_line_items(authenticated_request_manager, agreement_id, from, to).await;
+
+                        }
+                    } 
+                },
+                meter_agreements::MeterAgreementsNode::GasMeterType(gas_agreement) => {
+                    for agreement in gas_agreement.meter_point.agreements
+                    .into_iter()
+                    .flatten() 
+                    .flatten() 
+                    {
+                        if in_scope(&from, &to, &agreement.valid_from, &agreement.valid_to) {
+                            let agreement_id = unexpected_none(agreement.id)?;
+                            println!("Gas agreement {}", agreement_id);
+                        }
+                    } 
+                },
+                _ => return Err(Box::new(Error::InternalError("Unexpected node type found in agreements query")))
+             }
+        }
+        else {
+            return missing("node");
+        };
+
+
+
+    unimplemented!();
+    }
 
 
 
     pub async fn get_account_properties_meters(
         &self,
-        gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut TokenManager,
-        active_from: Option<DateTime>,
-    ) -> Result<AccountPropertyView, Error> {
-    let variables = AccountPropertyQueryParams {
-        account_number: self.account_number.clone(),
-        properties: PropertyQueryParams {
-            active_from,
-            // electricity_meter_points: MeterPointQueryParams {
-            //     meters: MeterQueryParams {
-            //         id: None,
-            //         include_inactive: Boolean::from(false),
-            //         consumption: ConsumptionTypeQueryParams {
-            //             start_at: DateTime::from_calendar_date(year, month, day),
-            //             grouping: None,
-            //             timezone: None,
-            //             before: None,
-            //             after: None,
-            //             first: None,
-            //             last: None,
-            //         },
-            //     },
-            // },
-            // gas_meter_points: MeterPointQueryParams{
-            //     meters: MeterQueryParams {
-            //         id: None,
-            //         include_inactive: None,
-            //         consumption: None,
-            //     },
-            // },
-            // first: Some(Int::new(1)),
-            // transactions: StatementTransactionParams { 
-            //     first: Some(Int::new(100)),
-            //     ..Default::default()
-            // },
-            // ..Default::default()
-        },
+        authenticated_request_manager: &mut AuthenticatedRequestManager<OctopusTokenManager>,
+        from: &Date,
+        to: &Option<Date>,
+    ) -> Result<get_account_properties_meters::GetAccountPropertiesMetersAccount, Box<dyn std::error::Error>> {
+
+
+        let variables = get_account_properties_meters::Variables {
+            account_number: self.account_number.clone()
+        };
+
+        let response = authenticated_request_manager.call::<GetAccountPropertiesMeters>(variables).await?;
+
+
+        let mut data = if let Some(data) = response.account {
+            data
+        }
+        else {
+            return Err(Box::new(Error::InternalError("No result found")));
+        };
+
+        // node_ids of all active meters
+        // let mut import_meters = Vec::new();
+        // let mut export_meters = Vec::new();
+        // let mut gas_meters = Vec::new();
+
+        // let x: Option<Vec<Option<get_account_properties_meters::GetAccountPropertiesMetersAccountProperties>>> = data.properties;
+
+
+        for property in data.properties.into_iter().flatten().map(|f| f.unwrap()) 
+        {
+            for electricity_meter_point in property.electricity_meter_points.into_iter().flatten().map(|f| f.unwrap()) {
+                for electricity_meter in electricity_meter_point.meters.into_iter().flatten().map(|f| f.unwrap()) {
+                    if let Some(_import_meter) = electricity_meter.import_meter {
+                        println!("Export electricity meter {}", &electricity_meter.node_id);
+                        // export_meters.push(electricity_meter.node_id);
+
+                        self.get_meter_agreements(authenticated_request_manager,
+                            electricity_meter.node_id,
+                            from,
+                            to).await?;
+                    }
+                    else {
+                        println!("Import electricity meter {}", &electricity_meter.node_id);
+                        // import_meters.push(electricity_meter.node_id);
+                        self.get_meter_agreements(authenticated_request_manager,
+                            electricity_meter.node_id,
+                            from,
+                            to).await?;
+                    }
+                }
+            }
+
+            for gas_meter_point in property.gas_meter_points.into_iter().flatten().map(|f| f.unwrap()) {
+                for gas_meter in gas_meter_point.meters.into_iter().flatten().map(|f| f.unwrap()) {
+                    println!("Gas meter {}", &gas_meter.node_id);
+                    // gas_meters.push(gas_meter.node_id);
+                    self.get_meter_agreements(authenticated_request_manager,
+                        gas_meter.node_id,
+                        from,
+                        to).await?;
+                }
+            }
+        }
+
+
+    unimplemented!();
+
+    // let variables = AccountPropertyQueryParams {
+    //     account_number: self.account_number.clone(),
+    //     properties: PropertyQueryParams {
+    //         active_from,
+    //         // electricity_meter_points: MeterPointQueryParams {
+    //         //     meters: MeterQueryParams {
+    //         //         id: None,
+    //         //         include_inactive: Boolean::from(false),
+    //         //         consumption: ConsumptionTypeQueryParams {
+    //         //             start_at: DateTime::from_calendar_date(year, month, day),
+    //         //             grouping: None,
+    //         //             timezone: None,
+    //         //             before: None,
+    //         //             after: None,
+    //         //             first: None,
+    //         //             last: None,
+    //         //         },
+    //         //     },
+    //         // },
+    //         // gas_meter_points: MeterPointQueryParams{
+    //         //     meters: MeterQueryParams {
+    //         //         id: None,
+    //         //         include_inactive: None,
+    //         //         consumption: None,
+    //         //     },
+    //         // },
+    //         // first: Some(Int::new(1)),
+    //         // transactions: StatementTransactionParams { 
+    //         //     first: Some(Int::new(100)),
+    //         //     ..Default::default()
+    //         // },
+    //         // ..Default::default()
+    //     },
+    // };
+
+    // let operation_name = "getAccountLatestBill";
+    // // let query = AccountBillsView::get_query(&operation_name, &variables);
+    
+    
+    
+    // // // format!(
+    // // //     r#"query {}($accountNumber: String!)
+    // // //                     {{
+    // // //                         account(accountNumber: $accountNumber)
+    // // //                         {{
+    // // //                             {}
+    // // //                         }}
+    // // //                     }}"#,
+    // // //     operation_name, AccountBillsView::get_field_names()
+    // // // );
+
+    // // println!("QUERY {}", query);
+
+    // let mut headers = HashMap::new();
+    // // let token = String::from(self.get_authenticator().await?);
+    // let token = &*token_manager.get_authenticator().await?;
+    // headers.insert("Authorization", token);
+
+    // let href = Some(&headers);
+
+
+    // println!("NEW params {:?}", &variables);
+    // println!("NEW params.get_actual {:?}", &variables.get_actual("TEST"));
+
+    // let result = gql_client
+    //     .new_call::<AccountPropertyView, AccountPropertyQueryParams>(operation_name, "account", variables, href)
+    //     .await?;
+
+    //     println!("\nHashMap response\n===========================\n{:?}\n===========================\n", result);
+
+
+    //     // let result: AccountBillsView = serde_json::from_value(result_json)?;
+
+    //     Ok(result)
+    }
+}
+
+fn unexpected_none<T>(value: Option<T>) -> Result<T, Box<Error>> {
+    value.ok_or(Box::new(Error::InternalError("Unexpected None value found")))
+}
+
+fn in_scope(from: &Date, to: &Option<Date>, valid_from: &Option<DateTime>, valid_to: &Option<DateTime>) -> bool {
+    let end_in_scope = if let Some(to) = to {
+        if let Some(valid_from) = valid_from {
+            valid_from.to_date() <= *to
+        }
+        else {
+            false
+        }
+    }
+    else {
+        true
     };
 
-    let operation_name = "getAccountLatestBill";
-    // let query = AccountBillsView::get_query(&operation_name, &variables);
-    
-    
-    
-    // // format!(
-    // //     r#"query {}($accountNumber: String!)
-    // //                     {{
-    // //                         account(accountNumber: $accountNumber)
-    // //                         {{
-    // //                             {}
-    // //                         }}
-    // //                     }}"#,
-    // //     operation_name, AccountBillsView::get_field_names()
-    // // );
+    let start_in_scope = if let Some(valid_to) = valid_to {
+            valid_to.to_date() >= *from
 
-    // println!("QUERY {}", query);
-
-    let mut headers = HashMap::new();
-    // let token = String::from(self.get_authenticator().await?);
-    let token = &*token_manager.get_authenticator().await?;
-    headers.insert("Authorization", token);
-
-    let href = Some(&headers);
-
-
-    println!("NEW params {:?}", &variables);
-    println!("NEW params.get_actual {:?}", &variables.get_actual("TEST"));
-
-    let result = gql_client
-        .new_call::<AccountPropertyView, AccountPropertyQueryParams>(operation_name, "account", variables, href)
-        .await?;
-
-        println!("\nHashMap response\n===========================\n{:?}\n===========================\n", result);
-
-
-        // let result: AccountBillsView = serde_json::from_value(result_json)?;
-
-        Ok(result)
     }
+    else {
+        true
+    };
+    
+    println!("in_scope({:?},{:?},{:?},{:?}) = {}",
+        from,
+        to,
+        valid_from,
+        valid_to,
+        end_in_scope && start_in_scope
+    );
+    end_in_scope && start_in_scope
 }
 
 
@@ -333,7 +580,7 @@ isOptedInToWof"#, account_field_names)
 
     pub async fn get_account_user(
         gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut TokenManager,
+        token_manager: &mut OctopusTokenManager,
     ) -> Result<AccountUser, Error> {
         let operation_name = "getAccountUser";
         let query = format!(
@@ -471,7 +718,7 @@ billingEmail
 
     pub async fn get_account(
         gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut TokenManager,
+        token_manager: &mut OctopusTokenManager,
         account_number: String
     ) -> Result<AccountInterface, Error> {
         let operation_name = "getAccount";
@@ -514,7 +761,7 @@ billingEmail
 
     pub async fn get_default_account(
         gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut TokenManager
+        token_manager: &mut OctopusTokenManager
     ) -> Result<AccountInterface, Error> {
         let operation_name = "getDefaultAccount";
         let query = format!(

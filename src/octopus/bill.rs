@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 
 
 use std::ops::Not;
-use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
+// use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
 use super::{decimal::Decimal, transaction::StatementTransactionParams};
 use super::transaction::Transaction;
@@ -687,26 +687,27 @@ impl StatementType {
 
         println!("\nTOTALS");
 
-        let rate = Decimal::from_int(&total_electric_charge) / total_electric_units;
+        if total_electric_units.is_positive() {
+            let rate = Decimal::from_int(&total_electric_charge) / total_electric_units;
 
-        print!("{:20} {:10} ", 
-            "Electricity Import",
-            ""
-        );
-        print!("{:>10} {:>10} {:>10} {:>10} ", 
-            "",
-            "", 
-            total_electric_charge.as_decimal(2),
-            ""
-        );
-        print!("{:10} {:10} {:>12.4} ", 
-            "",
-            "",
-            total_electric_units
-        );
-        print!("{:>12.4}", rate);
-        println!();
-
+            print!("{:20} {:10} ", 
+                "Electricity Import",
+                ""
+            );
+            print!("{:>10} {:>10} {:>10} {:>10} ", 
+                "",
+                "", 
+                total_electric_charge.as_decimal(2),
+                ""
+            );
+            print!("{:10} {:10} {:>12.4} ", 
+                "",
+                "",
+                total_electric_units
+            );
+            print!("{:>12.4}", rate);
+            println!();
+        }
     }
 }
 
