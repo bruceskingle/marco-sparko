@@ -50,7 +50,7 @@ use sparko_graphql::types::Date;
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use crate::{AuthenticatedRequestManager, Context, Module, ModuleBuilder, ModuleConstructor, RequestManager};
+use crate::{Context, Module, ModuleBuilder, ModuleConstructor};
 
 #[derive(Parser, Debug)]
 pub struct OctopusArgs {
@@ -175,7 +175,7 @@ impl Profile {
 pub struct Client{
     context: Context, 
     profile: Option<Profile>,
-    authenticated_request_manager: AuthenticatedRequestManager<OctopusTokenManager>,
+    authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
     gql_client: Arc<sparko_graphql::Client>,
     pub(crate) token_manager:  OctopusTokenManager,
     default_account: Option<Arc<AccountInterface>>
@@ -204,7 +204,7 @@ impl Client {
     }
 
     fn new(context: Context, profile: Option<Profile>, 
-        authenticated_request_manager: AuthenticatedRequestManager<OctopusTokenManager>,
+        authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
         gql_client: Arc<sparko_graphql::Client>, token_manager: OctopusTokenManager) -> Client {        
 
         Client {
@@ -530,16 +530,16 @@ impl ClientBuilder {
             "https://api.octopus.energy/v1/graphql/".to_string()
         };
 
-        let request_manager = Arc::new(RequestManager::new(url)?);
+        let gql_request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone())?);
 
         let token_manager = self.token_manager_builder
-            .with_request_manager(request_manager.clone())
+            .with_request_manager(gql_request_manager)
             .with_context(self.context.clone())
-            .with_request_manager(request_manager.clone())
             .build(init)?;
 
+        let request_manager = Arc::new(crate::RequestManager::new(url)?);
         let cloned_token_manager = token_manager.clone_delete_me();
-        let authenticated_request_manager = AuthenticatedRequestManager::new(request_manager, token_manager)?;
+        let authenticated_request_manager = crate::AuthenticatedRequestManager::new(request_manager, token_manager)?;
 
         let client = Client::new(self.context, option_profile, 
             authenticated_request_manager,

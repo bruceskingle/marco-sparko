@@ -26,7 +26,7 @@ use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 // use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
-use sparko_graphql::{types::{Boolean, Date, DateTime, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer, VariableBuffer};
+use sparko_graphql::{types::{Boolean, Date, DateTime, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams};
 use crate::octopus::consumption_type::ConsumptionType;
 
 use super::{consumption_type::ConsumptionTypeQueryParams, meter::{Meter, MeterQueryParams}, meter_property_view::MeterPropertyView};
