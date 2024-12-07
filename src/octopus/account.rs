@@ -464,12 +464,15 @@ pub struct AccountParams {
 
 
 // Represents AccountUserType in the GraphQL schema
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountUser {
     pub id: String,
   
     // List of accounts that the user is linked to either via portfolio role or account role.
+    #[graphql(no_params)]
     pub accounts: Vec<AccountInterface>,
     pub given_name: String,
     pub family_name: String,
@@ -502,6 +505,9 @@ pub struct AccountUser {
   
     // AccountUser's date of birth.
     #[serde(with = "time::serde::iso8601::option")]
+
+    #[graphql(no_params)]
+    #[graphql(scalar)]
     pub date_of_birth: Option<OffsetDateTime>,
   
     // // List of details linked to this user.
@@ -579,43 +585,49 @@ isOptedInToWof"#, account_field_names)
     }
 
     pub async fn get_account_user(
-        gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut OctopusTokenManager,
+        // gql_client: &Arc<sparko_graphql::Client>,
+        // token_manager: &mut OctopusTokenManager,
+        authenticatedRequestManager: &mut sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>
     ) -> Result<AccountUser, Error> {
-        let operation_name = "getAccountUser";
-        let query = format!(
-            r#"query {}
-                            {{
-                                viewer
-                                {{
-                                    {}
-                                }}
-                            }}"#,
-            operation_name, Self::get_field_names(AccountInterface::get_field_names())
-        );
 
-        println!("QUERY {}", query);
+        let mut response = authenticatedRequestManager.query::<NoParams, AccountUser>("GetAccountUser", "viewer", NoParams).await?;
 
-        let mut headers = HashMap::new();
-        // let token = String::from(self.get_authenticator().await?);
-        let token = &*token_manager.get_authenticator().await?;
-        headers.insert("Authorization", token);
+        Ok(response)
+        
+        // let operation_name = "getAccountUser";
+        // let query = format!(
+        //     r#"query {}
+        //                     {{
+        //                         viewer
+        //                         {{
+        //                             {}
+        //                         }}
+        //                     }}"#,
+        //     operation_name, Self::get_field_names(AccountInterface::get_field_names())
+        // );
 
-        let href = Some(&headers);
+        // println!("QUERY {}", query);
 
-        let variables =  {};
+        // let mut headers = HashMap::new();
+        // // let token = String::from(self.get_authenticator().await?);
+        // let token = &*token_manager.get_authenticator().await?;
+        // headers.insert("Authorization", token);
 
-        let mut response = gql_client
-            .call(operation_name, &query, &variables, href)
-            .await?;
+        // let href = Some(&headers);
 
-        if let Some(result_json) = response.remove("viewer") {
-            let account_user: AccountUser = serde_json::from_value(result_json)?;
+        // let variables =  {};
 
-            Ok(account_user)
-        } else {
-            return Err(Error::InternalError("No result found"));
-        }
+        // let mut response = gql_client
+        //     .call(operation_name, &query, &variables, href)
+        //     .await?;
+
+        // if let Some(result_json) = response.remove("viewer") {
+        //     let account_user: AccountUser = serde_json::from_value(result_json)?;
+
+        //     Ok(account_user)
+        // } else {
+        //     return Err(Error::InternalError("No result found"));
+        // }
     }
 }
 
@@ -678,16 +690,31 @@ pub struct GetAccountVar<'a> {
 //     status: AccountStatus,
 // }
 
+// #[derive(GraphQLType)]
+// #[graphql(params = "NoParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct ViewerAccounts {
+//     #[graphql(no_params)]
+//     pub viewer: AccountList,
+// }
+
+
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountList {
+    #[graphql(no_params)]
     pub accounts: Vec<AccountInterface>
 }
 
+#[derive(GraphQLType)]
+#[graphql(params = "NoParams")]
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInterface {
-    pub number: Option<String>,
+    pub number: String,
     pub brand: Option<String>,
     pub overdue_balance: Option<i32>,
     pub billing_name: Option<String>,
@@ -760,46 +787,52 @@ billingEmail
     }
 
     pub async fn get_default_account(
-        gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut OctopusTokenManager
+        // gql_client: &Arc<sparko_graphql::Client>,
+        // token_manager: &mut OctopusTokenManager
+        authenticatedRequestManager: &mut sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>
     ) -> Result<AccountInterface, Error> {
-        let operation_name = "getDefaultAccount";
-        let query = format!(
-            r#"query {}
-                            {{
-                                viewer
-                                {{
-                                    accounts {{
-                                        {}
-                                    }}
-                                }}
-                            }}"#,
-            operation_name, Self::get_field_names()
-        );
+        let mut response = authenticatedRequestManager.query::<NoParams, AccountList>("GetViewerAccounts", "viewer", NoParams).await?;
+
+       Ok(response.accounts.remove(0))
 
 
-        println!("QUERY {}", query);
+        // let operation_name = "getDefaultAccount";
+        // let query = format!(
+        //     r#"query {}
+        //                     {{
+        //                         viewer
+        //                         {{
+        //                             accounts {{
+        //                                 {}
+        //                             }}
+        //                         }}
+        //                     }}"#,
+        //     operation_name, Self::get_field_names()
+        // );
 
-        let mut headers = HashMap::new();
-        // let token = String::from(self.get_authenticator().await?);
-        let token = &*token_manager.get_authenticator().await?;
-        headers.insert("Authorization", token);
 
-        let href = Some(&headers);
+        // println!("QUERY {}", query);
 
-        let variables = {};
+        // let mut headers = HashMap::new();
+        // // let token = String::from(self.get_authenticator().await?);
+        // let token = &*token_manager.get_authenticator().await?;
+        // headers.insert("Authorization", token);
 
-        let mut response = gql_client
-            .call(operation_name, &query, &variables, href)
-            .await?;
+        // let href = Some(&headers);
 
-        if let Some(result_json) = response.remove("viewer") {
-            let mut account_list: AccountList = serde_json::from_value(result_json)?;
+        // let variables = {};
 
-            Ok(account_list.accounts.remove(0))
-        } else {
-            return Err(Error::InternalError("No result found"));
-        }
+        // let mut response = gql_client
+        //     .call(operation_name, &query, &variables, href)
+        //     .await?;
+
+        // if let Some(result_json) = response.remove("viewer") {
+        //     let mut account_list: AccountList = serde_json::from_value(result_json)?;
+
+        //     Ok(account_list.accounts.remove(0))
+        // } else {
+        //     return Err(Error::InternalError("No result found"));
+        // }
     }
 }
 

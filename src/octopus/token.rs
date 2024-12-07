@@ -324,7 +324,6 @@ impl TokenManager for OctopusTokenManager {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as u32;
-        println!("now {}", now);
 
         if let Some(token) = &self.token {
             let now = SystemTime::now()

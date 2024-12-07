@@ -143,11 +143,7 @@ enum Commands {
     Summary,
     Bill,
     /// does testing things
-    Test {
-        /// lists test values
-        #[arg(short, long)]
-        list: bool,
-    },
+    Test,
 }
 
 const DEFAULT_PROFILE: &str = "default";
@@ -174,6 +170,7 @@ impl Profile {
 pub trait Module {
     async fn summary(&mut self) -> Result<(), Error>;
     async fn bill(&mut self) -> Result<(), Error>;
+    async fn test(&mut self) -> Result<(), Error>;
 }
 
 pub trait ModuleBuilder {
@@ -275,8 +272,8 @@ impl MarcoSparko {
                         self.bill().await?; 
                         
                     }
-                    Commands::Test { list } => {
-                        println!("TEST {}!", list); 
+                    Commands::Test => {
+                        self.test().await?; 
                         
                     },
                 };
@@ -303,6 +300,15 @@ impl MarcoSparko {
         for (_module_id, module) in self.modules.iter_mut() {
             println!("Bill {}", _module_id);
             module.bill().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn test(&mut self) -> Result<(), Error> {
+        for (_module_id, module) in self.modules.iter_mut() {
+            println!("Test {}", _module_id);
+            module.test().await?;
         }
 
         Ok(())

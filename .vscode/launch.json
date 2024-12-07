@@ -88,6 +88,27 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug executable 'marco-sparko test'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--modules=octopus",
+                "test"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in executable 'marco-sparko'",
             "cargo": {
                 "args": [

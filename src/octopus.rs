@@ -175,6 +175,7 @@ impl Profile {
 pub struct Client{
     context: Context, 
     profile: Option<Profile>,
+    gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
     authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
     gql_client: Arc<sparko_graphql::Client>,
     pub(crate) token_manager:  OctopusTokenManager,
@@ -204,12 +205,14 @@ impl Client {
     }
 
     fn new(context: Context, profile: Option<Profile>, 
+        gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
         authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
         gql_client: Arc<sparko_graphql::Client>, token_manager: OctopusTokenManager) -> Client {        
 
         Client {
             context,
             profile,
+            gql_authenticated_request_manager,
             authenticated_request_manager,
             gql_client,
             token_manager,
@@ -226,7 +229,10 @@ impl Client {
             Ok(default_account.clone())
         }
         else {
-            let default_account = Arc::new(AccountInterface::get_default_account(&self.gql_client, &mut self.token_manager).await?);
+            let default_account = Arc::new(AccountInterface::get_default_account(
+                &mut self.gql_authenticated_request_manager
+                // &self.gql_client, &mut self.token_manager
+            ).await?);
             let return_value = default_account.clone();
             self.default_account = Some(default_account);
             Ok(return_value)
@@ -234,7 +240,10 @@ impl Client {
     }
 
     pub async fn get_account_user(&mut self)  -> Result<AccountUser, Error> {
-        let account_user = AccountUser::get_account_user(&self.gql_client, &mut self.token_manager).await?;
+        let account_user = AccountUser::get_account_user(
+            &mut self.gql_authenticated_request_manager
+                // &self.gql_client, &mut self.token_manager
+                ).await?;
         
         self.update_profile(&account_user).await?;
         
@@ -349,6 +358,14 @@ impl Client {
 
 #[async_trait]
 impl Module for Client {
+    async fn test(&mut self) -> Result<(), crate::Error>{
+        let user = self.get_account_user().await?;
+        println!("get_account_user {} {} {}", user.given_name, user.family_name, user.email);
+        let account = self.get_default_account().await?;
+        println!("get_default_account {}", account.number);
+        Ok(())
+    }
+
     async fn summary(&mut self) -> Result<(), crate::Error>{
         let user = self.get_account_user().await?;
         println!("{}", user);
@@ -357,7 +374,7 @@ impl Module for Client {
 
     async fn bill(&mut self) -> Result<(), crate::Error>{
         let account = self.get_default_account().await?;
-        if let Some(account_number) =  &account.number {
+        let account_number =  &account.number; {
             println!("{}", account_number);
 
             let account_manager = AccountManager::new(account_number);
@@ -395,9 +412,9 @@ impl Module for Client {
 
             Ok(())
         }
-        else {
-            Err(crate::Error::InternalError(String::from("Unable to find default account number")))
-        }
+        // else {
+        //     Err(crate::Error::InternalError(String::from("Unable to find default account number")))
+        // }
     }
 }
 
@@ -533,15 +550,21 @@ impl ClientBuilder {
         let gql_request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone())?);
 
         let token_manager = self.token_manager_builder
-            .with_request_manager(gql_request_manager)
+            .with_request_manager(gql_request_manager.clone())
             .with_context(self.context.clone())
             .build(init)?;
 
-        let request_manager = Arc::new(crate::RequestManager::new(url)?);
         let cloned_token_manager = token_manager.clone_delete_me();
-        let authenticated_request_manager = crate::AuthenticatedRequestManager::new(request_manager, token_manager)?;
+        let cloned2_token_manager = token_manager.clone_delete_me();
+
+        let gql_authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(gql_request_manager, token_manager)?;
+
+        let request_manager = Arc::new(crate::RequestManager::new(url)?);
+       
+        let authenticated_request_manager = crate::AuthenticatedRequestManager::new(request_manager, cloned2_token_manager)?;
 
         let client = Client::new(self.context, option_profile, 
+            gql_authenticated_request_manager,
             authenticated_request_manager,
             gql_client.clone(), 
             cloned_token_manager
