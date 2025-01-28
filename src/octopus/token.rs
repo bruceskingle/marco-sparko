@@ -242,8 +242,8 @@ impl TokenManager for OctopusTokenManager {
 
         let input = self.authenticator.to_obtain_json_web_token_input()?;
         let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-        let response = self.request_manager.new_call(&mutation, None).await?;
-        println!("Result {}", serde_json::to_string_pretty(&response)?);
+        let response = self.request_manager.call(&mutation, None).await?;
+        // println!("Result {}", serde_json::to_string_pretty(&response)?);
 
         //     token_arc = Arc::new(response.obtain_kraken_token_.token_);
         //     token = Some(&token_arc);

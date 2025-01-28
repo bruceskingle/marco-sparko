@@ -42,9 +42,10 @@ use async_trait::async_trait;
 use bill::AccountBillsView;
 // use bill::BillResults;
 use display_json::DisplayAsJsonPretty;
+use graphql::summary::get_account_summary::AccountUserType;
 use serde::{Deserialize, Serialize};
 
-use account::{AccountInterface, AccountManager, AccountUser};
+use account::{AccountManager};
 pub use error::Error;
 use sparko_graphql::types::Date;
 use token::{OctopusTokenManager, TokenManagerBuilder};
@@ -178,10 +179,10 @@ pub struct Client{
     context: Context, 
     profile: Option<Profile>,
     gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
-    authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
+    DEPRECATED_authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
     gql_client: Arc<sparko_graphql::Client>,
     pub(crate) token_manager:  OctopusTokenManager,
-    default_account: Option<Arc<AccountInterface>>
+    default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>
 }
 
 const MODULE_ID: &str = "octopus";
@@ -208,14 +209,14 @@ impl Client {
 
     fn new(context: Context, profile: Option<Profile>, 
         gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
-        authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
+        DEPRECATED_authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
         gql_client: Arc<sparko_graphql::Client>, token_manager: OctopusTokenManager) -> Client {        
 
         Client {
             context,
             profile,
             gql_authenticated_request_manager,
-            authenticated_request_manager,
+            DEPRECATED_authenticated_request_manager,
             gql_client,
             token_manager,
             default_account: None
@@ -226,33 +227,30 @@ impl Client {
     //     self.token_manager.authenticate().await
     // }
 
-    pub async fn get_default_account(&mut self)  -> Result<Arc<AccountInterface>, Error> {
+    pub async fn get_default_account(&mut self)  -> Result<Arc<graphql::summary::get_viewer_accounts::AccountInterface>, Error> {
         if let Some(default_account) = &self.default_account {
             Ok(default_account.clone())
         }
         else {
-            let default_account = Arc::new(AccountInterface::get_default_account(
-                &mut self.gql_authenticated_request_manager
-                // &self.gql_client, &mut self.token_manager
-            ).await?);
+            let query = graphql::summary::get_viewer_accounts::Query::new();
+            let mut response = self.gql_authenticated_request_manager.call(&query).await?;
+
+
+            let default_account = Arc::new(response.viewer_.accounts_.remove(0));
             let return_value = default_account.clone();
             self.default_account = Some(default_account);
             Ok(return_value)
         }
     }
 
-    pub async fn get_account_user(&mut self)  -> Result<AccountUser, Error> {
-        let account_user = AccountUser::get_account_user(
-            &mut self.gql_authenticated_request_manager
-                // &self.gql_client, &mut self.token_manager
-                ).await?;
-        
-        self.update_profile(&account_user).await?;
-        
-        Ok(account_user)
+    pub async fn get_account_user(&mut self)  -> Result<AccountUserType, Error> {
+        let query = graphql::summary::get_account_summary::Query::new();
+        let response = self.gql_authenticated_request_manager.call(&query).await?;
+
+        Ok(response.viewer_)
     }
 
-    async fn update_profile(&mut self, account_user: &AccountUser)  -> Result<(), Error> {
+    async fn update_profile(&mut self, account_user: &AccountUserType)  -> Result<(), Error> {
 
         let api_key = if let Some(profile) = &self.profile {
             profile.api_key.clone()
@@ -261,7 +259,7 @@ impl Client {
             None
         };
 
-        if let Some(new_api_key) = &account_user.live_secret_key {
+        if let Some(new_api_key) = &account_user.live_secret_key_ {
             if let Some(old_profile) = &self.profile {
             
                 if 
@@ -362,9 +360,9 @@ impl Client {
 impl Module for Client {
     async fn test(&mut self) -> Result<(), crate::Error>{
         let user = self.get_account_user().await?;
-        println!("get_account_user {} {} {}", user.given_name, user.family_name, user.email);
+        println!("get_account_user {} {} {}", user.given_name_, user.family_name_, user.email_);
         let account = self.get_default_account().await?;
-        println!("get_default_account {}", account.number);
+        println!("get_default_account {}", account.number_);
         Ok(())
     }
 
@@ -376,7 +374,7 @@ impl Module for Client {
 
     async fn bill(&mut self) -> Result<(), crate::Error>{
         let account = self.get_default_account().await?;
-        let account_number =  &account.number; {
+        let account_number =  &account.number_; {
             println!("{}", account_number);
 
             let account_manager = AccountManager::new(account_number);
@@ -405,7 +403,7 @@ impl Module for Client {
                 // if let Some(start_date) = &statement.consumption_start_date 
                 {
                     let meters = account_manager.get_account_properties_meters(
-                        &mut self.authenticated_request_manager,
+                        &mut self.DEPRECATED_authenticated_request_manager,
                         &start_date,
                         &statement.consumption_end_date).await?;
                     }
@@ -563,11 +561,11 @@ impl ClientBuilder {
 
         let request_manager = Arc::new(crate::RequestManager::new(url)?);
        
-        let authenticated_request_manager = crate::AuthenticatedRequestManager::new(request_manager, cloned2_token_manager)?;
+        let DEPRECATED_authenticated_request_manager = crate::AuthenticatedRequestManager::new(request_manager, cloned2_token_manager)?;
 
         let client = Client::new(self.context, option_profile, 
             gql_authenticated_request_manager,
-            authenticated_request_manager,
+            DEPRECATED_authenticated_request_manager,
             gql_client.clone(), 
             cloned_token_manager
           );

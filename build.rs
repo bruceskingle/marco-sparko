@@ -22,6 +22,7 @@ fn build()  -> Result<(), Box<dyn Error>> {
     sparko_graphql_builder::builder("graphql")
         .with_schema("graphql/octopus/octopus-schema.graphql")
         .with_query("graphql/octopus/Login.graphql", "login")
+        .with_query("graphql/octopus/Summary.graphql", "summary")
         .build()?;
 
     // panic!("Panic test!"); 

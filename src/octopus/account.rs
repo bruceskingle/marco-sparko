@@ -463,173 +463,173 @@ pub struct AccountParams {
 
 
 
-// Represents AccountUserType in the GraphQL schema
-#[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountUser {
-    pub id: String,
+// // Represents AccountUserType in the GraphQL schema
+// #[derive(GraphQLType)]
+// #[graphql(params = "NoParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AccountUser {
+//     pub id: String,
   
-    // List of accounts that the user is linked to either via portfolio role or account role.
-    #[graphql(no_params)]
-    pub accounts: Vec<AccountInterface>,
-    pub given_name: String,
-    pub family_name: String,
-    pub email: String,
-    pub mobile: String,
-    pub landline: String,
-    pub title: Option<String>,
+//     // List of accounts that the user is linked to either via portfolio role or account role.
+//     #[graphql(no_params)]
+//     pub accounts: Vec<AccountInterface>,
+//     pub given_name: String,
+//     pub family_name: String,
+//     pub email: String,
+//     pub mobile: String,
+//     pub landline: String,
+//     pub title: Option<String>,
   
-    // The user's pronouns e.g. 'she/her', 'he/him', 'they/them'.
-    pub pronouns: Option<String>,
+//     // The user's pronouns e.g. 'she/her', 'he/him', 'they/them'.
+//     pub pronouns: Option<String>,
   
-    // Designates whether this user is deceased.
-    pub is_deceased: bool,
+//     // Designates whether this user is deceased.
+//     pub is_deceased: bool,
   
-    // The user's secret key to access the Developer API.
-    pub live_secret_key: Option<String>,
+//     // The user's secret key to access the Developer API.
+//     pub live_secret_key: Option<String>,
   
-    // // List of portfolios that the user is linked to via their portfolio roles.
-    // portfolios(
-    //   // Optionally filter the user's portfolios to only return those linked to specified brands.
-    //   allowedBrandCodes: [BrandChoices]
+//     // // List of portfolios that the user is linked to via their portfolio roles.
+//     // portfolios(
+//     //   // Optionally filter the user's portfolios to only return those linked to specified brands.
+//     //   allowedBrandCodes: [BrandChoices]
   
-    //   // Optionally restrict the user portfolios to only return those linked to public facing brands.
-    //   restrictToPublicFacingBrands: Boolean
-    //   before: String
-    //   after: String
-    //   first: Int
-    //   last: Int
-    // ): PortfolioConnectionTypeConnection
+//     //   // Optionally restrict the user portfolios to only return those linked to public facing brands.
+//     //   restrictToPublicFacingBrands: Boolean
+//     //   before: String
+//     //   after: String
+//     //   first: Int
+//     //   last: Int
+//     // ): PortfolioConnectionTypeConnection
   
-    // AccountUser's date of birth.
-    #[serde(with = "time::serde::iso8601::option")]
+//     // AccountUser's date of birth.
+//     #[serde(with = "time::serde::iso8601::option")]
 
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    pub date_of_birth: Option<OffsetDateTime>,
+//     #[graphql(no_params)]
+//     #[graphql(scalar)]
+//     pub date_of_birth: Option<OffsetDateTime>,
   
-    // // List of details linked to this user.
-    // details: [AccountUserDetailType]
+//     // // List of details linked to this user.
+//     // details: [AccountUserDetailType]
   
-    // The user's full name.
-    pub full_name: Option<String>,
+//     // The user's full name.
+//     pub full_name: Option<String>,
   
-    // The user's preferred name.
-    pub preferred_name: Option<String>,
+//     // The user's preferred name.
+//     pub preferred_name: Option<String>,
   
       
-    // // List of portfolio ids that the user is linked to via their portfolio roles.
-    // portfolioIds(
-    //   // Optionally filter the user's portfolios to only return those linked to specified brands.
-    //   allowedBrandCodes: [BrandChoices]
+//     // // List of portfolio ids that the user is linked to via their portfolio roles.
+//     // portfolioIds(
+//     //   // Optionally filter the user's portfolios to only return those linked to specified brands.
+//     //   allowedBrandCodes: [BrandChoices]
   
-    //   // Optionally restrict the user portfolios to only return those linked to public facing brands.
-    //   restrictToPublicFacingBrands: Boolean
-    // ): [ID]
-    // specialCircumstances: SpecialCircumstancesType
-    // preferences: AccountUserCommsPreferences
+//     //   // Optionally restrict the user portfolios to only return those linked to public facing brands.
+//     //   restrictToPublicFacingBrands: Boolean
+//     // ): [ID]
+//     // specialCircumstances: SpecialCircumstancesType
+//     // preferences: AccountUserCommsPreferences
   
-    // List of alternative phone numbers for the account user.
-    pub alternative_phone_numbers: Vec<String>,
+//     // List of alternative phone numbers for the account user.
+//     pub alternative_phone_numbers: Vec<String>,
   
-    // Whether there are family issues.
-    pub has_family_issues: Option<bool>,
+//     // Whether there are family issues.
+//     pub has_family_issues: Option<bool>,
   
-    // True if user is linked to an account with an active hardship agreement.
-    pub is_in_hardship: Option<bool>,
+//     // True if user is linked to an account with an active hardship agreement.
+//     pub is_in_hardship: Option<bool>,
   
-    // // List of roles a user has for each account they're linked to.
-    // accountUserRoles(
-    //   // Optionally filter the user's account roles to only return those linked to specific accounts.
-    //   accountNumber: String
-    // ): [AccountUserRoleType]
+//     // // List of roles a user has for each account they're linked to.
+//     // accountUserRoles(
+//     //   // Optionally filter the user's account roles to only return those linked to specific accounts.
+//     //   accountNumber: String
+//     // ): [AccountUserRoleType]
   
-    // // List of roles a user has for each portfolio they're linked to.
-    // portfolioUserRoles(
-    //   // Optionally filter the portfolio's user roles to only return those linked to a specific portfolio.
-    //   portfolioNumber: String
+//     // // List of roles a user has for each portfolio they're linked to.
+//     // portfolioUserRoles(
+//     //   // Optionally filter the portfolio's user roles to only return those linked to a specific portfolio.
+//     //   portfolioNumber: String
   
-    //   // Return the user portfolio roles for this account's portfolio.
-    //   accountNumber: String
-    // ): [PortfolioUserRoleType]
+//     //   // Return the user portfolio roles for this account's portfolio.
+//     //   accountNumber: String
+//     // ): [PortfolioUserRoleType]
   
-    // List of hold music options.
-    // holdMusicChoices: [TrackOptionType]
-    pub is_opted_in_to_wof: Option<bool>,
-  }
+//     // List of hold music options.
+//     // holdMusicChoices: [TrackOptionType]
+//     pub is_opted_in_to_wof: Option<bool>,
+//   }
 
-  impl AccountUser {
-    pub fn get_field_names(account_field_names: &str) -> String {
-        format!(r#"id
-accounts {{
-{}
-    }}
-givenName
-familyName
-email
-mobile
-landline
-title
-pronouns
-isDeceased
-liveSecretKey
-dateOfBirth
-fullName
-preferredName
-alternativePhoneNumbers
-hasFamilyIssues
-isInHardship
-isOptedInToWof"#, account_field_names)
-    }
+//   impl AccountUser {
+//     pub fn get_field_names(account_field_names: &str) -> String {
+//         format!(r#"id
+// accounts {{
+// {}
+//     }}
+// givenName
+// familyName
+// email
+// mobile
+// landline
+// title
+// pronouns
+// isDeceased
+// liveSecretKey
+// dateOfBirth
+// fullName
+// preferredName
+// alternativePhoneNumbers
+// hasFamilyIssues
+// isInHardship
+// isOptedInToWof"#, account_field_names)
+//     }
 
-    pub async fn get_account_user(
-        // gql_client: &Arc<sparko_graphql::Client>,
-        // token_manager: &mut OctopusTokenManager,
-        authenticatedRequestManager: &mut sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>
-    ) -> Result<AccountUser, Error> {
+//     pub async fn get_account_user(
+//         // gql_client: &Arc<sparko_graphql::Client>,
+//         // token_manager: &mut OctopusTokenManager,
+//         authenticatedRequestManager: &mut sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>
+//     ) -> Result<AccountUser, Error> {
 
-        let mut response = authenticatedRequestManager.query::<NoParams, AccountUser>("GetAccountUser", "viewer", NoParams).await?;
+//         let mut response = authenticatedRequestManager.query::<NoParams, AccountUser>("GetAccountUser", "viewer", NoParams).await?;
 
-        Ok(response)
+//         Ok(response)
         
-        // let operation_name = "getAccountUser";
-        // let query = format!(
-        //     r#"query {}
-        //                     {{
-        //                         viewer
-        //                         {{
-        //                             {}
-        //                         }}
-        //                     }}"#,
-        //     operation_name, Self::get_field_names(AccountInterface::get_field_names())
-        // );
+//         // let operation_name = "getAccountUser";
+//         // let query = format!(
+//         //     r#"query {}
+//         //                     {{
+//         //                         viewer
+//         //                         {{
+//         //                             {}
+//         //                         }}
+//         //                     }}"#,
+//         //     operation_name, Self::get_field_names(AccountInterface::get_field_names())
+//         // );
 
-        // println!("QUERY {}", query);
+//         // println!("QUERY {}", query);
 
-        // let mut headers = HashMap::new();
-        // // let token = String::from(self.get_authenticator().await?);
-        // let token = &*token_manager.get_authenticator().await?;
-        // headers.insert("Authorization", token);
+//         // let mut headers = HashMap::new();
+//         // // let token = String::from(self.get_authenticator().await?);
+//         // let token = &*token_manager.get_authenticator().await?;
+//         // headers.insert("Authorization", token);
 
-        // let href = Some(&headers);
+//         // let href = Some(&headers);
 
-        // let variables =  {};
+//         // let variables =  {};
 
-        // let mut response = gql_client
-        //     .call(operation_name, &query, &variables, href)
-        //     .await?;
+//         // let mut response = gql_client
+//         //     .call(operation_name, &query, &variables, href)
+//         //     .await?;
 
-        // if let Some(result_json) = response.remove("viewer") {
-        //     let account_user: AccountUser = serde_json::from_value(result_json)?;
+//         // if let Some(result_json) = response.remove("viewer") {
+//         //     let account_user: AccountUser = serde_json::from_value(result_json)?;
 
-        //     Ok(account_user)
-        // } else {
-        //     return Err(Error::InternalError("No result found"));
-        // }
-    }
-}
+//         //     Ok(account_user)
+//         // } else {
+//         //     return Err(Error::InternalError("No result found"));
+//         // }
+//     }
+// }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
