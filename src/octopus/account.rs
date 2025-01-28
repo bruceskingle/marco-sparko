@@ -744,46 +744,53 @@ billingEmail
     // }
 
     pub async fn get_account(
-        gql_client: &Arc<sparko_graphql::Client>,
-        token_manager: &mut OctopusTokenManager,
+        // gql_client: &Arc<sparko_graphql::Client>,
+        // token_manager: &mut OctopusTokenManager,
+        authenticatedRequestManager: &mut sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
         account_number: String
     ) -> Result<AccountInterface, Error> {
-        let operation_name = "getAccount";
-        let query = format!(
-            r#"query {}($accountNumber: String!)
-                            {{
-                                account(accountNumber: $accountNumber)
-                                {{
-                                    {}
-                                }}
-                            }}"#,
-            operation_name, Self::get_field_names()
-        );
+        let mut response = authenticatedRequestManager.query::<NoParams, AccountList>("GetViewerAccounts", "account", NoParams).await?;
 
-        println!("QUERY {}", query);
+        Ok(response.accounts.remove(0))
 
-        let mut headers = HashMap::new();
-        // let token = String::from(self.get_authenticator().await?);
-        let token = &*token_manager.get_authenticator().await?;
-        headers.insert("Authorization", token);
 
-        let href = Some(&headers);
 
-        let variables = AccountParams {
-            account_number,
-        };
+        // let operation_name = "getAccount";
+        // let query = format!(
+        //     r#"query {}($accountNumber: String!)
+        //                     {{
+        //                         account(accountNumber: $accountNumber)
+        //                         {{
+        //                             {}
+        //                         }}
+        //                     }}"#,
+        //     operation_name, Self::get_field_names()
+        // );
 
-        let mut response = gql_client
-            .call(operation_name, &query, &variables.get_actual(""), href)
-            .await?;
+        // println!("QUERY {}", query);
 
-        if let Some(result_json) = response.remove("account") {
-            let account: AccountInterface = serde_json::from_value(result_json)?;
+        // let mut headers = HashMap::new();
+        // // let token = String::from(self.get_authenticator().await?);
+        // let token = &*token_manager.get_authenticator().await?;
+        // headers.insert("Authorization", token);
 
-            Ok(account)
-        } else {
-            return Err(Error::InternalError("No result found"));
-        }
+        // let href = Some(&headers);
+
+        // let variables = AccountParams {
+        //     account_number,
+        // };
+
+        // let mut response = gql_client
+        //     .call(operation_name, &query, &variables.get_actual(""), href)
+        //     .await?;
+
+        // if let Some(result_json) = response.remove("account") {
+        //     let account: AccountInterface = serde_json::from_value(result_json)?;
+
+        //     Ok(account)
+        // } else {
+        //     return Err(Error::InternalError("No result found"));
+        // }
     }
 
     pub async fn get_default_account(
@@ -793,7 +800,7 @@ billingEmail
     ) -> Result<AccountInterface, Error> {
         let mut response = authenticatedRequestManager.query::<NoParams, AccountList>("GetViewerAccounts", "viewer", NoParams).await?;
 
-       Ok(response.accounts.remove(0))
+        Ok(response.accounts.remove(0))
 
 
         // let operation_name = "getDefaultAccount";

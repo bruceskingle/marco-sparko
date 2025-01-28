@@ -25,140 +25,36 @@ SOFTWARE.
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
-
-use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
-
-use serde_json::Value;
-use sparko_graphql::{GraphQLQueryParams, GraphQLType, RequestManager, TokenManager};
-use sparko_graphql::NoParams;
 
 use crate::Context;
 
-use super::{error::Error, PossibleErrorType};
+use super::error::Error;
 
+use sparko_graphql::{RequestManager, TokenManager};
+use super::graphql::login::obtain_kraken_token::{ObtainJsonWebTokenInput, ObtainKrakenJsonWebToken};
 
-
-#[derive(GraphQLQueryParams)]
-#[graphql(as_object)]
-#[graphql(required)]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ObtainJSONWebTokenInput {
-    // "API key of the account user. Use standalone, don't provide a second input field."
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "APIKey")]
-    api_key: Option<String>,
-    // "Email address of the account user. Use with 'password' field."
-    #[serde(skip_serializing_if = "Option::is_none")]
-    email: Option<String>,
-    // // "Live secret key of an third-party organization. Use standalone, don't provide a second input field."
-    #[serde(skip_serializing_if = "Option::is_none")]
-    organization_secret_key: Option<String>,
-    // // "Password of the account user. Use with 'email' field."
-    #[serde(skip_serializing_if = "Option::is_none")]
-    password: Option<String>,
-    // // "Short-lived, temporary key (that's pre-signed). Use standalone, don't provide a second input field."
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pre_signed_key: Option<String>,
-    // // "The refresh token that can be used to extend the expiry claim of a Kraken token. Use standalone, don't provide a second input field."
-    #[serde(skip_serializing_if = "Option::is_none")]
-    refresh_token: Option<String>,
-}
-
-
-// // GENERATED START GraphQLQueryParams
-// impl sparko_graphql :: GraphQLQueryParams for ObtainJSONWebTokenInput
-// {
-//     fn
-//     get_formal_part(& self, params : & mut sparko_graphql :: ParamBuffer,
-//     prefix : & str)
-//     { params.push_formal(prefix, "input", "ObtainJSONWebTokenInput!"); } fn
-//     get_actual_part(& self, params : & mut sparko_graphql :: ParamBuffer,
-//     prefix : & str) { params.push_actual(prefix, "input"); } 
-    
-//     fn get_variables_part(& self, super_variables : & mut serde_json::Map<String, serde_json::Value>, prefix : & str) -> Result < (), serde_json :: Error >
-//     {
-//         // let mut variables = serde_json::Map::<String, serde_json::Value>::new();
-//         // super_variables.insert(format! ("{}{}", prefix, "input"), serde_json::Value::Object(variables))?;
-
-//         let variables = super_variables;
-//         if let Some(_value) = & self.api_key
-//         {
-//             variables.insert(format! ("{}{}", prefix, "apiKey"), serde_json ::
-//             to_value(& self.api_key) ?);
-//         }; if let Some(_value) = & self.email
-//         {
-//             variables.insert(format! ("{}{}", prefix, "email"), serde_json ::
-//             to_value(& self.email) ?);
-//         }; if let Some(_value) = & self.organization_secret_key
-//         {
-//             variables.insert(format!
-//             ("{}{}", prefix, "organizationSecretKey"), serde_json ::
-//             to_value(& self.organization_secret_key) ?);
-//         }; if let Some(_value) = & self.password
-//         {
-//             variables.insert(format! ("{}{}", prefix, "password"), serde_json
-//             :: to_value(& self.password) ?);
-//         }; if let Some(_value) = & self.pre_signed_key
-//         {
-//             variables.insert(format! ("{}{}", prefix, "preSignedKey"),
-//             serde_json :: to_value(& self.pre_signed_key) ?);
-//         }; if let Some(_value) = & self.refresh_token
-//         {
-//             variables.insert(format! ("{}{}", prefix, "refreshToken"),
-//             serde_json :: to_value(& self.refresh_token) ?);
-//         }; Ok(())
-//     }
-// }
-// // GENERATED END
-
-// Yeah, I know. They declare a GenericScalar in fact its the JWT payload
-#[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct JWT {
-    sub: String,
-    gty: String,
-    email: String,
-    token_use: String,
-    iss: String,
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    iat: u32,
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    exp: u32,
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    orig_iat: u32
-  }
-
-#[derive(GraphQLType)]
-#[graphql(params = "ObtainJSONWebTokenInput")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct ObtainKrakenJSONWebToken {
-    // #[graphql(no_params)]
-    // #[graphql(scalar)]
-    // errors: Option<Vec<PossibleErrorType>>,
-    // "A token that can be used in a subsequent call to obtainKrakenToken to get a new Kraken Token with the same access conditions after the previous one has expired."
-    refresh_token: Option<String>,
-    // "A Unix timestamp representing the point in time at which the refresh token will expire."
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    refresh_expires_in: Option<u32>,
-    // "The Kraken Token. Can be used in the Authorization header for subsequent calls to the API to access protected resources."
-    token: String,
-    // "The body payload of the Kraken Token. The same information can be obtained by using JWT decoding tools on the value of the token field."
-    //payload: GenericScalar,
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    payload: JWT
-}
-
-
+// // Yeah, I know. They declare a GenericScalar in fact its the JWT payload
+// #[derive(GraphQLType)]
+// #[graphql(params = "NoParams")]
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// struct JWT {
+//     sub: String,
+//     gty: String,
+//     email: String,
+//     token_use: String,
+//     iss: String,
+//     #[graphql(no_params)]
+//     #[graphql(scalar)]
+//     iat: u32,
+//     #[graphql(no_params)]
+//     #[graphql(scalar)]
+//     exp: u32,
+//     #[graphql(no_params)]
+//     #[graphql(scalar)]
+//     orig_iat: u32
+//   }
 
 const GRACE_PERIOD: u32 = 300;
 // 60*60*24*10;
@@ -183,8 +79,6 @@ struct OctopusToken {
     token:              Arc<String>,
 }
 
-
-
 impl From<StoredToken> for OctopusToken {
     fn from(from: StoredToken) -> OctopusToken {
         OctopusToken {
@@ -194,12 +88,20 @@ impl From<StoredToken> for OctopusToken {
     }
 }
 
-impl From<ObtainKrakenJSONWebToken> for OctopusToken {
-    fn from(from: ObtainKrakenJSONWebToken) -> OctopusToken {
+impl From<ObtainKrakenJsonWebToken> for OctopusToken {
+    fn from(from: ObtainKrakenJsonWebToken) -> OctopusToken {
+        let mut expires= 0;
+        
+        if let Some(object) = from.payload_.as_object() {
+            if let Some(exp) = object.get("exp") {
+                if let Some(exp) = exp.as_u64() {
+                    expires = exp as u32;
+                }
+            }
+        }
         OctopusToken {
-            // refresh_expires: token.refresh_expires_in.unwrap(),
-            token_expires: from.payload.exp,
-            token:          Arc::new(from.token),
+            token_expires: expires,
+            token: Arc::new(from.token_),
         }
     }
 }
@@ -227,28 +129,21 @@ impl OctopusAuthenticator {
         }
     }
 
-    fn to_obtain_json_web_token_input(&self) -> ObtainJSONWebTokenInput {
+    fn to_obtain_json_web_token_input(&self) ->  Result<ObtainJsonWebTokenInput, sparko_graphql::Error>{
+
+        
         if let Some(api_key) = &self.api_key {
-            ObtainJSONWebTokenInput {
-                api_key: Some(api_key.clone()),
-                email: None,
-                password: None,
-                organization_secret_key: None,
-                pre_signed_key: None,
-                refresh_token: None,
-            }
+            ObtainJsonWebTokenInput::builder()
+            .with_apikey(api_key.clone())
+            .build()
         }
         else {
             if let Some(email) = &self.email {
                 if let Some(password) = &self.password {
-                    ObtainJSONWebTokenInput {
-                        email: Some(email.clone()),
-                        password: Some(password.clone()),
-                        api_key: None,
-                        organization_secret_key: None,
-                        pre_signed_key: None,
-                        refresh_token: None,
-                    }
+                    ObtainJsonWebTokenInput::builder()
+                        .with_email(email.clone())
+                        .with_password(password.clone())
+                        .build()
                 }
                 else {
                     panic!("Unreachable");
@@ -345,9 +240,16 @@ impl TokenManager for OctopusTokenManager {
 
     async fn authenticate(&mut self)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
 
-        let variables = self.authenticator.to_obtain_json_web_token_input();
-        let response = self.request_manager.mutation::<ObtainJSONWebTokenInput, ObtainKrakenJSONWebToken>("Login", "obtainKrakenToken", variables).await?;
-        let token = OctopusToken::from(response);
+        let input = self.authenticator.to_obtain_json_web_token_input()?;
+        let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
+        let response = self.request_manager.new_call(&mutation, None).await?;
+        println!("Result {}", serde_json::to_string_pretty(&response)?);
+
+        //     token_arc = Arc::new(response.obtain_kraken_token_.token_);
+        //     token = Some(&token_arc);
+
+        // let response = self.request_manager.mutation::<ObtainJSONWebTokenInput, ObtainKrakenJSONWebToken>("Login", "obtainKrakenToken", variables).await?;
+        let token = OctopusToken::from(response.obtain_kraken_token_);
 
         self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
 

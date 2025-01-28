@@ -52,6 +52,8 @@ use clap::Parser;
 
 use crate::{Context, Module, ModuleBuilder, ModuleConstructor};
 
+include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
+
 #[derive(Parser, Debug)]
 pub struct OctopusArgs {
     /// The Octopus API_KEY to use
@@ -78,99 +80,99 @@ impl Profile {
 }
 
 
-     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-     #[serde(rename_all = "camelCase")]
-     struct Location {
-        line: i32,
-        column: i32,
-     }
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct Location {
+line: i32,
+column: i32,
+}
 
-     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-     #[serde(rename_all = "camelCase")]
-     struct ValidationError {
-            message: String,
-            input_path: Vec<String>
-     }
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct ValidationError {
+    message: String,
+    input_path: Vec<String>
+}
 
-     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-     #[serde(rename_all = "camelCase")]
-     struct Extensions {
-        error_type: String,
-        error_code: String,
-        error_description: String,
-        error_class: String,
-        validation_errors: Vec<ValidationError>
-     }
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct Extensions {
+error_type: String,
+error_code: String,
+error_description: String,
+error_class: String,
+validation_errors: Vec<ValidationError>
+}
 
-     #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-     #[serde(rename_all = "camelCase")]
-     pub struct PossibleErrorType {
-        message: Option<String>,
-        // locations: Vec<Location>,
-        // path: Vec<String>,
-        // extensions: Extensions,
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+pub struct PossibleErrorType {
+message: Option<String>,
+// locations: Vec<Location>,
+// path: Vec<String>,
+// extensions: Extensions,
 
 
 
-        // "The error code that might be returned from the query/mutation."
-        code: Option<String>,
-        // "The error description that might be returned from the query/mutation."
-        description: Option<String>,
-        // "The error message that might be returned from the query/mutation."
-        
-        // "The error type that might be returned from the query/mutation."
-        #[serde(rename = "type")]
-        type_name: Option<String>,
-    }
+// "The error code that might be returned from the query/mutation."
+code: Option<String>,
+// "The error description that might be returned from the query/mutation."
+description: Option<String>,
+// "The error message that might be returned from the query/mutation."
 
-    impl PossibleErrorType {
-        pub fn to_string(errors: Vec<PossibleErrorType>) -> String {
-            let mut result = String::new();
+// "The error type that might be returned from the query/mutation."
+#[serde(rename = "type")]
+type_name: Option<String>,
+}
 
-            for err in errors {
-                if result.len() == 0 {
-                    result.push('[');
-                }
-                else {
-                    result.push(',');
-                }
+impl PossibleErrorType {
+pub fn to_string(errors: Vec<PossibleErrorType>) -> String {
+    let mut result = String::new();
 
-                result.push_str(&err.to_string());
-            }
-            result.push(']');
-            result
+    for err in errors {
+        if result.len() == 0 {
+            result.push('[');
         }
+        else {
+            result.push(',');
+        }
+
+        result.push_str(&err.to_string());
     }
+    result.push(']');
+    result
+}
+}
 
 
 
-    // impl fmt::Display for PossibleErrorType {
-    //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    //         write!(f, "[")?;
+// impl fmt::Display for PossibleErrorType {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "[")?;
 
-    //         if let Some(code) = &self.code {
-    //             write!(f, "code: {}", code)?
-    //         }
+//         if let Some(code) = &self.code {
+//             write!(f, "code: {}", code)?
+//         }
 
-    //         if let Some(description) = &self.description {
-    //             write!(f, "description: {}", description)?
-    //         }
+//         if let Some(description) = &self.description {
+//             write!(f, "description: {}", description)?
+//         }
 
-    //         if let Some(message) = &self.message {
-    //             write!(f, "message: {}", message)?
-    //         }
+//         if let Some(message) = &self.message {
+//             write!(f, "message: {}", message)?
+//         }
 
-    //         if let Some(type_name) = &self.type_name {
-    //             write!(f, "type: {}", type_name)?
-    //         }
+//         if let Some(type_name) = &self.type_name {
+//             write!(f, "type: {}", type_name)?
+//         }
 
-    //         // Close the opened bracket and return a fmt::Result value.
-    //         write!(f, "]")
-    //     }
-    // }
+//         // Close the opened bracket and return a fmt::Result value.
+//         write!(f, "]")
+//     }
+// }
 
 
-    //  self.config.get_active_profile()?.modules.octopus.clone()
+//  self.config.get_active_profile()?.modules.octopus.clone()
 // #[derive(Debug)]
 pub struct Client{
     context: Context, 

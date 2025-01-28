@@ -6,6 +6,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[build-dependencies]
+sparko_graphql_builder = { path = "../sparko_graphql/sparko_graphql_builder" }
+
 [dependencies]
 time = { version = "0.3", features = ["serde", "parsing", "formatting"] }
 chrono = "0.4"
