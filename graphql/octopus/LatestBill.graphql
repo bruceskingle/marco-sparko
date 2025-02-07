@@ -1,0 +1,125 @@
+fragment ChargeSummary on Charge {
+    consumption {
+        startDate
+        endDate
+        quantity
+        unit
+        usageCost
+        supplyCharge
+    }?
+    isExport
+}
+
+fragment StatementSummary on StatementType {
+    closingBalance
+    openingBalance
+    isExternalBill
+    transactions(before: $bills_transactions_before, after: $bills_transactions_after, first: $bills_transactions_first, last: $bills_transactions_last) {
+        pageInfo {
+            startCursor
+            hasNextPage
+        }
+        edges {
+            node {
+                __typename
+                id
+                postedDate
+                createdAt
+                accountNumber
+                amounts {
+                    net
+                    tax
+                    gross
+                }
+                balanceCarriedForward
+                isHeld
+                isIssued
+                title
+                billingDocumentIdentifier
+                isReversed
+                hasStatement
+                note
+                ...ChargeSummary
+            }
+        }
+    }
+    userId
+    toAddress
+    paymentDueDate
+    consumptionStartDate?
+    consumptionEndDate?
+    reversalsAfterClose
+    status
+    heldStatus {
+        isHeld
+        reason?
+    }
+    totalCharges {
+        netTotal
+        taxTotal
+        grossTotal
+    }
+    totalCredits {
+        netTotal
+        taxTotal
+        grossTotal
+    }
+}
+
+query getAccountLatestBill($accountNumber: String!, 
+    $bills_includeBillsWithoutPDF: Boolean, 
+    $bills_includeOpenStatements: Boolean, 
+    $bills_includeHeldStatements: Boolean, 
+    $bills_includeHistoricStatements: Boolean, 
+    $bills_onlyCurrentEmail: Boolean, 
+    $bills_fromDate: Date, 
+    $bills_toDate: Date, 
+    $bills_issuedFromDate: Date, 
+    $bills_issuedToDate: Date, 
+    $bills_offset: Int, 
+    $bills_before: String, 
+    $bills_after: String, 
+    $bills_first: Int, 
+    $bills_last: Int, 
+    $bills_transactions_before: String, 
+    $bills_transactions_after: String, 
+    $bills_transactions_first: Int, 
+    $bills_transactions_last: Int) {
+        account(accountNumber: $accountNumber) {
+            id
+            status
+            number
+            balance
+            bills(
+                includeBillsWithoutPDF: $bills_includeBillsWithoutPDF, 
+                includeOpenStatements: $bills_includeOpenStatements, 
+                includeHeldStatements: $bills_includeHeldStatements, 
+                includeHistoricStatements: $bills_includeHistoricStatements, 
+                onlyCurrentEmail: $bills_onlyCurrentEmail, 
+                fromDate: $bills_fromDate, 
+                toDate: $bills_toDate, 
+                issuedFromDate: $bills_issuedFromDate, 
+                issuedToDate: $bills_issuedToDate, 
+                offset: $bills_offset, 
+                before: $bills_before, 
+                after: $bills_after, 
+                first: $bills_first, 
+                last: $bills_last) {
+                pageInfo {
+                    startCursor
+                    hasNextPage
+                }
+                edges {
+                    node {
+                        billType
+                        __typename
+                        id
+                        fromDate
+                        toDate
+                        issuedDate
+                        ...StatementSummary
+                }
+            }
+        }
+    }
+}

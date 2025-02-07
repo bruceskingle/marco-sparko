@@ -31,7 +31,9 @@ use marco_sparko::{Error, MarcoSparko};
 async fn main() -> Result<(), Error> {
     let mut marco_sparko = MarcoSparko::new_cli()?;
 
-    marco_sparko.run().await?;
+    if let Err(error) = marco_sparko.run().await {
+        println!("Execution failed: {}", error);
+    }
     
     Ok(())
 }

@@ -30,9 +30,10 @@ use serde::{Deserialize, Serialize};
 use crate::Context;
 
 use super::error::Error;
+use super::graphql::ObtainJsonWebTokenInput;
 
 use sparko_graphql::{RequestManager, TokenManager};
-use super::graphql::login::obtain_kraken_token::{ObtainJsonWebTokenInput, ObtainKrakenJsonWebToken};
+use super::graphql::login::obtain_kraken_token::ObtainKrakenJsonWebToken;
 
 // // Yeah, I know. They declare a GenericScalar in fact its the JWT payload
 // #[derive(GraphQLType)]

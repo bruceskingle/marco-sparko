@@ -42,10 +42,10 @@ use async_trait::async_trait;
 use bill::AccountBillsView;
 // use bill::BillResults;
 use display_json::DisplayAsJsonPretty;
-use graphql::summary::get_account_summary::AccountUserType;
+use graphql::{latest_bill::get_account_latest_bill::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
 use serde::{Deserialize, Serialize};
 
-use account::{AccountManager};
+use account::AccountManager;
 pub use error::Error;
 use sparko_graphql::types::Date;
 use token::{OctopusTokenManager, TokenManagerBuilder};
@@ -105,72 +105,6 @@ error_class: String,
 validation_errors: Vec<ValidationError>
 }
 
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct PossibleErrorType {
-message: Option<String>,
-// locations: Vec<Location>,
-// path: Vec<String>,
-// extensions: Extensions,
-
-
-
-// "The error code that might be returned from the query/mutation."
-code: Option<String>,
-// "The error description that might be returned from the query/mutation."
-description: Option<String>,
-// "The error message that might be returned from the query/mutation."
-
-// "The error type that might be returned from the query/mutation."
-#[serde(rename = "type")]
-type_name: Option<String>,
-}
-
-impl PossibleErrorType {
-pub fn to_string(errors: Vec<PossibleErrorType>) -> String {
-    let mut result = String::new();
-
-    for err in errors {
-        if result.len() == 0 {
-            result.push('[');
-        }
-        else {
-            result.push(',');
-        }
-
-        result.push_str(&err.to_string());
-    }
-    result.push(']');
-    result
-}
-}
-
-
-
-// impl fmt::Display for PossibleErrorType {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "[")?;
-
-//         if let Some(code) = &self.code {
-//             write!(f, "code: {}", code)?
-//         }
-
-//         if let Some(description) = &self.description {
-//             write!(f, "description: {}", description)?
-//         }
-
-//         if let Some(message) = &self.message {
-//             write!(f, "message: {}", message)?
-//         }
-
-//         if let Some(type_name) = &self.type_name {
-//             write!(f, "type: {}", type_name)?
-//         }
-
-//         // Close the opened bracket and return a fmt::Result value.
-//         write!(f, "]")
-//     }
-// }
 
 
 //  self.config.get_active_profile()?.modules.octopus.clone()
@@ -223,10 +157,6 @@ impl Client {
         }
     }
 
-    // pub async fn authenticate(&mut self) -> Result<Arc<std::string::String>, Error>{
-    //     self.token_manager.authenticate().await
-    // }
-
     pub async fn get_default_account(&mut self)  -> Result<Arc<graphql::summary::get_viewer_accounts::AccountInterface>, Error> {
         if let Some(default_account) = &self.default_account {
             Ok(default_account.clone())
@@ -248,6 +178,21 @@ impl Client {
         let response = self.gql_authenticated_request_manager.call(&query).await?;
 
         Ok(response.viewer_)
+    }
+
+
+
+    pub async fn get_latest_bill(&mut self)  -> Result<graphql::latest_bill::get_account_latest_bill::BillConnectionTypeConnection, Error> {
+        // let account_number = self.get_default_account().await?.number_;
+        let query = graphql::latest_bill::get_account_latest_bill::Query::from(graphql::latest_bill::get_account_latest_bill::Variables::builder()
+            .with_account_number(self.get_default_account().await?.number_.clone())
+            .with_bills_first(1)
+            .with_bills_transactions_first(100)
+            .build()?
+        );
+        let response = self.gql_authenticated_request_manager.call(&query).await?;
+
+        Ok(response.account_.bills_)
     }
 
     async fn update_profile(&mut self, account_user: &AccountUserType)  -> Result<(), Error> {
@@ -292,64 +237,69 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_bill(result: &AccountBillsView) -> Result<(), crate::Error> {
+    pub fn handle_bill(result: &graphql::latest_bill::get_account_latest_bill::BillConnectionTypeConnection) -> Result<(), crate::Error> {
         //println!("\n===========================\n{}\n===========================\n", result);
+        
+        let bill =  &result.edges_[0].node_;
+        let abstract_bill = bill.as_bill_interface();
+                // statement.print();
 
-        match &result.bills.edges[0].node {
-            bill::Bill::Statement(statement) => {
-                statement.print();
+        println!("Energy Account Statement");
+        println!("========================");
+        println!("Date                {}", abstract_bill.issued_date_);
+        println!("Ref                 {}", abstract_bill.id_);
+        println!("From                {}", abstract_bill.from_date_);
+        println!("To                  {}", abstract_bill.to_date_);
 
-                println!("Energy Account Statement");
-                println!("========================");
-                println!("Date                {}", statement.bill.issued_date);
-                println!("Ref                 {}", statement.bill.id);
-                println!("From                {}", statement.bill.from_date);
-                println!("To                  {}", statement.bill.to_date);
-
-                let mut map = BTreeMap::new();
-                for edge in &statement.transactions.edges {
-                    let txn = edge.node.as_transaction();
-
-                    map.insert(&txn.posted_date, &edge.node);
-                }
+        if let BillInterface::StatementType(statement) = bill {
+            let mut map = BTreeMap::new();
+            for edge in &statement.transactions_.edges_ {
+                map.insert(&edge.node_.as_transaction_type().posted_date_, &edge.node_);
+            }
 
 
-                for transaction in &mut map.values() {
-                    let txn = transaction.as_transaction();
+            for txn in &mut map.values() {
+                // let txn = transaction.as_transaction_type();
 
-                    print!("{:20} {:10} ", 
-                                txn.title,
-                                txn.posted_date
+                print!("{:20} {:10} ", 
+                            txn.as_transaction_type().title_,
+                            txn.as_transaction_type().posted_date_
+                        );
+                print!("{:10} {:10} {:10} {:10}", 
+                    txn.as_transaction_type().amounts_.net_,
+                    txn.as_transaction_type().amounts_.tax_, 
+                    txn.as_transaction_type().amounts_.gross_,
+                    txn.as_transaction_type().balance_carried_forward_
+                    );
+
+                    if let TransactionType::Charge(charge) = txn {
+                        if let Some(consumption) = &charge.consumption_ {
+                            print!(" {} {} {:10} ", 
+                                consumption.start_date_,
+                                consumption.end_date_,
+                                consumption.quantity_
                             );
-                    print!("{:10} {:10} {:10} {:10}", 
-                        txn.amounts.net,
-                        txn.amounts.tax, 
-                        txn.amounts.gross,
-                        txn.balance_carried_forward
-                        );
-
-                    if let transaction::Transaction::Charge(charge) = &transaction {
-                            
-                        print!(" {} {} {:10} ", 
-                            charge.consumption.start_date,
-                            charge.consumption.end_date,
-                            charge.consumption.quantity
-                        );
-                        if *charge.is_export {
-                            print!("export ");
-                        }
-                        else {
-                            print!("import ");
+                            if charge.is_export_ {
+                                print!("export ");
+                            }
+                            else {
+                                print!("import ");
+                            }
                         }
                     }
-                    println!();
-                } 
-            },
-        };
-
+                println!();
+            } 
+        }
 
         Ok(())
     }
+
+    // pub fn get_latest_bill(&self) -> Result<Bill, Error> {
+    //     let query = graphql::latest_bill::get_account_summary::Query::new();
+    //     let response = self.gql_authenticated_request_manager.call(&query).await?;
+
+    //     Ok(response.viewer_)
+    // }
 }
 
 // unsafe impl Send for Client {
@@ -379,36 +329,37 @@ impl Module for Client {
 
             let account_manager = AccountManager::new(account_number);
 
-            let result = account_manager.get_latest_bill(&self.gql_client, &mut self.token_manager).await?;
+            let result = self.get_latest_bill().await?;
+            // account_manager.get_latest_bill(&self.gql_client, &mut self.token_manager).await?;
 
             Self::handle_bill(&result)?;
 
-            
+            // let statement =  &result.edges_[0].node_;
 
 
             
 
-            if let  bill::Bill::Statement(statement) = &result.bills.edges[0].node {
+            // // if let  bill::Bill::Statement(statement) = &result.edges_[0].node_ {
 
-                // let with_effect_from = None; // Some(statement.bill.from_date)
-                // let meter_result = account_manager.get_account_properties_meters(
-                //     &self.gql_client, &mut self.token_manager, with_effect_from).await?;
+            //     // let with_effect_from = None; // Some(statement.bill.from_date)
+            //     // let meter_result = account_manager.get_account_properties_meters(
+            //     //     &self.gql_client, &mut self.token_manager, with_effect_from).await?;
 
-                let foo = &statement.consumption_start_date;
+            //     let foo = &statement.consumption_start_date_;
 
-                println!("consumption_start_date={:?}", foo);
+            //     println!("consumption_start_date={:?}", foo);
 
-                let start_date = Date::from_calendar_date(2024, time::Month::October, 30).unwrap();
+            //     let start_date = Date::from_calendar_date(2024, time::Month::October, 30).unwrap();
 
-                // if let Some(start_date) = &statement.consumption_start_date 
-                {
-                    let meters = account_manager.get_account_properties_meters(
-                        &mut self.DEPRECATED_authenticated_request_manager,
-                        &start_date,
-                        &statement.consumption_end_date).await?;
-                    }
+            //     // if let Some(start_date) = &statement.consumption_start_date 
+            //     {
+            //         let meters = account_manager.get_account_properties_meters(
+            //             &mut self.DEPRECATED_authenticated_request_manager,
+            //             &start_date,
+            //             &statement.consumption_end_date_).await?;
+            //         }
 
-            }
+            // // }
 
             Ok(())
         }

@@ -20,9 +20,12 @@ fn build()  -> Result<(), Box<dyn Error>> {
 
     println!("cargo::rerun-if-changed=build.rs");
     sparko_graphql_builder::builder("graphql")
+        .with_type("Date", "sparko_graphql::types::Date")
+        .with_type("DateTime", "sparko_graphql::types::DateTime")
         .with_schema("graphql/octopus/octopus-schema.graphql")
         .with_query("graphql/octopus/Login.graphql", "login")
         .with_query("graphql/octopus/Summary.graphql", "summary")
+        .with_query("graphql/octopus/LatestBill.graphql", "latest_bill")
         .build()?;
 
     // panic!("Panic test!"); 
