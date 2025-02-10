@@ -22,15 +22,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-pub mod gql;
+// pub mod gql;
 pub mod octopus;
 pub mod system;
+pub mod request_manager;
+pub use request_manager::RequestManager;
+pub mod authenticated_request_manager;
+pub use authenticated_request_manager::AuthenticatedRequestManager;
 
-
-use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::error::Error as StdError;
+use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};
 use async_trait::async_trait;
-
 use dirs::home_dir;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use clap::{Parser, Subcommand};
 
@@ -40,7 +44,56 @@ pub enum Error {
     JsonError(serde_json::Error),
     IOError(std::io::Error),
     InternalError(String),
-    UserError(String)
+    UserError(String),
+    WrappedError(Box<dyn StdError>),
+    GraphQLError(Vec<graphql_client::Error>)
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::OctopusError(err) => f.write_fmt(format_args!("OctopusError({})", err)),
+            Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
+            Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
+            Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
+            Error::UserError(err) => f.write_fmt(format_args!("UserError({})", err)),
+            Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err)),
+            Error::GraphQLError(err) => {
+                match  serde_json::to_string_pretty(err)  {
+                    Ok(s) => f.write_str(&s),
+                    Err(e) => f.write_fmt(format_args!("Failed to parse JSON: {}", e)),
+                }
+            }
+        }
+    }
+}
+
+impl StdError for Error {
+
+}
+
+// impl From<time::error::ComponentRange> for Error {
+//     fn from(err: time::error::ComponentRange) -> Error {
+//         Error::WrappedError(Box::new(err))
+//     }
+// }
+
+impl From<Box<dyn StdError>> for Error {
+    fn from(err: Box<dyn StdError>) -> Error {
+        Error::WrappedError(err)
+    }
+}
+
+impl From<Vec<graphql_client::Error>>  for Error {
+    fn from(err: Vec<graphql_client::Error>) -> Error {
+        Error::GraphQLError(err)
+    }
+}
+
+impl From<reqwest::Error> for Error {
+        fn from(err: reqwest::Error) -> Error {
+            Error::WrappedError(Box::new(err))
+        }
 }
 
 impl From<crate::octopus::error::Error> for Error {
@@ -77,6 +130,8 @@ pub struct Args {
     modules: Vec<String>,
     #[arg(short, long)]
     init: bool,
+    #[arg(short, long)]
+    verbose: bool,
 
     #[clap(flatten)]
     pub octopus: octopus::OctopusArgs,
@@ -88,12 +143,9 @@ pub struct Args {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Summary,
+    Bill,
     /// does testing things
-    Test {
-        /// lists test values
-        #[arg(short, long)]
-        list: bool,
-    },
+    Test,
 }
 
 const DEFAULT_PROFILE: &str = "default";
@@ -119,6 +171,8 @@ impl Profile {
 #[async_trait]
 pub trait Module {
     async fn summary(&mut self) -> Result<(), Error>;
+    async fn bill(&mut self) -> Result<(), Error>;
+    async fn test(&mut self) -> Result<(), Error>;
 }
 
 pub trait ModuleBuilder {
@@ -216,8 +270,12 @@ impl MarcoSparko {
                         self.summary().await?; 
                         
                     }
-                    Commands::Test { list } => {
-                        println!("TEST {}!", list); 
+                    Commands::Bill => {
+                        self.bill().await?; 
+                        
+                    }
+                    Commands::Test => {
+                        self.test().await?; 
                         
                     },
                 };
@@ -235,6 +293,24 @@ impl MarcoSparko {
         for (_module_id, module) in self.modules.iter_mut() {
             println!("Summary {}", _module_id);
             module.summary().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn bill(&mut self) -> Result<(), Error> {
+        for (_module_id, module) in self.modules.iter_mut() {
+            println!("Bill {}", _module_id);
+            module.bill().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn test(&mut self) -> Result<(), Error> {
+        for (_module_id, module) in self.modules.iter_mut() {
+            println!("Test {}", _module_id);
+            module.test().await?;
         }
 
         Ok(())
@@ -263,16 +339,52 @@ impl Context {
         &self.marco_sparko.args
     }
 
-    pub fn update_profile<T>(&mut self, module_id: &str, profile: T) -> Result<(), Error>
+    pub fn update_cache<T>(&self, module_id: &str, profile: &T) -> Result<(), Error>
     where
         T: Serialize
      {
-        let mutex = self.marco_sparko.updated_profile.lock()?;
-        let mut updated_profile = mutex;
+        let path = self.marco_sparko.get_cache_file_path(module_id)?;
 
-        updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
+        serde_json::to_writer_pretty(fs::File::create(path)?, &profile)?;
+            
+
         Ok(())
      }
+
+
+
+    pub fn read_cache<T>(&self, module_id: &str) -> Option<T>
+    where
+        T: DeserializeOwned
+     {
+        if let Ok(path) = self.marco_sparko.get_cache_file_path(module_id) {
+            if let Ok(reader) = fs::File::open(path) {
+                if let Ok(result) = serde_json::from_reader(reader) {
+                    return Some(result)
+                }
+            }
+        }
+        return None
+    }
+
+    //     let path = ContextImpl::get_cache_file_path(module_id).unwrap();
+    //     let reader = fs::File::open(path).unwrap();
+    //     let result = serde_json::from_reader(reader).unwrap();
+        
+    //                 return Some(result)
+    // }
+       
+
+     pub fn update_profile<T>(&mut self, module_id: &str, profile: T) -> Result<(), Error>
+     where
+         T: Serialize
+      {
+         let mutex = self.marco_sparko.updated_profile.lock()?;
+         let mut updated_profile = mutex;
+ 
+         updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
+         Ok(())
+      }
 }
 
 #[derive(Debug)]
@@ -298,6 +410,22 @@ impl ContextImpl {
             })
         }
     }
+
+    fn get_cache_file_path(&self, module_id: &str) -> Result<PathBuf, Error> {
+        let profile_name = if let Some(active_profile) = &self.active_profile {
+            &active_profile.name
+        }
+        else {
+            return Err(Error::InternalError("No Active Profile".to_string()))
+        };
+
+        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        path.push(".marco-sparko-cache");
+        path.push(format!("{}-{}.json", profile_name, module_id));
+
+        println!("Path is {:?}", &path);
+                Ok(path)
+     }
 
     fn get_file_path() -> Result<PathBuf, Error> {
         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
@@ -416,3 +544,8 @@ impl ContextImpl {
 
     }
 }
+
+// pub trait Token {
+//     fn fetch(&self) -> Arc<String>;
+//     fn has_expired(&self) -> bool;
+// }

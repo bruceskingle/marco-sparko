@@ -26,7 +26,48 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'marco-sparko'",
+            "name": "Debug unit tests in 'tests::test_handle_bill_total'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "octopus::tests::test_handle_bill_total",
+                    "--no-run",
+                    "--lib",
+                    "--package=marco-sparko"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'marco-sparko bill'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--modules=octopus",
+                "bill"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'marco-sparko summary'",
             "cargo": {
                 "args": [
                     "build",
@@ -41,6 +82,27 @@
             "args": [
                 "--modules=octopus",
                 "summary"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'marco-sparko test'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--modules=octopus",
+                "test"
             ],
             "cwd": "${workspaceFolder}"
         },

@@ -25,146 +25,133 @@ SOFTWARE.
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
+
+use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
-use crate::Context;
+use crate::{Context, TokenManager};
 
-use super::error::Error;
-use super::graphql::ObtainJsonWebTokenInput;
+use super::{error::Error, PossibleErrorType};
 
-use sparko_graphql::{RequestManager, TokenManager};
-use super::graphql::login::obtain_kraken_token::ObtainKrakenJsonWebToken;
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct JWT {
+    sub: String,
+    gty: String,
+    email: String,
+    token_use: String,
+    iss: String,
+    iat: u32,
+    exp: u32,
+    orig_iat: u32
+  }
 
-// // Yeah, I know. They declare a GenericScalar in fact its the JWT payload
-// #[derive(GraphQLType)]
-// #[graphql(params = "NoParams")]
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct ObtainKrakenJSONWebToken {
+    // "The body payload of the Kraken Token. The same information can be obtained by using JWT decoding tools on the value of the token field."
+    //payload: GenericScalar,
+    errors: Option<Vec<PossibleErrorType>>,
+    // "A token that can be used in a subsequent call to obtainKrakenToken to get a new Kraken Token with the same access conditions after the previous one has expired."
+    refresh_token: Option<String>,
+    // "A Unix timestamp representing the point in time at which the refresh token will expire."
+    refresh_expires_in: Option<u32>,
+    // "The Kraken Token. Can be used in the Authorization header for subsequent calls to the API to access protected resources."
+    token: String,
+    payload: JWT
+}
+
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+#[serde(rename_all = "camelCase")]
+struct ObtainKrakenJSONWebTokenWrapper {
+    obtain_kraken_token: Option<ObtainKrakenJSONWebToken>
+}
+
 // #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
 // #[serde(rename_all = "camelCase")]
-// struct JWT {
-//     sub: String,
-//     gty: String,
-//     email: String,
-//     token_use: String,
-//     iss: String,
-//     #[graphql(no_params)]
-//     #[graphql(scalar)]
-//     iat: u32,
-//     #[graphql(no_params)]
-//     #[graphql(scalar)]
-//     exp: u32,
-//     #[graphql(no_params)]
-//     #[graphql(scalar)]
-//     orig_iat: u32
-//   }
+// struct ObtainKrakenJSONWebTokenResponse {
+//     errors: Option<Vec<PossibleErrorType>>,
+//     data:   ObtainKrakenJSONWebTokenWrapper,
+// }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObtainJSONWebTokenInput {
+    // "API key of the account user. Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "APIKey")]
+    api_key: Option<String>,
+    // "Email address of the account user. Use with 'password' field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+    // // "Live secret key of an third-party organization. Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    organization_secret_key: Option<String>,
+    // // "Password of the account user. Use with 'email' field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    password: Option<String>,
+    // // "Short-lived, temporary key (that's pre-signed). Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pre_signed_key: Option<String>,
+    // // "The refresh token that can be used to extend the expiry claim of a Kraken token. Use standalone, don't provide a second input field."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    refresh_token: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Variables<'a> {
+   input:  &'a ObtainJSONWebTokenInput,
+}
 
 const GRACE_PERIOD: u32 = 300;
 // 60*60*24*10;
 
-#[derive(Serialize, Deserialize)]
-struct StoredToken {
-    token_expires:      u32,
-    token:              String,
-}
-
-impl From<&OctopusToken> for StoredToken {
-    fn from(from: &OctopusToken) -> StoredToken {
-        StoredToken {
-            token_expires: from.token_expires,
-            token: from.token.as_ref().clone()
-        }
-    }
-}
-
 struct OctopusToken {
     token_expires:      u32,
+    refresh_expires:    u32,
     token:              Arc<String>,
+    refresh_token:      ObtainJSONWebTokenInput,
 }
 
-impl From<StoredToken> for OctopusToken {
-    fn from(from: StoredToken) -> OctopusToken {
+impl OctopusToken {
+    fn new(token: ObtainKrakenJSONWebToken) -> OctopusToken {
         OctopusToken {
-            token_expires: from.token_expires,
-            token: Arc::new(from.token)
-        }
-    }
-}
-
-impl From<ObtainKrakenJsonWebToken> for OctopusToken {
-    fn from(from: ObtainKrakenJsonWebToken) -> OctopusToken {
-        let mut expires= 0;
-        
-        if let Some(object) = from.payload_.as_object() {
-            if let Some(exp) = object.get("exp") {
-                if let Some(exp) = exp.as_u64() {
-                    expires = exp as u32;
-                }
+            refresh_expires: token.refresh_expires_in.unwrap(),
+            token_expires: token.payload.exp,
+            token:          Arc::new(token.token),
+            refresh_token:  ObtainJSONWebTokenInput {
+                api_key: None,
+                email: None,
+                organization_secret_key: None,
+                password: None,
+                pre_signed_key: None,
+                refresh_token: Some(token.refresh_token.unwrap()),
             }
         }
-        OctopusToken {
-            token_expires: expires,
-            token: Arc::new(from.token_),
-        }
     }
 }
 
-pub struct OctopusAuthenticator {
-    api_key:            Option<String>,
-    email:              Option<String>,
-    password:           Option<String>,
-}
+// impl Token for OctopusToken {
+//     fn fetch(&self) -> Arc<String> {
+//         self.token.clone()
+//     }
 
-impl OctopusAuthenticator {
-    fn from_api_key(api_key: String) -> OctopusAuthenticator {
-        OctopusAuthenticator {
-            api_key: Some(api_key),
-            email: None,
-            password: None
-        }
-    }
+//     fn has_expired(&self) -> bool {
+//         let now = SystemTime::now()
+//                 .duration_since(UNIX_EPOCH)
+//                 .unwrap()
+//                 .as_secs() as u32;
 
-    fn from_password(email: String, password: String) -> OctopusAuthenticator {
-        OctopusAuthenticator {
-            api_key: None,
-            email: Some(email),
-            password: Some(password)
-        }
-    }
-
-    fn to_obtain_json_web_token_input(&self) ->  Result<ObtainJsonWebTokenInput, sparko_graphql::Error>{
-
-        
-        if let Some(api_key) = &self.api_key {
-            ObtainJsonWebTokenInput::builder()
-            .with_apikey(api_key.clone())
-            .build()
-        }
-        else {
-            if let Some(email) = &self.email {
-                if let Some(password) = &self.password {
-                    ObtainJsonWebTokenInput::builder()
-                        .with_email(email.clone())
-                        .with_password(password.clone())
-                        .build()
-                }
-                else {
-                    panic!("Unreachable");
-                }
-            }
-            else {
-                panic!("Unreachable");
-            }
-
-            
-        }
-
-    }
-}
+//         self.token_expires - GRACE_PERIOD > now
+//     }
+// }
 
 pub struct OctopusTokenManager {
-    context:            Context,
-    request_manager: Arc<RequestManager>,
-    authenticator: OctopusAuthenticator,
-    token: Option<OctopusToken>
+    context:        Context,
+    gql_client:     Arc<sparko_graphql::Client>,
+    authenticator:  ObtainJSONWebTokenInput,
+    token:          Option<OctopusToken>
 }
 
 impl OctopusTokenManager {
@@ -172,12 +159,9 @@ impl OctopusTokenManager {
         TokenManagerBuilder::new()
     }
 
-    fn new(context: Context,
-        request_manager: Arc<RequestManager>,
-        authenticator: OctopusAuthenticator,
-    ) -> OctopusTokenManager {
-        let token: Option<OctopusToken> = if let Some(json_web_token) =  context.read_cache::<StoredToken>(crate::octopus::MODULE_ID) {
-            Some(OctopusToken::from(json_web_token))
+    fn new(context: Context, gql_client: Arc<sparko_graphql::Client>, authenticator:  ObtainJSONWebTokenInput) -> OctopusTokenManager {
+        let token = if let Some(json_web_token) =  context.read_cache(crate::octopus::MODULE_ID) {
+            Some(OctopusToken::new(json_web_token))
         }
         else {
             None
@@ -185,30 +169,9 @@ impl OctopusTokenManager {
 
         OctopusTokenManager {
             context,
-            request_manager,
+            gql_client,
             authenticator,
             token,
-        }
-    }
-
-    pub fn clone_delete_me(&self) -> OctopusTokenManager {
-        OctopusTokenManager {
-            context: self.context.clone(),
-            request_manager: self.request_manager.clone(),
-            authenticator: OctopusAuthenticator {
-                api_key: self.authenticator.api_key.clone(),
-                email: self.authenticator.email.clone(),
-                password: self.authenticator.password.clone(),
-            },
-            token: if let Some(token) = &self.token {
-                Some(OctopusToken {
-                    token_expires: token.token_expires,
-                    token: token.token.clone()
-                })
-            }
-            else {
-                None
-            }
         }
     }
 }
@@ -220,6 +183,7 @@ impl TokenManager for OctopusTokenManager {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as u32;
+        println!("now {}", now);
 
         if let Some(token) = &self.token {
             let now = SystemTime::now()
@@ -240,42 +204,61 @@ impl TokenManager for OctopusTokenManager {
     }
 
     async fn authenticate(&mut self)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
+        let query_name = "obtainKrakenToken";
+        let query = format!(r#"mutation {}($input: ObtainJSONWebTokenInput!) {{
+                obtainKrakenToken(input: $input) {{
+                    refreshToken
+                    refreshExpiresIn
+                    token
+                    payload
+    }}
+    }}"#, query_name);
 
-        let input = self.authenticator.to_obtain_json_web_token_input()?;
-        let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-        let response = self.request_manager.call(&mutation, None).await?;
-        // println!("Result {}", serde_json::to_string_pretty(&response)?);
-
-        //     token_arc = Arc::new(response.obtain_kraken_token_.token_);
-        //     token = Some(&token_arc);
-
-        // let response = self.request_manager.mutation::<ObtainJSONWebTokenInput, ObtainKrakenJSONWebToken>("Login", "obtainKrakenToken", variables).await?;
-        let token = OctopusToken::from(response.obtain_kraken_token_);
-
-        self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
-
-        let result = token.token.clone();
-
-        self.token = Some(token);
+        println!("QUERY {}", query);
 
 
-        Ok(result)
+        let variables = Variables {
+            input: if let Some(token) = &self.token { &token.refresh_token } else { &self.authenticator }
+        };
+
+        let mut response = self.gql_client.call(query_name, &query, &variables, None).await?;
+
+        if let Some(result_json) = response.remove(query_name) {
+            let token: ObtainKrakenJSONWebToken = serde_json::from_value(result_json)?;
+
+                if let Some(errors) = token.errors {
+                    return Err(Box::new(Error::StringError(PossibleErrorType::to_string(errors))))
+                }
+
+                self.context.update_cache(crate::octopus::MODULE_ID, &token)?;
+
+                self.token = Some(OctopusToken::new(token));
+                 
+        } else {
+            return Err(Box::new(Error::InternalError("No result found")));
+        }
+
+        let r = &self.token.as_ref().unwrap().token;
+
+        Ok(r.clone())
+
     }
 
 }
 
 pub struct TokenManagerBuilder {
     context:            Option<Context>,
-    authenticator:      Option<OctopusAuthenticator>,
-    request_manager: Option<Arc<RequestManager>>,
+    gql_client:         Option<Arc<sparko_graphql::Client>>,
+    authenticator:      Option<ObtainJSONWebTokenInput>,
+
 }
 
 impl TokenManagerBuilder{
     fn new() -> TokenManagerBuilder {
         TokenManagerBuilder {
             context: None,
-            authenticator: None,
-            request_manager: None
+            gql_client:     None,
+            authenticator:  None
         }
     }
     
@@ -283,19 +266,37 @@ impl TokenManagerBuilder{
         self.context = Some(context);
         self
     }
-
-    pub fn with_request_manager(mut self, request_manager: Arc<RequestManager>) -> TokenManagerBuilder {
-            self.request_manager = Some(request_manager);
-            self
-        }
+    
+    pub fn with_gql_client(mut self, gql_client: Arc<sparko_graphql::Client>) -> TokenManagerBuilder {
+        self.gql_client = Some(gql_client);
+        self
+    }
 
     pub fn with_api_key(mut self, api_key: String) -> TokenManagerBuilder {
-        self.authenticator = Some(OctopusAuthenticator::from_api_key(api_key));
+        self.authenticator = 
+            Some(ObtainJSONWebTokenInput {
+                api_key: Some(api_key),
+                email: None,
+                organization_secret_key: None,
+                password: None,
+                pre_signed_key: None,
+                refresh_token: None,
+            });
+            // Some(Authenticator::ApiKey { key: api_key });
         self
     }
 
     pub fn with_password(mut self, email: String, password: String) -> TokenManagerBuilder {
-        self.authenticator = Some(OctopusAuthenticator::from_password(email, password));
+        self.authenticator = 
+            Some(ObtainJSONWebTokenInput {
+                api_key: None,
+                email: Some(email),
+                organization_secret_key: None,
+                password: Some(password),
+                pre_signed_key: None,
+                refresh_token: None,
+            });
+        // Some(Authenticator::EmailPassword { email: email, password: password });
         self
     }
 
@@ -323,9 +324,9 @@ impl TokenManagerBuilder{
 
         Ok(OctopusTokenManager::new(
             self.context.ok_or(Error::CallerError("Context must be provided"))?, 
-            self.request_manager.ok_or(Error::CallerError("RequestManager must be provided"))?, 
-            self.authenticator.ok_or(Error::CallerError("Credentials must be specified"))?
-        ))
+            self.gql_client.ok_or(Error::CallerError("GQL Client must be provided"))?, 
+            self.authenticator.ok_or(Error::CallerError("Credentials must be specified"))?)
+        )
     }
 }
 
@@ -415,7 +416,7 @@ impl TokenManagerBuilder{
 
 //         /*
 
-//     Need to fix this once this test refresh token has expired in a week.
+//     Need to fix this once this test refresh token has exired in a week.
 //         {
 //   "data": {
 //     "obtainKrakenToken": {

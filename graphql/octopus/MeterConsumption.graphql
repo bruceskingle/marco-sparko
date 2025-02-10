@@ -1,0 +1,35 @@
+query consumption($nodeId: ID!, $grouping: ConsumptionGroupings!, $periodStart: DateTime!, $first: Int, $timezone: String!) {
+  node(id: $nodeId) {
+    ... on ElectricityMeterType {
+      ...comparisonFields
+      __typename
+    }
+    ... on GasMeterType {
+      ...comparisonFields
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment comparisonFields on Meter {
+  consumptionUnits
+  consumption(first: $first, grouping: $grouping, startAt: $periodStart, timezone: $timezone) {
+    ...consumptionFields
+    __typename
+  }
+  serialNumber
+  __typename
+}
+
+fragment consumptionFields on ConsumptionConnection {
+  edges {
+    node {
+      consumption: value
+      intervalStart: startAt
+      __typename
+    }
+    __typename
+  }
+  __typename
+}

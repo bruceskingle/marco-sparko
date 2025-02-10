@@ -1,0 +1,42 @@
+query GetAccountSummary {
+    viewer {
+        id
+        accounts {
+            number
+            brand
+            overdueBalance
+            billingName
+            billingSubName?
+            billingEmail?
+        }
+        givenName
+        familyName
+        email
+        mobile
+        landline
+        title
+        pronouns?
+        isDeceased
+        liveSecretKey?
+        dateOfBirth?
+        fullName
+        preferredName
+        alternativePhoneNumbers
+        hasFamilyIssues
+        isInHardship
+        isOptedInToWof
+    } 
+}
+
+query GetViewerAccounts {
+    viewer {
+        accounts {
+            number
+            brand
+            overdueBalance
+            billingName
+            billingSubName?
+            billingEmail?
+        }
+    }
+}
