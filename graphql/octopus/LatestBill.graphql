@@ -21,7 +21,6 @@ fragment StatementSummary on StatementType {
         }
         edges {
             node {
-                __typename
                 id
                 postedDate
                 createdAt
@@ -112,7 +111,6 @@ query getAccountLatestBill($accountNumber: String!,
                 edges {
                     node {
                         billType
-                        __typename
                         id
                         fromDate
                         toDate
