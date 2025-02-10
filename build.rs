@@ -22,10 +22,12 @@ fn build()  -> Result<(), Box<dyn Error>> {
     sparko_graphql_builder::builder("graphql")
         .with_type("Date", "sparko_graphql::types::Date")
         .with_type("DateTime", "sparko_graphql::types::DateTime")
+        .with_type("Decimal", "crate::octopus::decimal::Decimal")
         .with_schema("graphql/octopus/octopus-schema.graphql")
         .with_query("graphql/octopus/Login.graphql", "login")
         .with_query("graphql/octopus/Summary.graphql", "summary")
         .with_query("graphql/octopus/LatestBill.graphql", "latest_bill")
+        .with_query("graphql/octopus/meters.graphql", "meters")
         .build()?;
 
     // panic!("Panic test!"); 

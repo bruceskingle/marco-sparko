@@ -49,6 +49,10 @@ impl Decimal {
   pub fn is_positive(&self)-> bool {
     self.0.gt(&rust_decimal::Decimal::from(0)) //.gt(&0)
   }
+
+  pub fn is_non_zero(&self)-> bool {
+    self.0.ne(&rust_decimal::Decimal::from(0)) //.gt(&0)
+  }
 }
 
 impl Div for Decimal {

@@ -1,0 +1,126 @@
+query GetAccountPropertiesMeters($accountNumber: String!) {
+  account(accountNumber: $accountNumber) {
+    properties {
+      id
+      address
+      postcode
+      electricityMeterPoints {
+        __typename
+        mpan
+        status
+        meters(includeInactive: false) {
+          nodeId
+          serialNumber
+          consumptionUnits
+          hasAndAllowsHhReadings
+          importMeter {
+            id
+            __typename
+          }?
+          __typename
+        }
+      }
+      gasMeterPoints {
+        __typename
+        mprn
+        status
+        meters(includeInactive: false) {
+          nodeId
+          serialNumber
+          consumptionUnits
+          hasAndAllowsHhReadings
+          __typename
+        }
+      }
+      smartDeviceNetworks {
+        smartDevices {
+          deviceId
+          type
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+
+query MeterAgreements($meterNodeId: ID!, $validAfter: DateTime) {
+  node(id: $meterNodeId) {
+    ... on ElectricityMeterType {
+      meterPoint {
+        mpan
+        agreements(excludeFuture: false, validAfter: $validAfter) {
+          id
+          validFrom
+          validTo?
+          tariff {
+            ... on HalfHourlyTariff {
+              displayName
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    ... on GasMeterType {
+      meterPoint {
+        agreements(excludeFuture: false, validAfter: $validAfter) {
+          id
+          validFrom
+          validTo?
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+
+query ElectricityAgreementLineItems($agreementId: ID!, $startAt: DateTime!, $first: Int, $timezone: String!, $itemType: LineItemTypeOptions!, $lineItemGrouping: LineItemGroupingOptions!, $lastCursor: String) {
+  electricityAgreement(id: $agreementId) {
+    ... on ElectricityAgreementType {
+      meterPoint {
+        mpan
+        __typename
+      }
+      lineItems(first: $first, grouping: $lineItemGrouping, startAt: $startAt, itemType: $itemType, timezone: $timezone, after: $lastCursor) {
+        __typename
+        ...lineItems
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment lineItems on LineItemConnection {
+  edges {
+    node {
+      startAt
+      endAt
+      netAmount
+      numberOfUnits
+      settlementUnit
+      __typename
+    }
+    cursor
+    __typename
+  }
+  pageInfo {
+    hasNextPage
+    hasPreviousPage
+    endCursor
+    startCursor
+    __typename
+  }
+  __typename
+}

@@ -39,21 +39,21 @@ pub mod account_property_meters;
 
 use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
-use bill::AccountBillsView;
-// use bill::BillResults;
+use decimal::Decimal;
 use display_json::DisplayAsJsonPretty;
 use graphql::{latest_bill::get_account_latest_bill::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
 use serde::{Deserialize, Serialize};
 
 use account::AccountManager;
 pub use error::Error;
-use sparko_graphql::types::Date;
+use sparko_graphql::types::{Date, DateTime};
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use crate::{Context, Module, ModuleBuilder, ModuleConstructor};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
+
 
 #[derive(Parser, Debug)]
 pub struct OctopusArgs {
@@ -180,8 +180,6 @@ impl Client {
         Ok(response.viewer_)
     }
 
-
-
     pub async fn get_latest_bill(&mut self)  -> Result<graphql::latest_bill::get_account_latest_bill::BillConnectionTypeConnection, Error> {
         // let account_number = self.get_default_account().await?.number_;
         let query = graphql::latest_bill::get_account_latest_bill::Query::from(graphql::latest_bill::get_account_latest_bill::Variables::builder()
@@ -193,6 +191,211 @@ impl Client {
         let response = self.gql_authenticated_request_manager.call(&query).await?;
 
         Ok(response.account_.bills_)
+    }
+
+    // Rename this to say what it actually does, after we delete the function of the same name in account.rs
+    pub async fn get_account_properties_meters(&mut self,
+        from: &Date,
+        to: &Option<Date>)  -> Result<(), Error> {
+        // let account_number = self.get_default_account().await?.number_;
+        let query = graphql::meters::get_account_properties_meters::Query::from(graphql::meters::get_account_properties_meters::Variables::builder()
+            .with_account_number(self.get_default_account().await?.number_.clone())
+            .build()?
+        );
+        let response = self.gql_authenticated_request_manager.call(&query).await?;
+
+        for property in response.account_.properties_ {
+            for electricity_meter_point in property.electricity_meter_points_ {
+                for electricity_meter in &electricity_meter_point.meters_ {
+                    if let Some(_import_meter) = &electricity_meter.import_meter_ {
+                        // println!("Export electricity meter {}", &electricity_meter.node_id_);
+                        // export_meters.push(electricity_meter.node_id);
+
+                        self.get_meter_agreements(
+                            &electricity_meter.node_id_,
+                            from,
+                            to).await?;
+                    }
+                    else {
+                        // println!("Import electricity meter {}", &electricity_meter.node_id_);
+                        // import_meters.push(electricity_meter.node_id);
+                        self.get_meter_agreements(
+                            &electricity_meter.node_id_,
+                            from,
+                            to).await?;
+                    }
+                }
+            }
+
+            for gas_meter_point in property.gas_meter_points_ {
+                for gas_meter in &gas_meter_point.meters_ {
+                    // println!("Gas meter {}", &gas_meter.node_id_);
+                    // gas_meters.push(gas_meter.node_id);
+                    self.get_meter_agreements(
+                        &gas_meter.node_id_,
+                        from,
+                        to).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+
+
+    fn in_scope(from: &Date, to: &Option<Date>, valid_from: &DateTime, valid_to: &Option<DateTime>) -> bool {
+        let end_in_scope = if let Some(to) = to {
+            // if let Some(valid_from) = valid_from {
+                valid_from.to_date() <= *to
+            // }
+            // else {
+            //     false
+            // }
+        }
+        else {
+            true
+        };
+
+        let start_in_scope = if let Some(valid_to) = valid_to {
+                valid_to.to_date() >= *from
+
+        }
+        else {
+            true
+        };
+        
+        // println!("in_scope({:?},{:?},{:?},{:?}) = {}",
+        //     from,
+        //     to,
+        //     valid_from,
+        //     valid_to,
+        //     end_in_scope && start_in_scope
+        // );
+        end_in_scope && start_in_scope
+    }
+ 
+    pub async fn get_meter_agreements (
+        &mut self,
+        meter_node_id: &String,
+        from: &Date,
+        to: &Option<Date>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+
+        let query = graphql::meters::meter_agreements::Query::from(graphql::meters::meter_agreements::Variables::builder()
+            .with_meter_node_id(meter_node_id.clone())
+            .with_valid_after(from.at_midnight())
+            .build()?
+        );
+        let response = self.gql_authenticated_request_manager.call(&query).await?;
+
+
+            match response.node_ {
+
+                graphql::meters::meter_agreements::Node::ElectricityMeterType(electricity_meter_type) => {
+                    for agreement in electricity_meter_type.meter_point_.agreements_
+                    {
+                        // println!("Agreement {:?}", &agreement);
+                        if Self::in_scope(&from, &to, &agreement.valid_from_, &agreement.valid_to_) {
+                            // let agreement_id = Self::unexpected_none()?.to_string();
+                            // println!("Electricity agreement {}", &agreement.id_);
+
+                            self.get_electric_line_items(format!("{}", &agreement.id_), from, to).await?;
+
+                        }
+                    } 
+                },
+                graphql::meters::meter_agreements::Node::GasMeterType(gas_meter_type) => {
+                    for agreement in gas_meter_type.meter_point_.agreements_
+                    {
+                        if Self::in_scope(&from, &to, &agreement.valid_from_, &agreement.valid_to_) {
+                            // let agreement_id = unexpected_none(agreement.id)?;
+                            println!("Gas agreement {}", &agreement.id_);
+                        }
+                    } 
+                },
+
+                
+                _ => return Err(Box::new(Error::InternalError("Unexpected node type found in agreements query")))
+             };
+
+
+
+        Ok(())
+    }
+
+
+ 
+    pub async fn get_electric_line_items (
+        &mut self,
+        agreement_id: String,
+        from: &Date,
+        to: &Option<Date>,
+    ) -> Result<(), Error> {
+        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+
+        fn handle(agreement: &graphql::meters::electricity_agreement_line_items::AgreementInterface, format: &[time::format_description::FormatItem<'_>]) -> Option<String> {
+
+            match agreement {
+                graphql::meters::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
+                    for edge in &electricity_agreement_type.line_items_.edges_ {
+                        let item = &edge.node_;
+
+                        println!("{:20} {:20} {:8.2} {:7.3} {:7.3}", item.start_at_.format(format).unwrap(), item.end_at_.format(format).unwrap(), item.net_amount_, item.number_of_units_, 
+                        
+                        if item.number_of_units_.is_non_zero() {(item.net_amount_ / item.number_of_units_)} else { item.number_of_units_ }  );
+                        // println!("Start {} End {}", item.start_at_, item.end_at_, item.number_of_units_)
+                    }
+
+
+                    if electricity_agreement_type.line_items_.page_info_.has_next_page_ {
+                        Some(electricity_agreement_type.line_items_.page_info_.end_cursor_.clone())
+                    }
+                    else {
+                        None
+                    }
+
+                },
+                graphql::meters::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_) => unreachable!(),
+            }
+        }
+
+        let from = Date::from_calendar_date(2024, time::Month::January, 1)?;
+
+        let query = graphql::meters::electricity_agreement_line_items::Query::from(graphql::meters::electricity_agreement_line_items::Variables::builder()
+            .with_agreement_id(agreement_id.clone())
+            .with_start_at(from.at_midnight())
+            .with_first(5)
+            .with_timezone(String::from("Europe/London"))
+            .with_item_type(graphql::LineItemTypeOptions::ConsumptionCharge)
+            .with_line_item_grouping(graphql::LineItemGroupingOptions::None)
+            .build()?
+        );
+        let mut response = self.gql_authenticated_request_manager.call(&query).await?;
+
+        loop {
+
+            if let Some(cursor) = handle(&response.electricity_agreement_, &format) {
+                let query = graphql::meters::electricity_agreement_line_items::Query::from(graphql::meters::electricity_agreement_line_items::Variables::builder()
+                .with_agreement_id(agreement_id.clone())
+                .with_start_at(from.at_midnight())
+                .with_first(5)
+                .with_last_cursor(cursor)
+                .with_timezone(String::from("Europe/London"))
+                .with_item_type(graphql::LineItemTypeOptions::ConsumptionCharge)
+                .with_line_item_grouping(graphql::LineItemGroupingOptions::None)
+                .build()?
+                );
+                response = self.gql_authenticated_request_manager.call(&query).await?;
+            }
+            else {
+                break;
+            }
+            
+
+        }
+        // println!("{}", &response.electricity_agreement_);
+
+        Ok(())
     }
 
     async fn update_profile(&mut self, account_user: &AccountUserType)  -> Result<(), Error> {
@@ -237,19 +440,26 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_bill(result: &graphql::latest_bill::get_account_latest_bill::BillConnectionTypeConnection) -> Result<(), crate::Error> {
+    async fn handle_statement(&mut self, statement: &graphql::latest_bill::get_account_latest_bill::StatementSummary)-> Result<(), Error> {
+        self.get_account_properties_meters(&statement.bill_interface_.from_date_, &Some(statement.bill_interface_.to_date_.clone())).await?;
+
+        
+        Ok(())
+    }
+
+    pub async fn handle_bill(&mut self, bill: &BillInterface) -> Result<(), crate::Error> {
         //println!("\n===========================\n{}\n===========================\n", result);
         
-        let bill =  &result.edges_[0].node_;
+        
         let abstract_bill = bill.as_bill_interface();
                 // statement.print();
 
         println!("Energy Account Statement");
         println!("========================");
-        println!("Date                {}", abstract_bill.issued_date_);
-        println!("Ref                 {}", abstract_bill.id_);
-        println!("From                {}", abstract_bill.from_date_);
-        println!("To                  {}", abstract_bill.to_date_);
+        println!("Date                 {}", abstract_bill.issued_date_);
+        println!("Ref                  {}", abstract_bill.id_);
+        println!("From                 {}", abstract_bill.from_date_);
+        println!("To                   {}", abstract_bill.to_date_);
 
         if let BillInterface::StatementType(statement) = bill {
             let mut map = BTreeMap::new();
@@ -258,34 +468,56 @@ impl Client {
             }
 
 
+            println!();
+            print!("{:20} {:10} ", 
+                "Title",
+                "Date"
+            );
+            print!("{:10} {:10} {:10} {:10}", 
+                "Net", "Tax", "Gross", "Balance c/f"
+            );
+
+            println!();
+
             for txn in &mut map.values() {
                 // let txn = transaction.as_transaction_type();
 
+                let title = if let TransactionType::Charge(charge) = txn {
+                    if charge.is_export_ {
+                        format!("{} Export", txn.as_transaction_type().title_)
+                    }
+                    else {
+                        txn.as_transaction_type().title_.clone()
+                    }
+                }
+                else {
+                    txn.as_transaction_type().title_.clone()
+                };
+
                 print!("{:20} {:10} ", 
-                            txn.as_transaction_type().title_,
-                            txn.as_transaction_type().posted_date_
-                        );
-                print!("{:10} {:10} {:10} {:10}", 
+                    title,
+                    txn.as_transaction_type().posted_date_
+                );
+                print!("{:8.2} {:8.2} {:8.2} {:8.2}", 
                     txn.as_transaction_type().amounts_.net_,
                     txn.as_transaction_type().amounts_.tax_, 
                     txn.as_transaction_type().amounts_.gross_,
                     txn.as_transaction_type().balance_carried_forward_
                     );
+                print!(" {:10} {:10} {:10} ", "from", "to", "Charge Amount");
 
                     if let TransactionType::Charge(charge) = txn {
                         if let Some(consumption) = &charge.consumption_ {
-                            print!(" {} {} {:10} ", 
+                            print!(" {:10} {:10} {:8.2} ", 
                                 consumption.start_date_,
                                 consumption.end_date_,
                                 consumption.quantity_
                             );
-                            if charge.is_export_ {
-                                print!("export ");
-                            }
-                            else {
-                                print!("import ");
-                            }
+
+                            println!();
+                            self.get_account_properties_meters(&consumption.start_date_, &Some(consumption.end_date_.clone())).await?;
                         }
+
                     }
                 println!();
             } 
@@ -332,8 +564,13 @@ impl Module for Client {
             let result = self.get_latest_bill().await?;
             // account_manager.get_latest_bill(&self.gql_client, &mut self.token_manager).await?;
 
-            Self::handle_bill(&result)?;
+            let bill =  &result.edges_[0].node_;
+            self.handle_bill(bill).await?;
 
+            // if let BillInterface::StatementType(statement) = bill {
+                
+            //     self.handle_statement(statement).await?;
+            // }
             // let statement =  &result.edges_[0].node_;
 
 
@@ -373,9 +610,10 @@ impl Module for Client {
 pub struct ClientBuilder {
     context: Context, 
     profile: Option<Profile>,
-    gql_client_builder:         sparko_graphql::ClientBuilder,
-    token_manager_builder:      TokenManagerBuilder,
-    url:                        Option<String>,
+    gql_client_builder: sparko_graphql::ClientBuilder,
+    token_manager_builder: TokenManagerBuilder,
+    url: Option<String>,
+    verbose: bool,
 }
 
 impl ClientBuilder {
@@ -415,14 +653,20 @@ impl ClientBuilder {
             Self::get_profile_api_key(&profile)?
         };
 
-        
+        let verbose = if let Some(args) =  context.args() {
+            args.verbose
+        }
+        else {
+            false
+        };
 
         let builder = ClientBuilder {
             context: context.clone(),
             profile,
-            gql_client_builder:     sparko_graphql::Client::builder(),
-            token_manager_builder:  OctopusTokenManager::builder(),
-            url:                    None,
+            gql_client_builder: sparko_graphql::Client::builder(),
+            token_manager_builder: OctopusTokenManager::builder(),
+            url: None,
+            verbose,
         };
 
         if let Some(api_key) = option_api_key {
@@ -498,7 +742,7 @@ impl ClientBuilder {
             "https://api.octopus.energy/v1/graphql/".to_string()
         };
 
-        let gql_request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone())?);
+        let gql_request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose)?);
 
         let token_manager = self.token_manager_builder
             .with_request_manager(gql_request_manager.clone())

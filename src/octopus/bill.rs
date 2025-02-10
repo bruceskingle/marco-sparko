@@ -29,8 +29,9 @@ use serde::{Deserialize, Serialize};
 use std::ops::Not;
 // use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
 use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer};
-use super::{decimal::Decimal, transaction::StatementTransactionParams};
+use super::transaction::StatementTransactionParams;
 use super::transaction::Transaction;
+use crate::octopus::decimal::Decimal;
 
 
 // #[derive(GraphQLQueryParams)]

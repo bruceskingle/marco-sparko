@@ -130,6 +130,8 @@ pub struct Args {
     modules: Vec<String>,
     #[arg(short, long)]
     init: bool,
+    #[arg(short, long)]
+    verbose: bool,
 
     #[clap(flatten)]
     pub octopus: octopus::OctopusArgs,
