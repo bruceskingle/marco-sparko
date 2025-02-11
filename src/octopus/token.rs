@@ -216,11 +216,6 @@ impl OctopusTokenManager {
 impl TokenManager for OctopusTokenManager {
 
     async fn get_authenticator(&mut self)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
-        let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32;
-
         if let Some(token) = &self.token {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -244,12 +239,7 @@ impl TokenManager for OctopusTokenManager {
         let input = self.authenticator.to_obtain_json_web_token_input()?;
         let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
         let response = self.request_manager.call(&mutation, None).await?;
-        // println!("Result {}", serde_json::to_string_pretty(&response)?);
 
-        //     token_arc = Arc::new(response.obtain_kraken_token_.token_);
-        //     token = Some(&token_arc);
-
-        // let response = self.request_manager.mutation::<ObtainJSONWebTokenInput, ObtainKrakenJSONWebToken>("Login", "obtainKrakenToken", variables).await?;
         let token = OctopusToken::from(response.obtain_kraken_token_);
 
         self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
@@ -257,7 +247,6 @@ impl TokenManager for OctopusTokenManager {
         let result = token.token.clone();
 
         self.token = Some(token);
-
 
         Ok(result)
     }
