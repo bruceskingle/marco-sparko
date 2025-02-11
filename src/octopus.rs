@@ -321,7 +321,7 @@ impl Client {
 
                         println!("{:20} {:20} {:8.2} {:7.3} {:7.3}", item.start_at_.format(format).unwrap(), item.end_at_.format(format).unwrap(), item.net_amount_, item.number_of_units_, 
                         
-                        if item.number_of_units_.is_non_zero() {(item.net_amount_ / item.number_of_units_)} else { item.number_of_units_ }  );
+                        if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.number_of_units_ }  );
                         // println!("Start {} End {}", item.start_at_, item.end_at_, item.number_of_units_)
                     }
 
@@ -657,7 +657,6 @@ impl Module for Client {
 pub struct ClientBuilder {
     context: Context, 
     profile: Option<Profile>,
-    gql_client_builder: sparko_graphql::ClientBuilder,
     token_manager_builder: TokenManagerBuilder,
     url: Option<String>,
     verbose: bool,
@@ -710,7 +709,6 @@ impl ClientBuilder {
         let builder = ClientBuilder {
             context: context.clone(),
             profile,
-            gql_client_builder: sparko_graphql::Client::builder(),
             token_manager_builder: OctopusTokenManager::builder(),
             url: None,
             verbose,
@@ -736,14 +734,11 @@ impl ClientBuilder {
     // }
 
     pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
-        self.gql_client_builder = self.gql_client_builder.with_url(url.clone())?;
         self.url = Some(url);
         Ok(self)
     }
 
     pub fn with_url_if_not_set(mut self, url: String) -> Result<ClientBuilder, Error> {
-        self.gql_client_builder = self.gql_client_builder.with_url_if_not_set(url.clone())?;
-
         if let None = self.url {
             self.url = Some(url);
         }
