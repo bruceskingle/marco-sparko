@@ -1,5 +1,6 @@
 pub mod octopus;
 pub mod system;
+pub mod util;
 
 use std::error::Error as StdError;
 use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};

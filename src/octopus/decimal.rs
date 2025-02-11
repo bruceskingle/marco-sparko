@@ -95,6 +95,12 @@ impl Deref for Decimal {
     }
 }
 
+impl From<i32> for Decimal {
+    fn from(value: i32) -> Self {
+      Decimal(rust_decimal::Decimal::from(value))
+    }
+}
+
 impl FromStr for Decimal {
     type Err = Error;
 

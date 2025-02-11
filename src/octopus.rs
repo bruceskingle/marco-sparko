@@ -1,9 +1,11 @@
 pub mod error;
 pub mod token;
 pub mod decimal;
+mod bill;
 
 use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
+use decimal::Decimal;
 use display_json::DisplayAsJsonPretty;
 use graphql::{latest_bill::get_account_latest_bill::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
 use serde::{Deserialize, Serialize};
@@ -13,10 +15,9 @@ use sparko_graphql::types::{Date, DateTime};
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use crate::{Context, Module, ModuleBuilder, ModuleConstructor};
+use crate::{util::as_decimal, Context, Module, ModuleBuilder, ModuleConstructor};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
-
 
 #[derive(Parser, Debug)]
 pub struct OctopusArgs {
@@ -75,13 +76,28 @@ validation_errors: Vec<ValidationError>
 pub struct Client{
     context: Context, 
     profile: Option<Profile>,
-    gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
-    default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>
+    request_manager: Arc<sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>>,
+    default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
+    bill_manager: bill::BillManager,
 }
 
 const MODULE_ID: &str = "octopus";
 
 impl Client {
+    fn new(context: Context, profile: Option<Profile>, 
+        request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>) -> Client {        
+
+        let request_manager = Arc::new(request_manager);
+
+        Client {
+            bill_manager: bill::BillManager::new(request_manager.clone()),
+            context,
+            profile,
+            request_manager,
+            default_account: None,
+        }
+    }
+
     pub fn registration() -> (String, Box<ModuleConstructor>) {
 
         // Client::foo(Client::constructor);
@@ -101,24 +117,13 @@ impl Client {
         ClientBuilder::new(context, json_profile)
     }
 
-    fn new(context: Context, profile: Option<Profile>, 
-        gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>) -> Client {        
-
-        Client {
-            context,
-            profile,
-            gql_authenticated_request_manager,
-            default_account: None
-        }
-    }
-
     pub async fn get_default_account(&mut self)  -> Result<Arc<graphql::summary::get_viewer_accounts::AccountInterface>, Error> {
         if let Some(default_account) = &self.default_account {
             Ok(default_account.clone())
         }
         else {
             let query = graphql::summary::get_viewer_accounts::Query::new();
-            let mut response = self.gql_authenticated_request_manager.call(&query).await?;
+            let mut response = self.request_manager.call(&query).await?;
 
 
             let default_account = Arc::new(response.viewer_.accounts_.remove(0));
@@ -130,23 +135,12 @@ impl Client {
 
     pub async fn get_account_user(&mut self)  -> Result<AccountUserType, Error> {
         let query = graphql::summary::get_account_summary::Query::new();
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
+        let response = self.request_manager.call(&query).await?;
 
         Ok(response.viewer_)
     }
 
-    pub async fn get_latest_bill(&mut self)  -> Result<graphql::latest_bill::get_account_latest_bill::BillConnectionTypeConnection, Error> {
-        // let account_number = self.get_default_account().await?.number_;
-        let query = graphql::latest_bill::get_account_latest_bill::Query::from(graphql::latest_bill::get_account_latest_bill::Variables::builder()
-            .with_account_number(self.get_default_account().await?.number_.clone())
-            .with_bills_first(1)
-            .with_bills_transactions_first(100)
-            .build()?
-        );
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
-
-        Ok(response.account_.bills_)
-    }
+    
 
     // Rename this to say what it actually does, after we delete the function of the same name in account.rs
     pub async fn get_account_properties_meters(&mut self,
@@ -157,7 +151,7 @@ impl Client {
             .with_account_number(self.get_default_account().await?.number_.clone())
             .build()?
         );
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
+        let response = self.request_manager.call(&query).await?;
 
         for property in response.account_.properties_ {
             for electricity_meter_point in property.electricity_meter_points_ {
@@ -241,7 +235,7 @@ impl Client {
             .with_valid_after(from.at_midnight())
             .build()?
         );
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
+        let response = self.request_manager.call(&query).await?;
 
 
             match response.node_ {
@@ -295,7 +289,7 @@ impl Client {
                     for edge in &electricity_agreement_type.line_items_.edges_ {
                         let item = &edge.node_;
 
-                        println!("{:20} {:20} {:8.2} {:7.3} {:7.3}", item.start_at_.format(format).unwrap(), item.end_at_.format(format).unwrap(), item.net_amount_, item.number_of_units_, 
+                        println!("{:20} {:20} {:10.2} {:10.3} {:10.3}", item.start_at_.format(format).unwrap(), item.end_at_.format(format).unwrap(), item.net_amount_, item.number_of_units_, 
                         
                         if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.number_of_units_ }  );
                         // println!("Start {} End {}", item.start_at_, item.end_at_, item.number_of_units_)
@@ -313,19 +307,20 @@ impl Client {
                 graphql::meters::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_) => unreachable!(),
             }
         }
-
+        println!();
+        println!("{:-^20} {:-^20} {:-^10} ", "From", "To", "Charge Amount");
         let from = Date::from_calendar_date(2024, time::Month::January, 1)?;
 
         let query = graphql::meters::electricity_agreement_line_items::Query::from(graphql::meters::electricity_agreement_line_items::Variables::builder()
             .with_agreement_id(agreement_id.clone())
             .with_start_at(from.at_midnight())
-            .with_first(5)
+            .with_first(100)
             .with_timezone(String::from("Europe/London"))
             .with_item_type(graphql::LineItemTypeOptions::ConsumptionCharge)
             .with_line_item_grouping(graphql::LineItemGroupingOptions::None)
             .build()?
         );
-        let mut response = self.gql_authenticated_request_manager.call(&query).await?;
+        let mut response = self.request_manager.call(&query).await?;
 
         loop {
 
@@ -340,7 +335,7 @@ impl Client {
                 .with_line_item_grouping(graphql::LineItemGroupingOptions::None)
                 .build()?
                 );
-                response = self.gql_authenticated_request_manager.call(&query).await?;
+                response = self.request_manager.call(&query).await?;
             }
             else {
                 break;
@@ -395,196 +390,193 @@ impl Client {
         Ok(())
     }
 
-    pub async fn handle_bill(&mut self, bill: &BillInterface) -> Result<(), crate::Error> {
-        //println!("\n===========================\n{}\n===========================\n", result);
+    // pub async fn handle_bill(&mut self, bill: &BillInterface) -> Result<(), crate::Error> {
+    //     //println!("\n===========================\n{}\n===========================\n", result);
+    //     Self::print_statement(bill);
+
+    //     panic!("STOP");
         
-        
-        let abstract_bill = bill.as_bill_interface();
-                // statement.print();
+    //     let abstract_bill = bill.as_bill_interface();
+    //             // statement.print();
 
-        println!("Energy Account Statement");
-        println!("========================");
-        println!("Date                 {}", abstract_bill.issued_date_);
-        println!("Ref                  {}", abstract_bill.id_);
-        println!("From                 {}", abstract_bill.from_date_);
-        println!("To                   {}", abstract_bill.to_date_);
-
-        if let BillInterface::StatementType(statement) = bill {
-            let mut map = BTreeMap::new();
-            for edge in &statement.transactions_.edges_ {
-                map.insert(&edge.node_.as_transaction_type().posted_date_, &edge.node_);
-            }
-
-
-            println!();
-            print!("{:20} {:10} ", 
-                "Title",
-                "Date"
-            );
-            print!("{:10} {:10} {:10} {:10}", 
-                "Net", "Tax", "Gross", "Balance c/f"
-            );
-
-            println!();
-
-            for txn in &mut map.values() {
-                // let txn = transaction.as_transaction_type();
-
-                let title = if let TransactionType::Charge(charge) = txn {
-                    if charge.is_export_ {
-                        format!("{} Export", txn.as_transaction_type().title_)
-                    }
-                    else {
-                        txn.as_transaction_type().title_.clone()
-                    }
-                }
-                else {
-                    txn.as_transaction_type().title_.clone()
-                };
-
-                print!("{:20} {:10} ", 
-                    title,
-                    txn.as_transaction_type().posted_date_
-                );
-                print!("{:8.2} {:8.2} {:8.2} {:8.2}", 
-                    txn.as_transaction_type().amounts_.net_,
-                    txn.as_transaction_type().amounts_.tax_, 
-                    txn.as_transaction_type().amounts_.gross_,
-                    txn.as_transaction_type().balance_carried_forward_
-                    );
-                print!(" {:10} {:10} {:10} ", "from", "to", "Charge Amount");
-
-                    if let TransactionType::Charge(charge) = txn {
-                        if let Some(consumption) = &charge.consumption_ {
-                            print!(" {:10} {:10} {:8.2} ", 
-                                consumption.start_date_,
-                                consumption.end_date_,
-                                consumption.quantity_
-                            );
-
-                            println!();
-                            self.get_account_properties_meters(&consumption.start_date_, &Some(consumption.end_date_.clone())).await?;
-                        }
-
-                    }
-                println!();
-            } 
-        }
-
-        Ok(())
-    }
-
-    // pub fn get_latest_bill(&self) -> Result<Bill, Error> {
-    //     let query = graphql::latest_bill::get_account_summary::Query::new();
-    //     let response = self.gql_authenticated_request_manager.call(&query).await?;
-
-    //     Ok(response.viewer_)
-    // }
-
-
-
-    // pub fn print_statement(&self) {
     //     println!("Energy Account Statement");
     //     println!("========================");
-    //     println!("Date                 {}", self.bill.issued_date);
-    //     println!("Ref                  {}", self.bill.id);
-    //     println!("From                 {}", self.bill.from_date);
-    //     println!("To                   {}", self.bill.to_date);
-    //     println!();
+    //     println!("Date                 {}", abstract_bill.issued_date_);
+    //     println!("Ref                  {}", abstract_bill.id_);
+    //     println!("From                 {}", abstract_bill.from_date_);
+    //     println!("To                   {}", abstract_bill.to_date_);
 
-    //     // let mut map = BTreeMap::new();
-    //     // for edge in &self.transactions.edges {
-    //     //     let txn = edge.node.as_transaction();
+    //     if let BillInterface::StatementType(statement) = bill {
+    //         let mut map = BTreeMap::new();
+    //         for edge in &statement.transactions_.edges_ {
+    //             map.insert(&edge.node_.as_transaction_type().posted_date_, &edge.node_);
+    //         }
 
-    //     //     map.insert(&txn.posted_date, &edge.node);
-    //     // }
 
-    //     print!("{:20} {:10} ", 
-    //         "Description",
-    //         "Posted"
-    //     );
-    //     print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //         "Net",
-    //         "Tax", 
-    //         "Total",
-    //         "Balance"
-    //     );
-    //     print!("{:10} {:10} {:>12} ", 
-    //         "From",
-    //         "To",
-    //         "Units"
-    //     );
-    //     print!("{:>12}", "p / unit");
-    //     println!();
+    //         println!();
+    //         print!("{:-^20} {:-^10} ", 
+    //             "Title",
+    //             "Date"
+    //         );
+    //         print!("{:-^10} {:-^10} {:-^10} {:-^10}", 
+    //             "Net", "Tax", "Gross", "c/f"
+    //         );
+    //         println!("{:-^10} {:-^10} {:-^10} ", "From", "To", "Charge Amount");
 
-    //     let mut total_electric_charge = Int::new(0); //0;
-    //     let mut total_electric_units = Decimal::new(0, 0);
+    //         for txn in &mut map.values() {
+    //             // let txn = transaction.as_transaction_type();
 
-    //     // for transaction in &mut map.values() {
-    //     for edge in (&self.transactions.edges).into_iter().rev() {
-    //         let transaction = &edge.node;
-    //         let txn = transaction.as_transaction();
-    //         if let Transaction::Charge(charge) = &transaction {
-    //             if *charge.is_export {
-    //                 print!("{} {:width$} ", txn.title, "Export", width = 20 - txn.title.len() - 1);
-    //             }
-    //             else {
-    //                 print!("{} {:width$} ", txn.title, "Import",width =  20 - txn.title.len() - 1);
-
-    //                 if txn.title.eq("Electricity") {
-    //                     total_electric_charge += *&txn.amounts.gross;
-    //                     total_electric_units += charge.consumption.quantity;
+    //             let title = if let TransactionType::Charge(charge) = txn {
+    //                 if charge.is_export_ {
+    //                     format!("{} Export", txn.as_transaction_type().title_)
+    //                 }
+    //                 else {
+    //                     txn.as_transaction_type().title_.clone()
     //                 }
     //             }
-    //         }
-    //         else {
-    //             print!("{:20} ", txn.title);
-    //         }
-    //         print!("{:10} ", 
-    //                     txn.posted_date
-    //                 );
-    //         print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //             txn.amounts.net.as_decimal(2),
-    //             txn.amounts.tax.as_decimal(2), 
-    //             txn.amounts.gross.as_decimal(2),
-    //             txn.balance_carried_forward.as_decimal(2)
-    //         );
-    //         if let Transaction::Charge(charge) = &transaction {
-    //             print!("{:10} {:10} {:>12.4} ", 
-    //                 charge.consumption.start_date,
-    //                 charge.consumption.end_date,
-    //                 charge.consumption.quantity
+    //             else {
+    //                 txn.as_transaction_type().title_.clone()
+    //             };
+
+    //             print!("{:20} {:10} ", 
+    //                 title,
+    //                 txn.as_transaction_type().posted_date_
     //             );
+    //             print!("{:10.2} {:10.2} {:10.2} {:10.2}", 
+    //                 txn.as_transaction_type().amounts_.net_,
+    //                 txn.as_transaction_type().amounts_.tax_, 
+    //                 txn.as_transaction_type().amounts_.gross_,
+    //                 txn.as_transaction_type().balance_carried_forward_
+    //                 );
+                
 
-    //             let rate = Decimal::from_int(&txn.amounts.gross) / charge.consumption.quantity;
+    //                 if let TransactionType::Charge(charge) = txn {
+    //                     if let Some(consumption) = &charge.consumption_ {
+    //                         print!(" {:10} {:10} {:10.2} ", 
+    //                             consumption.start_date_,
+    //                             consumption.end_date_,
+    //                             consumption.quantity_
+    //                         );
 
-    //             print!("{:>12.4}", rate); //.round_dp(2));
-    //         }
-    //         println!();
+    //                         println!();
+    //                         self.get_account_properties_meters(&consumption.start_date_, &Some(consumption.end_date_.clone())).await?;
+    //                     }
+
+    //                 }
+    //             println!();
+    //         } 
     //     }
 
-    //     println!("\nTOTALS");
+    //     Ok(())
+    // }
 
-    //     if total_electric_units.is_positive() {
-    //         let rate = Decimal::from_int(&total_electric_charge) / total_electric_units;
+    // pub fn print_statement( bill: &BillInterface) {
+    //     let abstract_bill = bill.as_bill_interface();
 
+    //     println!("Energy Account Statement");
+    //     println!("========================");
+    //     println!("Date                 {}", abstract_bill.issued_date_);
+    //     println!("Ref                  {}", abstract_bill.id_);
+    //     println!("From                 {}", abstract_bill.from_date_);
+    //     println!("To                   {}", abstract_bill.to_date_);
+    //     println!();
+
+    //     if let BillInterface::StatementType(statement) = bill {
     //         print!("{:20} {:10} ", 
-    //             "Electricity Import",
-    //             ""
+    //             "Description",
+    //             "Posted"
     //         );
     //         print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //             "",
-    //             "", 
-    //             total_electric_charge.as_decimal(2),
-    //             ""
+    //             "Net",
+    //             "Tax", 
+    //             "Total",
+    //             "Balance"
     //         );
-    //         print!("{:10} {:10} {:>12.4} ", 
-    //             "",
-    //             "",
-    //             total_electric_units
+    //         print!("{:10} {:10} {:>12} ", 
+    //             "From",
+    //             "To",
+    //             "Units"
     //         );
-    //         print!("{:>12.4}", rate);
+    //         print!("{:>12}", "p / unit");
     //         println!();
+
+    //         let mut total_electric_charge = 0;
+    //         let mut total_electric_units = Decimal::new(0, 0);
+
+    //         // for transaction in &mut map.values() {
+    //         for edge in (&statement.transactions_.edges_).into_iter().rev() {
+    //             let txn = edge.node_.as_transaction_type();
+
+    //             if let TransactionType::Charge(charge) = &edge.node_ {
+    //                 if charge.is_export_ {
+    //                     print!("{} {:width$} ", txn.title_, "Export", width = 20 - txn.title_.len() - 1);
+    //                 }
+    //                 else {
+    //                         print!("{:20} ", txn.title_);
+    //                 }
+    //             }
+    //             else {
+    //                 print!("{:20} ", txn.title_);
+    //             }
+    //             print!("{:10} ", 
+    //                         txn.posted_date_
+    //                     );
+    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
+    //                 as_decimal(txn.amounts_.net_, 2),
+    //                 as_decimal(txn.amounts_.tax_, 2), 
+    //                 as_decimal(txn.amounts_.gross_, 2),
+    //                 as_decimal(txn.balance_carried_forward_, 2)
+    //             );
+    //             if let TransactionType::Charge(charge) = &edge.node_ {
+    //                 if let Some(consumption) = &charge.consumption_ {
+    //                     print!("{:10} {:10} {:>12.4} ", 
+    //                         consumption.start_date_,
+    //                         consumption.end_date_,
+    //                         consumption.quantity_
+    //                     );
+
+    //                     let rate = Decimal::from(txn.amounts_.gross_) / consumption.quantity_;
+
+    //                     print!("{:>12.4}", rate); //.round_dp(2));
+
+    //                     if charge.is_export_ {
+                            
+    //                     }
+    //                     else {
+    //                             if txn.title_.eq("Electricity") {
+    //                                 total_electric_charge += *&txn.amounts_.gross_;
+    //                                 total_electric_units += consumption.quantity_;
+    //                             }
+    //                         }
+    //                 }
+    //             }
+    //             print!(" {}", txn.note_);
+    //             println!();
+    //         }
+
+    //         println!("\nTOTALS");
+
+    //         if total_electric_units.is_positive() {
+    //             let rate = Decimal::from(total_electric_charge) / total_electric_units;
+
+    //             print!("{:20} {:10} ", 
+    //                 "Electricity Import",
+    //                 ""
+    //             );
+    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
+    //                 "",
+    //                 "", 
+    //                 as_decimal(total_electric_charge, 2),
+    //                 ""
+    //             );
+    //             print!("{:10} {:10} {:>12.4} ", 
+    //                 "",
+    //                 "",
+    //                 total_electric_units
+    //             );
+    //             print!("{:>12.4}", rate);
+    //             println!();
+    //         }
     //     }
     // }
 }
@@ -611,21 +603,18 @@ impl Module for Client {
 
     async fn bill(&mut self) -> Result<(), crate::Error>{
         let account = self.get_default_account().await?;
-        let account_number =  &account.number_; {
-            println!("{}", account_number);
+        // let account_number =  &account.number_;
 
-            let result = self.get_latest_bill().await?;
-            // account_manager.get_latest_bill(&self.gql_client, &mut self.token_manager).await?;
+        let bill = self.bill_manager.get_latest_bill(&account.number_).await?;
 
-            let bill =  &result.edges_[0].node_;
-            self.handle_bill(bill).await?;
+        bill.print();
+
+        self.bill_manager.print_transactions(&bill).await;
+
+        // self.handle_bill(bill).await?;
 
 
-            Ok(())
-        }
-        // else {
-        //     Err(crate::Error::InternalError(String::from("Unable to find default account number")))
-        // }
+        Ok(())
     }
 }
 
@@ -699,16 +688,6 @@ impl ClientBuilder {
         
     }
 
-    #[cfg(test)]
-    // fn new_test() -> ClientBuilder {
-    //     ClientBuilder {
-    //         context: Context::new_test(),
-    //         profile: None,
-    //         gql_client_builder:     sparko_graphql::Client::builder(),
-    //         token_manager_builder:  TokenManager::builder(),
-    //     }
-    // }
-
     pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
         self.url = Some(url);
         Ok(self)
@@ -755,17 +734,17 @@ impl ClientBuilder {
             "https://api.octopus.energy/v1/graphql/".to_string()
         };
 
-        let gql_request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose)?);
+        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose)?);
 
         let token_manager = self.token_manager_builder
-            .with_request_manager(gql_request_manager.clone())
+            .with_request_manager(request_manager.clone())
             .with_context(self.context.clone())
             .build(init)?;
 
-        let gql_authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(gql_request_manager, token_manager)?;
+        let authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?;
        
         let client = Client::new(self.context, option_profile, 
-            gql_authenticated_request_manager
+            authenticated_request_manager
           );
 
         Ok(client)

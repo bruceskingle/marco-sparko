@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 
 use crate::Context;
 
@@ -139,10 +140,10 @@ impl OctopusAuthenticator {
 }
 
 pub struct OctopusTokenManager {
-    context:            Context,
+    context: Context,
     request_manager: Arc<RequestManager>,
     authenticator: OctopusAuthenticator,
-    token: Option<OctopusToken>
+    token: Mutex<Option<OctopusToken>>,
 }
 
 impl OctopusTokenManager {
@@ -165,47 +166,56 @@ impl OctopusTokenManager {
             context,
             request_manager,
             authenticator,
-            token,
+            token: Mutex::new(token),
         }
     }
 }
 
 impl TokenManager for OctopusTokenManager {
 
-    async fn get_authenticator(&mut self)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
-        if let Some(token) = &self.token {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32;
+    async fn get_authenticator(&self, refresh: bool)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
+        let mut locked_token = self.token.lock().await;
 
-            if token.token_expires - GRACE_PERIOD > now {
-                Ok(token.token.clone())
-            }
-            else {
-
-                self.authenticate().await
-            }
-        } else {
-            self.authenticate().await
+        let current_token = if refresh {
+            None
         }
-    }
+        else {
+            if let Some(token) = &*locked_token {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as u32;
 
-    async fn authenticate(&mut self)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
+                if token.token_expires - GRACE_PERIOD > now {
+                    Some(token.token.clone())
+                }
+                else {
 
-        let input = self.authenticator.to_obtain_json_web_token_input()?;
-        let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-        let response = self.request_manager.call(&mutation, None).await?;
+                    None
+                }
+            } else {
+                None
+            }
+        };
 
-        let token = OctopusToken::from(response.obtain_kraken_token_);
-
-        self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
-
-        let result = token.token.clone();
-
-        self.token = Some(token);
-
-        Ok(result)
+        if let Some(token) = current_token {
+            Ok(token)
+        }
+        else {
+            let input = self.authenticator.to_obtain_json_web_token_input()?;
+            let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
+            let response = self.request_manager.call(&mutation, None).await?;
+    
+            let token = OctopusToken::from(response.obtain_kraken_token_);
+    
+            self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
+    
+            let result = token.token.clone();
+    
+            *locked_token = Some(token);
+            
+            Ok(result)
+        }
     }
 
 }
