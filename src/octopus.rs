@@ -24,27 +24,14 @@ SOFTWARE.
 
 pub mod error;
 pub mod token;
-pub mod account;
-pub mod tariff;
 pub mod decimal;
-pub mod consumption;
-pub mod consumption_type;
-pub mod transaction;
-pub mod bill;
-pub mod meter;
-pub mod meter_property_view;
-pub mod meter_point;
-pub mod meter_point_property_view;
-pub mod account_property_meters;
 
 use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
-use decimal::Decimal;
 use display_json::DisplayAsJsonPretty;
 use graphql::{latest_bill::get_account_latest_bill::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
 use serde::{Deserialize, Serialize};
 
-use account::AccountManager;
 pub use error::Error;
 use sparko_graphql::types::{Date, DateTime};
 use token::{OctopusTokenManager, TokenManagerBuilder};
@@ -113,9 +100,6 @@ pub struct Client{
     context: Context, 
     profile: Option<Profile>,
     gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
-    DEPRECATED_authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
-    gql_client: Arc<sparko_graphql::Client>,
-    pub(crate) token_manager:  OctopusTokenManager,
     default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>
 }
 
@@ -142,17 +126,12 @@ impl Client {
     }
 
     fn new(context: Context, profile: Option<Profile>, 
-        gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
-        DEPRECATED_authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
-        gql_client: Arc<sparko_graphql::Client>, token_manager: OctopusTokenManager) -> Client {        
+        gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>) -> Client {        
 
         Client {
             context,
             profile,
             gql_authenticated_request_manager,
-            DEPRECATED_authenticated_request_manager,
-            gql_client,
-            token_manager,
             default_account: None
         }
     }
@@ -440,13 +419,6 @@ impl Client {
         Ok(())
     }
 
-    async fn handle_statement(&mut self, statement: &graphql::latest_bill::get_account_latest_bill::StatementSummary)-> Result<(), Error> {
-        self.get_account_properties_meters(&statement.bill_interface_.from_date_, &Some(statement.bill_interface_.to_date_.clone())).await?;
-
-        
-        Ok(())
-    }
-
     pub async fn handle_bill(&mut self, bill: &BillInterface) -> Result<(), crate::Error> {
         //println!("\n===========================\n{}\n===========================\n", result);
         
@@ -532,6 +504,113 @@ impl Client {
 
     //     Ok(response.viewer_)
     // }
+
+
+
+    // pub fn print_statement(&self) {
+    //     println!("Energy Account Statement");
+    //     println!("========================");
+    //     println!("Date                 {}", self.bill.issued_date);
+    //     println!("Ref                  {}", self.bill.id);
+    //     println!("From                 {}", self.bill.from_date);
+    //     println!("To                   {}", self.bill.to_date);
+    //     println!();
+
+    //     // let mut map = BTreeMap::new();
+    //     // for edge in &self.transactions.edges {
+    //     //     let txn = edge.node.as_transaction();
+
+    //     //     map.insert(&txn.posted_date, &edge.node);
+    //     // }
+
+    //     print!("{:20} {:10} ", 
+    //         "Description",
+    //         "Posted"
+    //     );
+    //     print!("{:>10} {:>10} {:>10} {:>10} ", 
+    //         "Net",
+    //         "Tax", 
+    //         "Total",
+    //         "Balance"
+    //     );
+    //     print!("{:10} {:10} {:>12} ", 
+    //         "From",
+    //         "To",
+    //         "Units"
+    //     );
+    //     print!("{:>12}", "p / unit");
+    //     println!();
+
+    //     let mut total_electric_charge = Int::new(0); //0;
+    //     let mut total_electric_units = Decimal::new(0, 0);
+
+    //     // for transaction in &mut map.values() {
+    //     for edge in (&self.transactions.edges).into_iter().rev() {
+    //         let transaction = &edge.node;
+    //         let txn = transaction.as_transaction();
+    //         if let Transaction::Charge(charge) = &transaction {
+    //             if *charge.is_export {
+    //                 print!("{} {:width$} ", txn.title, "Export", width = 20 - txn.title.len() - 1);
+    //             }
+    //             else {
+    //                 print!("{} {:width$} ", txn.title, "Import",width =  20 - txn.title.len() - 1);
+
+    //                 if txn.title.eq("Electricity") {
+    //                     total_electric_charge += *&txn.amounts.gross;
+    //                     total_electric_units += charge.consumption.quantity;
+    //                 }
+    //             }
+    //         }
+    //         else {
+    //             print!("{:20} ", txn.title);
+    //         }
+    //         print!("{:10} ", 
+    //                     txn.posted_date
+    //                 );
+    //         print!("{:>10} {:>10} {:>10} {:>10} ", 
+    //             txn.amounts.net.as_decimal(2),
+    //             txn.amounts.tax.as_decimal(2), 
+    //             txn.amounts.gross.as_decimal(2),
+    //             txn.balance_carried_forward.as_decimal(2)
+    //         );
+    //         if let Transaction::Charge(charge) = &transaction {
+    //             print!("{:10} {:10} {:>12.4} ", 
+    //                 charge.consumption.start_date,
+    //                 charge.consumption.end_date,
+    //                 charge.consumption.quantity
+    //             );
+
+    //             let rate = Decimal::from_int(&txn.amounts.gross) / charge.consumption.quantity;
+
+    //             print!("{:>12.4}", rate); //.round_dp(2));
+    //         }
+    //         println!();
+    //     }
+
+    //     println!("\nTOTALS");
+
+    //     if total_electric_units.is_positive() {
+    //         let rate = Decimal::from_int(&total_electric_charge) / total_electric_units;
+
+    //         print!("{:20} {:10} ", 
+    //             "Electricity Import",
+    //             ""
+    //         );
+    //         print!("{:>10} {:>10} {:>10} {:>10} ", 
+    //             "",
+    //             "", 
+    //             total_electric_charge.as_decimal(2),
+    //             ""
+    //         );
+    //         print!("{:10} {:10} {:>12.4} ", 
+    //             "",
+    //             "",
+    //             total_electric_units
+    //         );
+    //         print!("{:>12.4}", rate);
+    //         println!();
+    //     }
+    // }
 }
 
 // unsafe impl Send for Client {
@@ -559,44 +638,12 @@ impl Module for Client {
         let account_number =  &account.number_; {
             println!("{}", account_number);
 
-            let account_manager = AccountManager::new(account_number);
-
             let result = self.get_latest_bill().await?;
             // account_manager.get_latest_bill(&self.gql_client, &mut self.token_manager).await?;
 
             let bill =  &result.edges_[0].node_;
             self.handle_bill(bill).await?;
 
-            // if let BillInterface::StatementType(statement) = bill {
-                
-            //     self.handle_statement(statement).await?;
-            // }
-            // let statement =  &result.edges_[0].node_;
-
-
-            
-
-            // // if let  bill::Bill::Statement(statement) = &result.edges_[0].node_ {
-
-            //     // let with_effect_from = None; // Some(statement.bill.from_date)
-            //     // let meter_result = account_manager.get_account_properties_meters(
-            //     //     &self.gql_client, &mut self.token_manager, with_effect_from).await?;
-
-            //     let foo = &statement.consumption_start_date_;
-
-            //     println!("consumption_start_date={:?}", foo);
-
-            //     let start_date = Date::from_calendar_date(2024, time::Month::October, 30).unwrap();
-
-            //     // if let Some(start_date) = &statement.consumption_start_date 
-            //     {
-            //         let meters = account_manager.get_account_properties_meters(
-            //             &mut self.DEPRECATED_authenticated_request_manager,
-            //             &start_date,
-            //             &statement.consumption_end_date_).await?;
-            //         }
-
-            // // }
 
             Ok(())
         }
@@ -730,11 +777,6 @@ impl ClientBuilder {
             self.profile
         };
 
-        let gql_client = Arc::new(
-            self.gql_client_builder
-                .with_url_if_not_set(String::from("https://api.octopus.energy/v1/graphql/"))?
-                .build()?);
-        
         let url = if let Some(url) = self.url {
             url
         }
@@ -749,20 +791,10 @@ impl ClientBuilder {
             .with_context(self.context.clone())
             .build(init)?;
 
-        let cloned_token_manager = token_manager.clone_delete_me();
-        let cloned2_token_manager = token_manager.clone_delete_me();
-
         let gql_authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(gql_request_manager, token_manager)?;
-
-        let request_manager = Arc::new(crate::RequestManager::new(url)?);
        
-        let DEPRECATED_authenticated_request_manager = crate::AuthenticatedRequestManager::new(request_manager, cloned2_token_manager)?;
-
         let client = Client::new(self.context, option_profile, 
-            gql_authenticated_request_manager,
-            DEPRECATED_authenticated_request_manager,
-            gql_client.clone(), 
-            cloned_token_manager
+            gql_authenticated_request_manager
           );
 
         Ok(client)

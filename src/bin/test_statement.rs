@@ -22,8 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ******************************************************************************/
 
-use marco_sparko::octopus::bill::AccountBillsView;
-use marco_sparko::octopus::Client;
 use marco_sparko::Error;
 
 fn main() -> Result<(), Error> {
