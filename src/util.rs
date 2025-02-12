@@ -29,6 +29,8 @@ mod tests {
 
     #[test]
     fn test_zero_int() {
+        
+        assert_eq!(as_decimal(37364, 2), "373.64");
          assert_eq!(as_decimal(36, 2), "0.36");
          assert_eq!(as_decimal(-36, 2), "-0.36");
     }

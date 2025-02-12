@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use decimal::Decimal;
 use display_json::DisplayAsJsonPretty;
-use graphql::{latest_bill::get_account_latest_bill::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
+use graphql::{bill::get_bills::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
 use serde::{Deserialize, Serialize};
 
 pub use error::Error;
@@ -18,6 +18,8 @@ use clap::Parser;
 use crate::{util::as_decimal, Context, Module, ModuleBuilder, ModuleConstructor};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
+
+pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
 
 #[derive(Parser, Debug)]
 pub struct OctopusArgs {
@@ -76,21 +78,19 @@ validation_errors: Vec<ValidationError>
 pub struct Client{
     context: Context, 
     profile: Option<Profile>,
-    request_manager: Arc<sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>>,
+    request_manager: RequestManager,
     default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
-    bill_manager: bill::BillManager,
 }
 
 const MODULE_ID: &str = "octopus";
 
 impl Client {
     fn new(context: Context, profile: Option<Profile>, 
-        request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>) -> Client {        
+        request_manager: RequestManager) -> Client {        
 
-        let request_manager = Arc::new(request_manager);
+        // let request_manager = Arc::new(request_manager);
 
         Client {
-            bill_manager: bill::BillManager::new(request_manager.clone()),
             context,
             profile,
             request_manager,
@@ -605,11 +605,13 @@ impl Module for Client {
         let account = self.get_default_account().await?;
         // let account_number =  &account.number_;
 
-        let bill = self.bill_manager.get_latest_bill(&account.number_).await?;
+        let mut bills = bill::get_bills(&self.request_manager, account.number_.clone(), 5, 1).await?;
 
-        bill.print();
+        bills.fetch_all(&self.request_manager).await?;
 
-        self.bill_manager.print_transactions(&bill).await;
+        bills.print_summary_lines();
+
+        // self.bill_manager.print_transactions(&bill).await;
 
         // self.handle_bill(bill).await?;
 

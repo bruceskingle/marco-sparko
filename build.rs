@@ -26,8 +26,8 @@ fn build()  -> Result<(), Box<dyn Error>> {
         .with_schema("graphql/octopus/octopus-schema.graphql")
         .with_query("graphql/octopus/Login.graphql", "login")
         .with_query("graphql/octopus/Summary.graphql", "summary")
-        .with_query("graphql/octopus/LatestBill.graphql", "latest_bill")
         .with_query("graphql/octopus/meters.graphql", "meters")
+        .with_query("graphql/octopus/bill.graphql", "bill")
         .build()?;
 
     // panic!("Panic test!"); 
