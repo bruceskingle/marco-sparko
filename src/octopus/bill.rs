@@ -136,10 +136,10 @@ impl BillInterface {
             let mut total_electric_units = Decimal::new(0, 0);
 
             // for transaction in &mut map.values() {
-            for edge in (&statement.transactions_.edges_).into_iter().rev() {
-                let txn = edge.node_.as_transaction_type();
+            for edge in (&statement.transactions_.edges).into_iter().rev() {
+                let txn = edge.node.as_transaction_type();
 
-                if let TransactionType::Charge(charge) = &edge.node_ {
+                if let TransactionType::Charge(charge) = &edge.node {
                     if charge.is_export_ {
                         print!("{} {:width$} ", txn.title_, "Export", width = 20 - txn.title_.len() - 1);
                     }
@@ -159,7 +159,7 @@ impl BillInterface {
                     as_decimal(txn.amounts_.gross_, 2),
                     as_decimal(txn.balance_carried_forward_, 2)
                 );
-                if let TransactionType::Charge(charge) = &edge.node_ {
+                if let TransactionType::Charge(charge) = &edge.node {
                     if let Some(consumption) = &charge.consumption_ {
                         print!("{:10} {:10} {:>12.4} ", 
                             consumption.start_date_,
@@ -240,14 +240,14 @@ pub async fn get_bills(request_manager: &RequestManager, account_number: String,
 
     let mut bills = Vec::new();
 
-    for edge in response.account_.bills_.edges_ {
-        bills.push(edge.node_);
+    for edge in response.account_.bills_.edges {
+        bills.push(edge.node);
     }
     Ok(BillList {
         account_number,
         transactions,
-        end_cursor: response.account_.bills_.page_info_.end_cursor_,
-        has_next_page: response.account_.bills_.page_info_.has_next_page_,
+        end_cursor: response.account_.bills_.page_info.end_cursor,
+        has_next_page: response.account_.bills_.page_info.has_next_page,
         bills,
     })
 }
@@ -284,13 +284,13 @@ impl BillList {
             );
             let response = request_manager.call(&query).await?;
 
-            println!("request for {} bills after {} returned {} bills", 20, self.end_cursor, response.account_.bills_.edges_.len());
+            println!("request for {} bills after {} returned {} bills", 20, self.end_cursor, response.account_.bills_.edges.len());
 
-            for edge in response.account_.bills_.edges_ {
-                self.bills.push(edge.node_);
+            for edge in response.account_.bills_.edges {
+                self.bills.push(edge.node);
             }
-            self.end_cursor = response.account_.bills_.page_info_.end_cursor_;
-            has_next_page = response.account_.bills_.page_info_.has_next_page_;
+            self.end_cursor = response.account_.bills_.page_info.end_cursor;
+            has_next_page = response.account_.bills_.page_info.has_next_page;
             println!("has_next_page = {:?}", has_next_page);
         }
         self.has_next_page = has_next_page;

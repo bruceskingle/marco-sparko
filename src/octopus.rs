@@ -286,8 +286,8 @@ impl Client {
 
             match agreement {
                 graphql::meters::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
-                    for edge in &electricity_agreement_type.line_items_.edges_ {
-                        let item = &edge.node_;
+                    for edge in &electricity_agreement_type.line_items_.edges {
+                        let item = &edge.node;
 
                         println!("{:20} {:20} {:10.2} {:10.3} {:10.3}", item.start_at_.format(format).unwrap(), item.end_at_.format(format).unwrap(), item.net_amount_, item.number_of_units_, 
                         
@@ -296,8 +296,8 @@ impl Client {
                     }
 
 
-                    if electricity_agreement_type.line_items_.page_info_.has_next_page_ {
-                        Some(electricity_agreement_type.line_items_.page_info_.end_cursor_.clone())
+                    if electricity_agreement_type.line_items_.page_info.has_next_page {
+                        Some(electricity_agreement_type.line_items_.page_info.end_cursor.clone())
                     }
                     else {
                         None
