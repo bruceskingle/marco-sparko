@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use decimal::Decimal;
 use display_json::DisplayAsJsonPretty;
-use graphql::{bill::get_bills::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
+use graphql::{bill::get_bills_and_transactions::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
 use serde::{Deserialize, Serialize};
 
 pub use error::Error;
@@ -605,9 +605,9 @@ impl Module for Client {
         let account = self.get_default_account().await?;
         // let account_number =  &account.number_;
 
-        let mut bills = bill::get_bills(&self.request_manager, account.number_.clone(), 5, 1).await?;
+        let mut bills = bill::get_bills_and_transactions(&self.request_manager, account.number_.clone(), 5, 1).await?;
 
-        bills.fetch_all(&self.request_manager).await?;
+        // bills.fetch_all(&self.request_manager).await?;
 
         bills.print_summary_lines();
 

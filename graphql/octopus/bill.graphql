@@ -12,11 +12,7 @@ query getBills($accountNumber: String!,
     $before: String, 
     $after: String, 
     $first: Int, 
-    $last: Int, 
-    $transactions_before: String, 
-    $transactions_after: String, 
-    $transactions_first: Int, 
-    $transactions_last: Int) {
+    $last: Int) {
         account(accountNumber: $accountNumber) {
             bills(
                 includeBillsWithoutPDF: $includeBillsWithoutPDF, 
@@ -53,10 +49,18 @@ query getBills($accountNumber: String!,
     }
 }
 
-fragment Statement on StatementType {
-    closingBalance
-    openingBalance
-    isExternalBill
+query getStatementTransactions($statementId: ID!, 
+    $transactions_before: String, 
+    $transactions_after: String, 
+    $transactions_first: Int, 
+    $transactions_last: Int) {
+        node(id: $statementId) {
+            id #removing this exposes a bug in the code generator
+            ...StatementTransactions
+        }
+    }
+
+fragment StatementTransactions on StatementType {
     transactions(before: $transactions_before, after: $transactions_after, first: $transactions_first, last: $transactions_last) {
         pageInfo {
             endCursor
@@ -85,6 +89,68 @@ fragment Statement on StatementType {
             }
         }
     }
+}
+
+query getBillsAndTransactions($accountNumber: String!, 
+    $includeBillsWithoutPDF: Boolean, 
+    $includeOpenStatements: Boolean, 
+    $includeHeldStatements: Boolean, 
+    $includeHistoricStatements: Boolean, 
+    $onlyCurrentEmail: Boolean, 
+    $fromDate: Date, 
+    $toDate: Date, 
+    $issuedFromDate: Date, 
+    $issuedToDate: Date, 
+    $offset: Int, 
+    $before: String, 
+    $after: String, 
+    $first: Int, 
+    $last: Int, 
+    $transactions_before: String, 
+    $transactions_after: String, 
+    $transactions_first: Int, 
+    $transactions_last: Int) {
+        account(accountNumber: $accountNumber) {
+            bills(
+                includeBillsWithoutPDF: $includeBillsWithoutPDF, 
+                includeOpenStatements: $includeOpenStatements, 
+                includeHeldStatements: $includeHeldStatements, 
+                includeHistoricStatements: $includeHistoricStatements, 
+                onlyCurrentEmail: $onlyCurrentEmail, 
+                fromDate: $fromDate, 
+                toDate: $toDate, 
+                issuedFromDate: $issuedFromDate, 
+                issuedToDate: $issuedToDate, 
+                offset: $offset, 
+                before: $before, 
+                after: $after, 
+                first: $first, 
+                last: $last) {
+                pageInfo {
+                    endCursor
+                    hasNextPage
+                }
+                edges {
+                    node {
+                        id
+                        billType
+                        fromDate
+                        toDate
+                        issuedDate
+                        ...Statement
+                        ...StatementTransactions
+                        ...PeriodBasedDocument
+                        ...Invoice
+                    }
+                }
+            }
+        }
+    }
+
+fragment Statement on StatementType {
+    closingBalance
+    openingBalance
+    isExternalBill
     userId
     toAddress
     paymentDueDate

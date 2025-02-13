@@ -4,10 +4,10 @@ use std::sync::Arc;
 use sparko_graphql::AuthenticatedRequestManager;
 
 use crate::octopus::decimal::Decimal;
-use crate::octopus::graphql::bill::get_bills::TransactionType;
+use crate::octopus::graphql::bill::get_bills_and_transactions::TransactionType;
 use crate::util::as_decimal;
 
-use super::graphql::bill::get_bills::BillInterface;
+use super::graphql::bill::get_bills_and_transactions::BillInterface;
 use super::graphql::BillTypeEnum;
 use super::RequestManager;
 use super::{token::OctopusTokenManager, Error};
@@ -228,9 +228,33 @@ impl BillInterface {
 //     Ok(response.account_.bills_.edges_.remove(0).node_)
 // }
 
-pub async fn get_bills(request_manager: &RequestManager, account_number: String, first: i32, transactions: i32)  -> Result<BillList, Error> {
+pub async fn get_bills_and_transactions(request_manager: &RequestManager, account_number: String, first: i32, transactions: i32)  -> Result<BillList, Error> {
 
-    let query = super::graphql::bill::get_bills::Query::from(super::graphql::bill::get_bills::Variables::builder()
+    let query = super::graphql::bill::get_bills_and_transactions::Query::from(super::graphql::bill::get_bills_and_transactions::Variables::builder()
+        .with_account_number(account_number.clone())
+        .with_first(first)
+        .with_transactions_first(transactions)
+        .build()?
+    );
+    let response = request_manager.call(&query).await?;
+
+    let mut bills = Vec::new();
+
+    for edge in response.account_.bills_.edges {
+        bills.push(edge.node);
+    }
+    Ok(BillList {
+        account_number,
+        transactions,
+        end_cursor: response.account_.bills_.page_info.end_cursor,
+        has_next_page: response.account_.bills_.page_info.has_next_page,
+        bills,
+    })
+}
+
+pub async fn fetch_statement_transactions(request_manager: &RequestManager, account_number: String, first: i32, transactions: i32)  -> Result<BillList, Error> {
+
+    let query = super::graphql::bill::get_bills_and_transactions::Query::from(super::graphql::bill::get_bills_and_transactions::Variables::builder()
         .with_account_number(account_number.clone())
         .with_first(first)
         .with_transactions_first(transactions)
@@ -257,7 +281,7 @@ pub struct BillList {
     pub transactions: i32,
     pub end_cursor: String,
     pub has_next_page: bool,
-    pub bills: Vec<super::graphql::bill::get_bills::BillInterface>
+    pub bills: Vec<super::graphql::bill::get_bills_and_transactions::BillInterface>
 }
 
 impl BillList {
@@ -267,6 +291,9 @@ impl BillList {
         for bill in &self.bills {
             bill.print_summary_line();
         }
+
+        let bill = self.bills.get(0).unwrap();
+        bill.print();
     }
 
     pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
@@ -275,7 +302,7 @@ impl BillList {
         println!("fetch_all bills {} in buffer", self.bills.len());
 
         while has_next_page {
-            let query = super::graphql::bill::get_bills::Query::from(super::graphql::bill::get_bills::Variables::builder()
+            let query = super::graphql::bill::get_bills_and_transactions::Query::from(super::graphql::bill::get_bills_and_transactions::Variables::builder()
                 .with_account_number(self.account_number.clone())
                 .with_first(20)
                 .with_transactions_first(self.transactions)
@@ -327,7 +354,7 @@ impl BillList {
 //       }
 //     }
 //   }"#;
-//         let response: super::super::graphql::bill::get_bills::Response = serde_json::from_str(all_json).unwrap();
+//         let response: super::super::graphql::bill::get_bills_and_transactions::Response = serde_json::from_str(all_json).unwrap();
 
 //         serde_json::to_string_pretty(&response);
 //     }
