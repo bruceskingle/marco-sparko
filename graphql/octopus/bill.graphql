@@ -30,10 +30,11 @@ query getBills($accountNumber: String!,
                 first: $first, 
                 last: $last) {
                 pageInfo {
-                    endCursor
-                    hasNextPage
+                    startCursor
+                    hasPreviousPage
                 }
                 edges {
+                    cursor
                     node {
                         id
                         billType
@@ -49,16 +50,19 @@ query getBills($accountNumber: String!,
     }
 }
 
-query getStatementTransactions($statementId: ID!, 
+query getStatementTransactions(
+    $accountNumber: String!,
+    $statementId: ID!, 
     $transactions_before: String, 
     $transactions_after: String, 
     $transactions_first: Int, 
     $transactions_last: Int) {
-        node(id: $statementId) {
-            id #removing this exposes a bug in the code generator
+        account(accountNumber: $accountNumber) {
+            bill(id: $statementId, billType: STATEMENT) {
             ...StatementTransactions
         }
     }
+}
 
 fragment StatementTransactions on StatementType {
     transactions(before: $transactions_before, after: $transactions_after, first: $transactions_first, last: $transactions_last) {
@@ -67,6 +71,7 @@ fragment StatementTransactions on StatementType {
             hasNextPage
         }
         edges {
+            cursor
             node {
                 id
                 postedDate
@@ -131,6 +136,7 @@ query getBillsAndTransactions($accountNumber: String!,
                     hasNextPage
                 }
                 edges {
+                    cursor
                     node {
                         id
                         billType

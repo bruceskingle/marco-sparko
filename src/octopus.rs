@@ -3,11 +3,10 @@ pub mod token;
 pub mod decimal;
 mod bill;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use async_trait::async_trait;
-use decimal::Decimal;
 use display_json::DisplayAsJsonPretty;
-use graphql::{bill::get_bills_and_transactions::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
+use graphql::summary::get_account_summary::AccountUserType;
 use serde::{Deserialize, Serialize};
 
 pub use error::Error;
@@ -15,7 +14,7 @@ use sparko_graphql::types::{Date, DateTime};
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use crate::{util::as_decimal, Context, Module, ModuleBuilder, ModuleConstructor};
+use crate::{CacheManager, Context, Module, ModuleBuilder, ModuleConstructor};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 
@@ -80,22 +79,23 @@ pub struct Client{
     profile: Option<Profile>,
     request_manager: RequestManager,
     default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
+    cache_manager: CacheManager,
 }
 
 const MODULE_ID: &str = "octopus";
 
 impl Client {
     fn new(context: Context, profile: Option<Profile>, 
-        request_manager: RequestManager) -> Client {        
+        request_manager: RequestManager) -> Result<Client, Error> {   
 
-        // let request_manager = Arc::new(request_manager);
-
-        Client {
+        let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID)?;
+        Ok(Client {
             context,
             profile,
             request_manager,
             default_account: None,
-        }
+            cache_manager,
+        })
     }
 
     pub fn registration() -> (String, Box<ModuleConstructor>) {
@@ -297,7 +297,12 @@ impl Client {
 
 
                     if electricity_agreement_type.line_items_.page_info.has_next_page {
-                        Some(electricity_agreement_type.line_items_.page_info.end_cursor.clone())
+                        if let Some(end_cursor) = &electricity_agreement_type.line_items_.page_info.end_cursor {
+                            Some(end_cursor.clone())
+                        }
+                        else {
+                            None
+                        }
                     }
                     else {
                         None
@@ -605,12 +610,30 @@ impl Module for Client {
         let account = self.get_default_account().await?;
         // let account_number =  &account.number_;
 
-        let mut bills = bill::get_bills_and_transactions(&self.request_manager, account.number_.clone(), 5, 1).await?;
+        let mut bills = bill::get_bills(&self.cache_manager, &self.request_manager, account.number_.clone()).await?;
 
         // bills.fetch_all(&self.request_manager).await?;
 
         bills.print_summary_lines();
 
+        // for (key, bill) in &bills.bills {
+        //     if let graphql::bill::get_bills::BillInterface::StatementType(statement) = bill {
+        //         let transactions = bill::get_statement_transactions(&self.request_manager, account.number_.clone(), bill.as_bill_interface().id_.clone(), 50).await?;
+
+        //         transactions.print();
+        //         // break;
+
+        //     }
+        // }
+
+
+
+
+
+
+
+
+        
         // self.bill_manager.print_transactions(&bill).await;
 
         // self.handle_bill(bill).await?;
@@ -745,11 +768,9 @@ impl ClientBuilder {
 
         let authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?;
        
-        let client = Client::new(self.context, option_profile, 
+        Client::new(self.context, option_profile, 
             authenticated_request_manager
-          );
-
-        Ok(client)
+          )
     }
 }
 

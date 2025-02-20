@@ -2,7 +2,12 @@ pub mod octopus;
 pub mod system;
 pub mod util;
 
+use std::fs::{File, OpenOptions};
+use std::io::{BufReader, Lines, Write};
+use std::io::BufRead;
+use std::collections::BTreeMap;
 use std::error::Error as StdError;
+use std::path::Path;
 use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};
 use async_trait::async_trait;
 use dirs::home_dir;
@@ -276,6 +281,79 @@ impl MarcoSparko {
     }
 }
 
+pub struct CacheManager {
+    pub dir_path: PathBuf,
+}
+
+impl CacheManager {
+    pub fn write<T: Serialize>(&self, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
+        let mut path = self.dir_path.clone();
+        path.push(hash_key);
+
+        if cached_cnt == 0 {
+            let mut out = fs::File::create(path)?;
+            for (key, value) in vec {
+                writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
+                println!("WRITE {}", key);
+            }
+        }
+        else {
+            let mut out = OpenOptions::new().append(true).open(path)?;
+
+            let mut i = cached_cnt;
+            while i < vec.len() {
+                let (key, value) = vec.get(i).unwrap();
+                writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
+                i += 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    // The output is wrapped in a Result to allow matching on errors.
+    // Returns an Iterator to the Reader of the lines of the file.
+    fn read_lines<P>(filename: P) -> std::io::Result<Lines<BufReader<File>>>
+    where P: AsRef<Path>, {
+        let file = File::open(filename)?;
+        Ok(BufReader::new(file).lines())
+    }
+
+    pub fn read<T: DeserializeOwned>(&self, hash_key: &str, vec: &mut Vec<(String, T)>) -> Result<(), Error> {
+        let mut path = self.dir_path.clone();
+        path.push(hash_key);
+
+        match Self::read_lines(path) {
+            Ok(lines) => {
+                // Consumes the iterator, returns an (Optional) String
+                for line in lines.map_while(Result::ok) {
+                    println!("READ {}", line);
+
+                    match line.split_once('\t') {
+                        Some((key, value)) => vec.push((key.to_string(), serde_json::from_str(value)?)),
+                        None => return Err(Error::InternalError(format!("Invalid cached object <{}>", line))),
+                    }
+                }
+            },
+
+            Err(error) => {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    println!("ERROR {:?}", error);
+                    return Err(Error::IOError(error))
+                }
+                
+            },
+        }
+
+        // for (key, value) in map {
+        //     writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
+        //     println!("WRITE {}", key);
+        // }
+
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 pub struct Context {
     marco_sparko: Arc<ContextImpl>,
@@ -344,6 +422,15 @@ impl Context {
          updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
          Ok(())
       }
+      
+    fn create_cache_manager(&self, module_id: &str) -> Result<CacheManager, Error> {
+        let dir_path = self.marco_sparko.get_cache_data_dir_path(module_id)?;
+        fs::create_dir_all(&dir_path)?;
+
+        Ok(CacheManager {
+            dir_path,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -385,6 +472,22 @@ impl ContextImpl {
         println!("Path is {:?}", &path);
                 Ok(path)
      }
+
+     fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
+        let profile_name = if let Some(active_profile) = &self.active_profile {
+            &active_profile.name
+        }
+        else {
+            return Err(Error::InternalError("No Active Profile".to_string()))
+        };
+
+        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        path.push(".marco-sparko-cache");
+        path.push(format!("{}-{}", profile_name, module_id));
+
+        println!("Path is {:?}", &path);
+        Ok(path)
+      }
 
     fn get_file_path() -> Result<PathBuf, Error> {
         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
