@@ -3,8 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-
-use crate::Context;
+use crate::MarcoSparkoContext;
 
 use super::error::Error;
 use super::graphql::ObtainJsonWebTokenInput;
@@ -140,7 +139,7 @@ impl OctopusAuthenticator {
 }
 
 pub struct OctopusTokenManager {
-    context: Context,
+    context: Arc<MarcoSparkoContext>,
     request_manager: Arc<RequestManager>,
     authenticator: OctopusAuthenticator,
     token: Mutex<Option<OctopusToken>>,
@@ -151,7 +150,7 @@ impl OctopusTokenManager {
         TokenManagerBuilder::new()
     }
 
-    fn new(context: Context,
+    fn new(context: Arc<MarcoSparkoContext>,
         request_manager: Arc<RequestManager>,
         authenticator: OctopusAuthenticator,
     ) -> OctopusTokenManager {
@@ -221,7 +220,7 @@ impl TokenManager for OctopusTokenManager {
 }
 
 pub struct TokenManagerBuilder {
-    context:            Option<Context>,
+    context:            Option<Arc<MarcoSparkoContext>>,
     authenticator:      Option<OctopusAuthenticator>,
     request_manager: Option<Arc<RequestManager>>,
 }
@@ -235,7 +234,7 @@ impl TokenManagerBuilder{
         }
     }
     
-    pub fn with_context(mut self, context: Context) -> TokenManagerBuilder {
+    pub fn with_context(mut self, context: Arc<MarcoSparkoContext>) -> TokenManagerBuilder {
         self.context = Some(context);
         self
     }

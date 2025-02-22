@@ -3,18 +3,19 @@ pub mod token;
 pub mod decimal;
 mod bill;
 
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 use async_trait::async_trait;
-use display_json::DisplayAsJsonPretty;
+
 use graphql::summary::get_account_summary::AccountUserType;
 use serde::{Deserialize, Serialize};
+
 
 pub use error::Error;
 use sparko_graphql::types::{Date, DateTime};
 use token::{OctopusTokenManager, TokenManagerBuilder};
-use clap::Parser;
+use clap::{ArgMatches, Parser};
 
-use crate::{CacheManager, Context, Module, ModuleBuilder, ModuleConstructor};
+use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 
@@ -46,36 +47,36 @@ impl Profile {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct Location {
-line: i32,
-column: i32,
-}
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// struct Location {
+// line: i32,
+// column: i32,
+// }
 
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct ValidationError {
-    message: String,
-    input_path: Vec<String>
-}
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// struct ValidationError {
+//     message: String,
+//     input_path: Vec<String>
+// }
 
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct Extensions {
-error_type: String,
-error_code: String,
-error_description: String,
-error_class: String,
-validation_errors: Vec<ValidationError>
-}
+// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+// #[serde(rename_all = "camelCase")]
+// struct Extensions {
+// error_type: String,
+// error_code: String,
+// error_description: String,
+// error_class: String,
+// validation_errors: Vec<ValidationError>
+// }
 
 
 
 //  self.config.get_active_profile()?.modules.octopus.clone()
 // #[derive(Debug)]
 pub struct Client{
-    context: Context, 
+    context: Arc<MarcoSparkoContext>, 
     profile: Option<Profile>,
     request_manager: RequestManager,
     default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
@@ -85,7 +86,7 @@ pub struct Client{
 const MODULE_ID: &str = "octopus";
 
 impl Client {
-    fn new(context: Context, profile: Option<Profile>, 
+    fn new(context: Arc<MarcoSparkoContext>, profile: Option<Profile>, 
         request_manager: RequestManager) -> Result<Client, Error> {   
 
         let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID)?;
@@ -105,12 +106,12 @@ impl Client {
         (MODULE_ID.to_string(), Box::new(Client::constructor))
     }
     
-    pub fn constructor(context: Box<&Context>, 
+    pub fn constructor(context: Arc<MarcoSparkoContext>, 
         json_profile: Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder>, crate::Error> {
-            Ok(Client::builder(&context, json_profile)?)
+            Ok(Client::builder(context, json_profile)?)
     }
 
-    pub fn builder(context: &Context, 
+    pub fn builder(context: Arc<MarcoSparkoContext>, 
         json_profile: Option<serde_json::Value>
     ) -> Result<Box<dyn ModuleBuilder>, Error> {
 
@@ -395,6 +396,11 @@ impl Client {
         Ok(())
     }
 
+    pub async fn list_handler(&mut self) ->  Result<(), super::Error> {
+        println!("Octopus: Hello List!");
+        Ok(())
+    }
+
     // pub async fn handle_bill(&mut self, bill: &BillInterface) -> Result<(), crate::Error> {
     //     //println!("\n===========================\n{}\n===========================\n", result);
     //     Self::print_statement(bill);
@@ -584,6 +590,66 @@ impl Client {
     //         }
     //     }
     // }
+    // async fn do_repl(&self) -> easy_repl::anyhow::Result<()> {
+
+    // use easy_repl::command;
+    // use easy_repl::{anyhow::Context, CommandStatus};
+
+    //     let mut repl = easy_repl::Repl::builder()
+    //         .add("hello", command! {
+    //             "Say hello",
+    //             (name: String) => |name| {
+    //                 println!("Hello {}!", name);
+    //                 Ok(CommandStatus::Done)
+    //             }
+    //         })
+    //         .add("add", command! {
+    //             "Add X to Y",
+    //             (X:i32, Y:i32) => |x, y| {
+    //                 println!("{} + {} = {}", x, y, x + y);
+    //                 Ok(CommandStatus::Done)
+    //             }
+    //         })
+    //         .build().context("Failed to create repl")?;
+    
+    //     repl.run().context("Critical REPL error")?;
+    
+    //     Ok(())
+    // }
+
+    // async fn hello<T>(args: ArgMatches, _context: &mut T) -> reedline_repl_rs::Result<Option<String>> {
+    //     Ok(Some(format!(
+    //         "Hello, {}",
+    //         args.get_one::<String>("who").unwrap()
+    //     )))
+    // }
+    
+    // /// Called after successful command execution, updates prompt with returned Option
+    // async fn update_prompt<T>(_context: &mut T) -> reedline_repl_rs::Result<Option<String>> {
+    //     Ok(Some("updated".to_string()))
+    // }
+
+    // async fn do_repl(&mut self) { //-> impl Future<Output =  reedline_repl_rs::Result<()>> + Send { //-> reedline_repl_rs::Result<()> {
+
+    //     use reedline_repl_rs::clap::{Arg, ArgMatches, Command};
+    //     use reedline_repl_rs::{Repl, Result};
+
+    //     let mut repl: Repl<(), reedline_repl_rs::Error> = Repl::new(())
+    //         .with_name("MyApp")
+    //         .with_version("v0.1.0")
+    //         .with_command_async(
+    //             Command::new("hello")
+    //                 .arg(Arg::new("who").required(true))
+    //                 .about("Greetings!"),
+    //             |args, context| Box::pin(Self::hello(args, context)),
+    //         )
+    //         .with_on_after_command_async(|context| Box::pin(Self::update_prompt(context)));
+
+    //     //    repl.run_async();
+    //     if let Err(error) = repl.run_async().await {
+    //         println!("ERROR: {}", error);
+    //     }
+    // }
 }
 
 // unsafe impl Send for Client {
@@ -591,7 +657,37 @@ impl Client {
 // }
 
 #[async_trait]
+impl CommandProvider for Client {
+
+    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), super::Error> {
+        match command {
+            "list" => {
+                self.list_handler().await
+            },
+            _ => Err(super::Error::UserError(format!("Invalid command '{}'", command)))
+        }
+    }
+
+    async fn get_repl_commands(&mut self) -> Vec<ReplCommand> {
+        vec!(
+            ReplCommand {
+                command:"list",
+                description: "Greeting",
+                help: "Help yourself",
+                // handler: Box::new(|| Box::pin(self.list_handler())),    
+            }
+        )
+    }
+}
+
+    // async fn repl(&mut self) -> Result<(), crate::Error> {
+    //     self.do_repl().await;
+    //     Ok(())
+    // }}
+
+#[async_trait]
 impl Module for Client {
+
     async fn test(&mut self) -> Result<(), crate::Error>{
         let user = self.get_account_user().await?;
         println!("get_account_user {} {} {}", user.given_name_, user.family_name_, user.email_);
@@ -645,7 +741,7 @@ impl Module for Client {
 
 
 pub struct ClientBuilder {
-    context: Context, 
+    context: Arc<MarcoSparkoContext>, 
     profile: Option<Profile>,
     token_manager_builder: TokenManagerBuilder,
     url: Option<String>,
@@ -666,7 +762,7 @@ impl ClientBuilder {
     }
 
     fn new(
-            context: &Context,
+            context: Arc<MarcoSparkoContext>,
             json_profile: Option<serde_json::Value>
         ) -> Result<Box<dyn ModuleBuilder>, Error> {
 
@@ -677,27 +773,17 @@ impl ClientBuilder {
             None
         };
 
-        let option_api_key= if let Some(args) =  context.args() {
-            if let Some(api_key) = &args.octopus.octopus_api_key {
-                Some(api_key.to_string())
-            }
-            else {
-                Self::get_profile_api_key(&profile)?
-            }
+        let option_api_key = if let Some(api_key) = &context.args.octopus.octopus_api_key {
+            Some(api_key.to_string())
         }
         else {
             Self::get_profile_api_key(&profile)?
         };
 
-        let verbose = if let Some(args) =  context.args() {
-            args.verbose
-        }
-        else {
-            false
-        };
+        let verbose = context.args.verbose;
 
         let builder = ClientBuilder {
-            context: context.clone(),
+            context,
             profile,
             token_manager_builder: OctopusTokenManager::builder(),
             url: None,
@@ -735,7 +821,7 @@ impl ClientBuilder {
         Ok(self)
     }
 
-    pub fn do_build(self, init: bool) -> Result<Client, Error> {
+    pub async fn do_build(self, init: bool) -> Result<Client, Error> {
         let option_profile = if init {
             if let Some(mut profile) = self.profile {
                 profile.init = true;
@@ -768,14 +854,22 @@ impl ClientBuilder {
 
         let authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?;
        
-        Client::new(self.context, option_profile, 
+        let mut client = Client::new(self.context, option_profile, 
             authenticated_request_manager
-          )
+        )?;
+
+        if init {
+            let account_user = client.get_account_user().await?;
+            client.update_profile(&account_user).await?;
+        }
+        
+        Ok(client)
     }
 }
 
+#[async_trait]
 impl ModuleBuilder for ClientBuilder {
-    fn build(self: Box<Self>, init: bool) -> Result<Box<dyn crate::Module + Send>, crate::Error> {
-        Ok(Box::new(self.do_build(init)?))
+    async fn build(self: Box<Self>, init: bool) -> Result<Box<dyn crate::Module + Send>, crate::Error> {
+        Ok(Box::new(self.do_build(init).await?))
     }
 }

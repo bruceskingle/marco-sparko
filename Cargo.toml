@@ -27,6 +27,9 @@ rust_decimal_macros = "1.36.0"
 const_format = "0.2.32"
 sparko_graphql = {veraion = "0.0.1", path = "../../git/sparko_graphql" }
 serde_with = "3.9.0"
+#reedline-repl-rs = { version = "1.2.1", features = ["async"] }
+futures = "0.3.31"
+reedline = "0.38.0"
 
 [dev-dependencies]
 tokio-test = "*"
