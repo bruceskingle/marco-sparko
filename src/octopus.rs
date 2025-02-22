@@ -6,6 +6,7 @@ mod bill;
 use std::sync::Arc;
 use async_trait::async_trait;
 
+use bill::BillManager;
 use graphql::summary::get_account_summary::AccountUserType;
 use serde::{Deserialize, Serialize};
 
@@ -52,9 +53,41 @@ pub struct Client{
     request_manager: RequestManager,
     default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
     cache_manager: CacheManager,
+    bill_manager: Option<BillManager>,
 }
 
 const MODULE_ID: &str = "octopus";
+
+#[async_trait(?Send)]
+impl CommandProvider for Client {
+
+    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), super::Error> {
+        match command {
+            "bills" => {
+                Ok(self.get_bill_manager()
+                .await?
+                .bills_handler(args)
+                .await?)
+            },
+            _ => Err(super::Error::UserError(format!("Invalid command '{}'", command)))
+        }
+    }
+
+    fn get_repl_commands(&self) -> Vec<ReplCommand> {
+        vec!(
+            ReplCommand {
+                command:"bills",
+                description: "Print a summary of all bills",
+                help:
+r#"
+usage: bills
+
+Print a one line summary of all bills in the account.
+"#,
+            }
+        )
+    }
+}
 
 impl Client {
     fn new(context: Arc<MarcoSparkoContext>, profile: Option<Profile>, 
@@ -67,6 +100,7 @@ impl Client {
             request_manager,
             default_account: None,
             cache_manager,
+            bill_manager: None,
         })
     }
 
@@ -87,6 +121,16 @@ impl Client {
     ) -> Result<Box<dyn ModuleBuilder>, Error> {
 
         ClientBuilder::new(context, json_profile)
+    }
+
+    pub async fn get_bill_manager(&mut self)  -> Result<&mut BillManager, Error> {
+
+        if self.bill_manager.is_none() {
+            let account = self.get_default_account().await?;
+            let bill_manager = BillManager::new(&self.cache_manager, &self.request_manager, account.number_.clone()).await?;
+            self.bill_manager = Some(bill_manager);
+        }
+        Ok(self.bill_manager.as_mut().unwrap())
     }
 
     pub async fn get_default_account(&mut self)  -> Result<Arc<graphql::summary::get_viewer_accounts::AccountInterface>, Error> {
@@ -367,11 +411,6 @@ impl Client {
         Ok(())
     }
 
-    pub async fn list_handler(&mut self) ->  Result<(), super::Error> {
-        println!("Octopus: Hello List!");
-        Ok(())
-    }
-
     // pub async fn handle_bill(&mut self, bill: &BillInterface) -> Result<(), crate::Error> {
     //     //println!("\n===========================\n{}\n===========================\n", result);
     //     Self::print_statement(bill);
@@ -627,29 +666,6 @@ impl Client {
 
 // }
 
-#[async_trait]
-impl CommandProvider for Client {
-
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), super::Error> {
-        match command {
-            "list" => {
-                self.list_handler().await
-            },
-            _ => Err(super::Error::UserError(format!("Invalid command '{}'", command)))
-        }
-    }
-
-    fn get_repl_commands(&self) -> Vec<ReplCommand> {
-        vec!(
-            ReplCommand {
-                command:"list",
-                description: "Greeting",
-                help: "Help yourself",
-                // handler: Box::new(|| Box::pin(self.list_handler())),    
-            }
-        )
-    }
-}
 
     // async fn repl(&mut self) -> Result<(), crate::Error> {
     //     self.do_repl().await;

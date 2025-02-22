@@ -49,6 +49,8 @@ impl StdError for Error {
 
 }
 
+// impl Send for Error {}
+
 // impl From<time::error::ComponentRange> for Error {
 //     fn from(err: time::error::ComponentRange) -> Error {
 //         Error::WrappedError(Box::new(err))
@@ -152,7 +154,7 @@ pub trait Module: CommandProvider {
     async fn test(&mut self) -> Result<(), Error>;
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait CommandProvider {
     fn get_repl_commands(&self) -> Vec<ReplCommand>;
     async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error>;

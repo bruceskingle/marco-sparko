@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use sparko_graphql::AuthenticatedRequestManager;
 
@@ -11,6 +11,26 @@ use super::graphql::bill::get_bills::BillInterface;
 use super::graphql::BillTypeEnum;
 use super::RequestManager;
 use super::{token::OctopusTokenManager, Error};
+
+pub struct BillManager {
+    pub bills: BillList,
+}
+
+impl BillManager {
+    pub async fn new(cache_manager: &CacheManager, request_manager: &RequestManager, account_number: String)  -> Result<Self, Error> {
+        let bills = BillList::new(cache_manager, request_manager, account_number).await?;
+
+        Ok(Self {
+            bills,
+        })
+    }
+
+
+    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
+        self.bills.print_summary_lines();
+        Ok(())
+    }
+}
 
 impl BillTypeEnum {
     fn as_str(&self) -> &'static str {
