@@ -1090,6 +1090,7 @@ dependencies = [
  "dirs",
  "display_json",
  "futures",
+ "nu-ansi-term",
  "once_cell",
  "reedline",
  "reqwest 0.11.27",

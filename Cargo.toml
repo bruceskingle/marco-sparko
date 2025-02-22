@@ -30,6 +30,7 @@ serde_with = "3.9.0"
 #reedline-repl-rs = { version = "1.2.1", features = ["async"] }
 futures = "0.3.31"
 reedline = "0.38.0"
+nu-ansi-term = "0.50.1"
 
 [dev-dependencies]
 tokio-test = "*"

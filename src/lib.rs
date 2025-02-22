@@ -2,8 +2,8 @@ pub mod octopus;
 pub mod system;
 pub mod util;
 
+use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
-use std::future::Future;
 use std::io::{BufReader, Lines, Write};
 use std::io::BufRead;
 use std::error::Error as StdError;
@@ -11,12 +11,16 @@ use std::path::Path;
 use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};
 use async_trait::async_trait;
 use dirs::home_dir;
-use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use clap::{ArgMatches, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
-use reedline::{DefaultPrompt, DefaultPromptSegment, Prompt, Reedline, Signal};
+use reedline::{Emacs, ExampleHighlighter, FileBackedHistory, MenuBuilder, ReedlineMenu};
+use reedline::{default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, KeyCode, KeyModifiers, Reedline, ReedlineEvent, Signal};
+use {
+    nu_ansi_term::{Color, Style},
+    reedline::{DefaultValidator, DefaultHinter},
+  };
 
 #[derive(Debug)]
 pub enum Error {
@@ -26,8 +30,6 @@ pub enum Error {
     InternalError(String),
     UserError(String),
     WrappedError(Box<dyn StdError>),
-    // AnyHowError(easy_repl::anyhow::Error),
-    // ReplError(reedline_repl_rs::Error),
 }
 
 impl Display for Error {
@@ -39,8 +41,6 @@ impl Display for Error {
             Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
             Error::UserError(err) => f.write_fmt(format_args!("{}", err)),
             Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err)),
-            // Error::AnyHowError(err) => f.write_fmt(format_args!("AnyHowError({})", err)),
-            // Error::ReplError(err) => f.write_fmt(format_args!("ReplError({})", err)),
         }
     }
 }
@@ -52,18 +52,6 @@ impl StdError for Error {
 // impl From<time::error::ComponentRange> for Error {
 //     fn from(err: time::error::ComponentRange) -> Error {
 //         Error::WrappedError(Box::new(err))
-//     }
-// }
-
-// impl From<easy_repl::anyhow::Error> for Error {
-//     fn from(err: easy_repl::anyhow::Error) -> Error {
-//         Error::AnyHowError(err)
-//     }
-// }
-
-// impl From<reedline_repl_rs::Error> for Error {
-//     fn from(err: reedline_repl_rs::Error) -> Error {
-//         Error::ReplError(err)
 //     }
 // }
 
@@ -103,61 +91,11 @@ impl<T> From<std::sync::PoisonError<T>> for Error {
     }
 }
 
-pub async fn list_handler(context: &mut MarcoSparkoContext) {
-
-}
-
-type Handler<'a, T> = Box<dyn Fn(&'a mut T) -> Box<dyn Future<Output = ()>>>;
-type Handler2<T> = dyn Fn(&mut T) -> Box<dyn Future<Output = ()>>;
-type Handler3<'a,T> = Box<dyn Fn(&'a mut T) -> BoxFuture<'a, ()>>;
-type Handler4<T> = Box<dyn Fn(&mut T) -> BoxFuture<()>>;
-type Handler5 = Box<dyn Fn() -> BoxFuture<'static, ()>>;
-
 pub struct ReplCommand {
     pub command: &'static str,
     pub description: &'static str,
     pub help: &'static str,
-    // pub handler: Handler5,
 }
-
-// pub fn foo<'a>() {
-//     let x: Handler<'a,MarcoSparkoContext> = Box::new(|context| Box::new(list_handler(context)));
-
-//     // x(context);
-// }
-
-// pub fn foo2(context: &mut MarcoSparkoContext) {
-//     let x: Handler2<MarcoSparkoContext> = Box::new(list_handler(context));
-
-//     x(context);
-// }
-
-// pub fn foo3<'a>() {
-//     let x: Handler3<'a,MarcoSparkoContext> = Box::new(|context| Box::pin(list_handler(context)));
-
-//     // x(context);
-// }
-
-// pub fn foo4(context: &mut MarcoSparkoContext) {
-//     let x: Handler4<MarcoSparkoContext> = Box::new(|context| Box::pin(list_handler(context)));
-//     let y = ReplCommand {
-//         command: "hello",
-//         description: "Greeting",
-//         help: "Say Hello",
-//         // handler: Box::new(|context| Box::pin(list_handler(context))),
-//         handler: Box::new(|| Box::pin(list_handler())),
-//     };
-
-//     x(context);
-//     let yy = y.handler;
-//     yy(context);
-// }
-
-
-
-// pub struct Repl {
-//     pub commands: HashMap<&'static str, ReplCommand>,
-// }
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)] // Read from `Cargo.toml`
@@ -216,10 +154,7 @@ pub trait Module: CommandProvider {
 
 #[async_trait]
 pub trait CommandProvider {
-    // async fn repl(&mut self) -> Result<(), Error>;
-    // async fn get_repl_commands(&mut self) -> Vec<ReplCommand<&mut Self>>;
-    // async fn get_repl_commands<'a>(&'a mut self) -> Vec<ReplCommand<&'a mut Self>>;
-    async fn get_repl_commands(&mut self) -> Vec<ReplCommand>;
+    fn get_repl_commands(&self) -> Vec<ReplCommand>;
     async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error>;
 }
 
@@ -228,14 +163,8 @@ pub trait ModuleBuilder {
      // fn with_init(&mut self, init: bool) -> Result<&mut Self, Error>;
      async fn build(self: Box<Self>, init: bool) -> Result<Box<dyn Module + Send>, Error>;
 }
-// #[async_trait]
-// pub trait ModuleBuilder<T: Module> {
-//      // fn with_init(&mut self, init: bool) -> Result<&mut Self, Error>;
-//      async fn build(self: Box<Self>, init: bool) -> Result<Box<T>, Error>;
-// }
 
 type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder>, Error>;
-// type ModuleConstructor<T: Module> = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder<T>>, Error>;
 
 /*
  * This context is shared with all modules and needs to be separate from MarcoSparko because that struct holds the list of modules.
@@ -375,6 +304,22 @@ impl MarcoSparkoContext {
                 Ok(path)
     }
 
+    fn get_history_file_path(&self, module_id: &Option<String>) -> Result<PathBuf, Error> {
+        let profile_name = &self.active_profile.name;
+        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        path.push(".marco-sparko-cache");
+        if let Some(module_id) = module_id {
+            path.push(format!("{}-{}-history.txt", profile_name, module_id));
+        }
+        else {
+            path.push(format!("{}-history.txt", profile_name));
+        }
+        
+
+        println!("Path is {:?}", &path);
+                Ok(path)
+    }
+
     fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
         let profile_name = &self.active_profile.name;
 
@@ -433,45 +378,6 @@ impl MarcoSparkoContext {
     }
 }
 
-struct SparkoPrompt {
-    prompt: std::borrow::Cow<'static, str>,
-    empty: std::borrow::Cow<'static, str>,
-}
-
-// impl SparkoPrompt {
-//     fn new() -> Self {
-//         SparkoPrompt {
-//             prompt: std::borrow::Cow::from("> "),
-//             empty: std::borrow::Cow::from(" <"),
-//         }
-//     }
-// }
-
-// impl Prompt for SparkoPrompt {
-//     fn render_prompt_left(&self) -> std::borrow::Cow<str> {
-//         self.prompt.clone()
-//     }
-
-//     fn render_prompt_right(&self) -> std::borrow::Cow<str> {
-//         self.empty.clone()
-//     }
-
-//     fn render_prompt_indicator(&self, prompt_mode: reedline::PromptEditMode) -> std::borrow::Cow<str> {
-//         self.prompt.clone()
-//     }
-
-//     fn render_prompt_multiline_indicator(&self) -> std::borrow::Cow<str> {
-//         self.prompt.clone()
-//     }
-
-//     fn render_prompt_history_search_indicator(
-//         &self,
-//         history_search: reedline::PromptHistorySearch,
-//     ) -> std::borrow::Cow<str> {
-//         self.prompt.clone()
-//     }
-// }
-
 pub struct MarcoSparko {
     context: Arc<MarcoSparkoContext>,
     module_registrations: HashMap<String, Box<ModuleConstructor>>,
@@ -490,16 +396,44 @@ impl MarcoSparko {
         }
     }
 
-    async fn get_repl_commands(&mut self) -> Vec<ReplCommand> {
+    fn get_repl_commands(&self) -> Vec<ReplCommand> {
         vec!(
             ReplCommand {
                 command:"list",
-                description: "Greeting",
-                help: "Help yourself",
-                // handler: Box::new(|| Box::pin(self.list_handler())),    
+                description: "List modules or profiles",
+                help:
+r#"
+usage: list modules|profiles
+
+"modules" lists all known modules and whether they are activated.
+"profiles" lists all known profiles (run configurations) and indicates the active one.
+"#,
             }
         )
     }
+
+    fn get_global_repl_commands(&self) -> Vec<ReplCommand> {
+        vec!(
+            ReplCommand {
+                command:"quit",
+                description: "Quit Marco Sparko (also Ctrl-D)",
+                help: "Terminates the application",
+            },
+
+            ReplCommand {
+                command:"help",
+                description: "Print this message (try \"help help\" for more detail).",
+                help: 
+r#"
+usage: help [command]
+
+Without any arguments lists all the currently available commands, with a single command parameter,
+prints more detailed help on that specific command.
+"#,
+            }
+        )
+    }
+
     pub async fn list_handler(&self, mut args: std::str::SplitWhitespace<'_>) -> Result<(), Error> {
         if let Some(target) = args.next() {
 
@@ -559,14 +493,6 @@ impl MarcoSparko {
        Ok(marco_sparko_manager)
     }
 
-    // pub fn new_config() -> Result<MarcoSparko, Error> {
-    //     MarcoSparko::new(ContextImpl::load()?)
-    // }
-
-    // pub fn new_cli() -> Result<MarcoSparko, Error> {
-    //     MarcoSparko::new(ContextImpl::load_cli()?)
-    // }
-
     fn get_module_list(&self) -> Vec<String> {
         self.context.args.modules.clone()
     }
@@ -619,299 +545,158 @@ impl MarcoSparko {
 
             self.repl().await?;
         }
-        self.context.save_updated_profile()?;
+    self.context.save_updated_profile()?;
 
-            return Ok(())
-            // Err(Error::UserError(String::from("No command given - try 'Summary'")))
-        }
-    
-        async fn repl(&mut self) -> Result<(), crate::Error> {
-            let marco_sparko_prompt = "Marco Sparko".to_string();
-            let module_id = if let Some(module_id) = &self.current_module {
-                module_id
+        return Ok(())
+        // Err(Error::UserError(String::from("No command given - try 'Summary'")))
+    }
+
+    async fn repl(&mut self) -> Result<(), crate::Error> {
+        let marco_sparko_prompt = "Marco Sparko".to_string();
+        let (module_id, commands) = if let Some(module_id) = &self.current_module {
+            let commands = if let Some(module) = self.modules.get(module_id) {
+                module.get_repl_commands()
             }
             else {
-                &marco_sparko_prompt
+                Vec::new()
             };
+            (module_id, commands)
+        }
+        else {
+            (&marco_sparko_prompt, self.get_repl_commands())
+        };
 
-            let mut line_editor = Reedline::create();
-            let prompt = //SparkoPrompt::new(); //DefaultPrompt::default();
-            DefaultPrompt {
-                left_prompt: DefaultPromptSegment::Basic(module_id.clone()),
-                right_prompt: DefaultPromptSegment::CurrentDateTime,
-            };
+        let mut command_map = BTreeMap::new();
+        let mut command_list = Vec::new();
+        let mut max_command_len = 0;
 
-            loop {
-                let out = line_editor.read_line(&prompt).unwrap();
-                match out {
-                    Signal::Success(content) => {
-                        // process content
-                        println!("GOT <{}>", content);
+        for cmd in commands {
+            if cmd.command.len() > max_command_len {
+                max_command_len = cmd.command.len();
+            }
+            command_list.push(cmd.command.to_string());
+            command_map.insert(cmd.command, cmd);
+        }
 
-                        let mut arg_iterator = content.split_whitespace();
-                        if let Some(command) = arg_iterator.next() {
-                            match command {
-                                "quit" => break,
-                                _ => {
+        for cmd in self.get_global_repl_commands() {
+            if cmd.command.len() > max_command_len {
+                max_command_len = cmd.command.len();
+            }
+            command_list.push(cmd.command.to_string());
+            command_map.insert(cmd.command, cmd);
+        }
 
-                                    let result = if let Some(module_id) = &self.current_module {
-                                        let module: &mut Box<dyn Module> = self.modules.get_mut(module_id).unwrap();
-                                        module.exec_repl_command(&command, arg_iterator).await
+        let validator = Box::new(DefaultValidator);
+
+        // command_list.push("lime".into());
+        // command_list.push("limit".into());
+        // command_list.push("limitation".into());
+        // command_list.push("limeted".into());
+
+        println!("command_list ={:?}", &command_list);
+
+
+        let completer = Box::new(DefaultCompleter::new_with_wordlen(command_list.clone(), 2));
+
+        // let completer = Box::new(completer::ReplCompleter::new(command_list.clone()));
+
+
+        // Use the interactive menu to select options from the completer
+        let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
+        // Set up the required keybindings
+        let mut keybindings = default_emacs_keybindings();
+        keybindings.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Tab,
+            ReedlineEvent::Menu("completion_menu".to_string()),
+            // ReedlineEvent::UntilFound(vec![
+            //     ReedlineEvent::Menu("completion_menu".to_string()),
+            //     ReedlineEvent::MenuNext,
+            // ]),
+        );
+
+        let edit_mode = Box::new(Emacs::new(keybindings));
+
+        let history = Box::new(
+            FileBackedHistory::with_file(50, self.context.get_history_file_path(&self.current_module)?)
+                .expect("Error configuring history with file"),
+            );
+
+        let mut line_editor = //Reedline::create();
+            Reedline::create()
+                .with_hinter(Box::new(
+                    DefaultHinter::default()
+                        .with_style(Style::new().italic().fg(Color::LightGray)),
+            )).with_validator(validator)
+
+            .with_highlighter(Box::new(ExampleHighlighter::new(command_list.clone())))
+            .with_completer(completer)
+            .with_partial_completions(true)
+            .with_quick_completions(true)
+            .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+            .with_edit_mode(edit_mode)
+            .with_history(history)
+            ;
+
+        let prompt = //SparkoPrompt::new(); //DefaultPrompt::default();
+        DefaultPrompt {
+            left_prompt: DefaultPromptSegment::Basic(module_id.clone()),
+            right_prompt: DefaultPromptSegment::CurrentDateTime,
+        };
+
+        loop {
+            let out = line_editor.read_line(&prompt).unwrap();
+            match out {
+                Signal::Success(content) => {
+                    // process content
+                    println!("GOT <{}>", content);
+
+                    let mut arg_iterator = content.split_whitespace();
+                    if let Some(command) = arg_iterator.next() {
+                        match command {
+                            "quit" => break,
+                            "help" => {
+                                if let Some(param) = arg_iterator.next() {
+                                    if let Some(cmd) = command_map.get(param) {
+                                        println!("{}", cmd.help);
                                     }
                                     else {
-                                        self.exec_repl_command(&command, arg_iterator).await
-                                    };
-                                    if let Err(error) = result {
-                                        println!("{}", error);
+                                        println!("Unrecognized command '{}'", param);
                                     }
                                 }
-                            }
+                                else {
+                                    for (name, command) in &command_map {
+                                        println!("{:l$} {}", name, command.description, l = max_command_len);
+                                    }
+                                }
+                            },
+                            _ => {
 
+                                let result = if let Some(module_id) = &self.current_module {
+                                    let module: &mut Box<dyn Module> = self.modules.get_mut(module_id).unwrap();
+                                    module.exec_repl_command(&command, arg_iterator).await
+                                }
+                                else {
+                                    self.exec_repl_command(&command, arg_iterator).await
+                                };
+                                if let Err(error) = result {
+                                    println!("{}", error);
+                                }
+                            }
                         }
-                    }
-                    Signal::CtrlD => break,
-                    _ => {
-                        eprintln!("Entry aborted!");
 
                     }
                 }
+                Signal::CtrlD => break,
+                _ => {
+                    eprintln!("Entry aborted!");
+
+                }
             }
-
-            Ok(())
         }
-    
-    // async fn zzrepl(&mut self) -> Result<(), crate::Error> {
-    //     // let exec = self.exec_repl_command;
 
-    //     // Self::zzdo_repl(self.get_repl_commands(), |command| self.exec_repl_command(command), "Marco Sparko".to_string()).await
-
-        
-    //     // Self::do_repl(self, "Marco Sparko".to_string()).await
-
-    //     if let Some(module_id) = &self.current_module {
-    //         let module: &mut Box<dyn Module> = self.modules.get_mut(module_id).unwrap();
-    //         Self::do_repl(module, module_id.clone()).await
-    //     }
-    //     else {
-    //         Self::do_repl(Box::new(self), "Marco Sparko".to_string()).await
-    //         // Err(Error::InternalError(format!("No current module")))
-    //     }
-    // }
-
-
-    
-    // // async fn zzdo_repl(get_repl_commands: impl Future<Output = Vec<ReplCommand>>, exec_repl_command: impl FnMut(&str) -> impl Future<Output = Result<(), Error>>, command: String) -> Result<(), Error> {
-    // //     todo!()
-    // // }
-
-    // // async fn do_repl(command_provider: &mut dyn CommandProvider, module_id: String) -> Result<(), crate::Error> {
-    // async fn do_repl(command_provider: &mut Box<dyn Module>, module_id: String) -> Result<(), crate::Error> {
-    //     // self.do_repl().await?;
-
-    //     let mut line_editor = Reedline::create();
-    //     let prompt = //SparkoPrompt::new(); //DefaultPrompt::default();
-    //     DefaultPrompt {
-    //         left_prompt: DefaultPromptSegment::Basic(module_id),
-    //         right_prompt: DefaultPromptSegment::CurrentDateTime,
-    //     };
-
-    //     loop {
-    //         let out = line_editor.read_line(&prompt).unwrap();
-    //         match out {
-    //             Signal::Success(content) => {
-    //                 // process content
-    //                 println!("GOT <{}>", content)
-    //             }
-    //             Signal::CtrlD => break,
-    //             _ => {
-    //                 eprintln!("Entry aborted!");
-
-    //             }
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
-
-    // async fn hello<T>(args: ArgMatches, _context: &mut T) -> reedline_repl_rs::Result<Option<String>> {
-    //     Ok(Some(format!(
-    //         "Hello, {}",
-    //         args.get_one::<String>("who").unwrap()
-    //     )))
-    // }
-    
-    // /// Called after successful command execution, updates prompt with returned Option
-    // async fn update_prompt<T>(_context: &mut T) -> reedline_repl_rs::Result<Option<String>> {
-    //     Ok(Some("updated".to_string()))
-    // }
-
-    // async fn do_repl(&mut self) -> reedline_repl_rs::Result<()> {
-
-    //     use reedline_repl_rs::clap::{Arg, ArgMatches, Command};
-    //     use reedline_repl_rs::{Repl, Result};
-
-    //     let mut repl = Repl::new(())
-    //         .with_name("MyApp")
-    //         .with_version("v0.1.0")
-    //         .with_command_async(
-    //             Command::new("hello")
-    //                 .arg(Arg::new("who").required(true))
-    //                 .about("Greetings!"),
-    //             |args, context| Box::pin(Self::hello(args, context)),
-    //         )
-    //         .with_on_after_command_async(|context| Box::pin(Self::update_prompt(context)));
-    //     repl.run_async().await
-
-    //     // // let marko_sparko = RefCell::new(self);
-    //     // // let self1 = &marko_sparko;
-    //     // // let self2 = &marko_sparko;
-    
-    //     // let mut repl = easy_repl::Repl::builder()
-    //     //     .add("list", command! {
-    //     //         "List modules or profiles",
-    //     //         (target: String) => |target: String| {
-    //     //             let this = self1.borrow();
-    //     //             println!("List {}!", target);
-
-    //     //             match target.as_ref() {
-    //     //                 "modules" => {
-    //     //                     for reg in &this.module_registrations {
-    //     //                         let status = if let Some(_module) = this.modules.get(reg.0) {
-    //     //                             "Active"
-    //     //                         }
-    //     //                         else {
-    //     //                             "Uninitialized"
-    //     //                         };
-    //     //                         println!("{} [{}]", reg.0, status);
-    //     //                     }
-    //     //                 },
-    //     //                 "profiles" => {
-    //     //                     for profile in &this.context.before_profiles {
-    //     //                         println!("{}", profile.name);
-    //     //                     }
-    //     //                     println!("{} [Active]", &this.context.active_profile.name);
-
-    //     //                     for profile in &this.context.after_profiles {
-    //     //                         println!("{}", profile.name);
-    //     //                     }
-    //     //                 },
-    //     //                 _ => {
-    //     //                     println!("ERROR: usage: list modules|profiles");
-    //     //                 },
-    //     //             };
-
-    //     //             Ok(CommandStatus::Done)
-    //     //         }
-    //     //     })
-    //     //     .add("init", command! {
-    //     //         "initialize a module",
-    //     //         (module_name: String) => |module_name: String| {
-    //     //             let mut this = self2.borrow_mut();
-    //     //             println!("Initialize {}!", module_name);
-
-    //     //             if let Some(_) = &this.modules.get(&module_name) {
-    //     //                 println!("ERROR: module {} is already active", module_name);
-    //     //             }
-    //     //             else {
-    //     //                 if let Err(error) = &this.initialize(module_name, true).await {
-    //     //                     println!("ERROR {}", error);
-    //     //                 }
-    //     //             }
-
-    //     //             Ok(CommandStatus::Done)
-    //     //         }
-    //     //     })
-    //     //     .add("add", command! {
-    //     //         "Add X to Y",
-    //     //         (X:i32, Y:i32) => |x, y| {
-    //     //             println!("{} + {} = {}", x, y, x + y);
-    //     //             Ok(CommandStatus::Done)
-    //     //         }
-    //     //     })
-    //     //     .build().context("Failed to create repl")?;
-    
-    //     // repl.run().context("Critical REPL error")?;
-    
-    //     // Ok(())
-    // }
-
-    // async fn do_repl(&mut self) -> easy_repl::anyhow::Result<()> {
-
-    //     use easy_repl::command;
-    //     use easy_repl::{anyhow::Context, CommandStatus};
-
-    //     let marko_sparko = RefCell::new(self);
-    //     let self1 = &marko_sparko;
-    //     let self2 = &marko_sparko;
-    
-    //     let mut repl = easy_repl::Repl::builder()
-    //         .add("list", command! {
-    //             "List modules or profiles",
-    //             (target: String) => |target: String| {
-    //                 let this = self1.borrow();
-    //                 println!("List {}!", target);
-
-    //                 match target.as_ref() {
-    //                     "modules" => {
-    //                         for reg in &this.module_registrations {
-    //                             let status = if let Some(_module) = this.modules.get(reg.0) {
-    //                                 "Active"
-    //                             }
-    //                             else {
-    //                                 "Uninitialized"
-    //                             };
-    //                             println!("{} [{}]", reg.0, status);
-    //                         }
-    //                     },
-    //                     "profiles" => {
-    //                         for profile in &this.context.before_profiles {
-    //                             println!("{}", profile.name);
-    //                         }
-    //                         println!("{} [Active]", &this.context.active_profile.name);
-
-    //                         for profile in &this.context.after_profiles {
-    //                             println!("{}", profile.name);
-    //                         }
-    //                     },
-    //                     _ => {
-    //                         println!("ERROR: usage: list modules|profiles");
-    //                     },
-    //                 };
-
-    //                 Ok(CommandStatus::Done)
-    //             }
-    //         })
-    //         .add("init", command! {
-    //             "initialize a module",
-    //             (module_name: String) => |module_name: String| {
-    //                 let mut this = self2.borrow_mut();
-    //                 println!("Initialize {}!", module_name);
-
-    //                 if let Some(_) = &this.modules.get(&module_name) {
-    //                     println!("ERROR: module {} is already active", module_name);
-    //                 }
-    //                 else {
-    //                     if let Err(error) = &this.initialize(module_name, true).await {
-    //                         println!("ERROR {}", error);
-    //                     }
-    //                 }
-
-    //                 Ok(CommandStatus::Done)
-    //             }
-    //         })
-    //         .add("add", command! {
-    //             "Add X to Y",
-    //             (X:i32, Y:i32) => |x, y| {
-    //                 println!("{} + {} = {}", x, y, x + y);
-    //                 Ok(CommandStatus::Done)
-    //             }
-    //         })
-    //         .build().context("Failed to create repl")?;
-    
-    //     repl.run().context("Critical REPL error")?;
-    
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     async fn summary(&mut self) -> Result<(), Error> {
         for (_module_id, module) in self.modules.iter_mut() {
@@ -939,32 +724,6 @@ impl MarcoSparko {
 
         Ok(())
     }
-
-    // fn init_module_repl<T: Module + ?Sized>(&mut self, module_id: &str, module_box: Box<T>, repl_commands: Vec<ReplCommand>) {
-
-
-    //     use reedline_repl_rs::clap::{Arg, ArgMatches, Command};
-    //     use reedline_repl_rs::{Repl, Result};
-
-    //     // let module = *module_box;
-    //     let mut repl = Repl::new(module_box)
-    //         .with_name(&module_id)
-    //         .with_version("v0.1.0");
-
-    //     for repl_command in repl_commands {
-    //         repl = repl.with_command_async(
-    //             Command::new(repl_command.command)
-    //                 // .arg(Arg::new("who").required(true))
-    //                 .about(repl_command.description),
-    //             |args, context| Box::pin(
-    //                 context.exec_repl_command("repl_command.command")
-    //                 // Self::hello(args, context)
-    //             ),
-    //         )
-    //     }
-    //         // .with_on_after_command_async(|context| Box::pin(Self::update_prompt(context)));
-    //     // repl.run_async().await
-    // }
     
     async fn initialize(&mut self, module_id: String, init: bool) -> Result<(), Error> {
         if let Some(module_registration) = self.module_registrations.get(&module_id) {
@@ -976,23 +735,11 @@ impl MarcoSparko {
                 None
             };
             let builder = constructor(self.context.clone(), profile)?;
-            // let x = builder.build(init);
-            // let modules = &mut self.modules;
             let module = builder.build(init).await?;
-            // self.init_module_repl(&module_id, module, module.get_repl_commands().await);
             self.modules.insert(module_id.clone(),module);
-
-            // let r: Vec<ReplCommand> = module.get_repl_commands().await;
-
-        
-
-
 
             if self.current_module.is_none() {
                 self.current_module = Some(module_id.clone());
-
-                // let m = modules.get_mut(&module_id).unwrap();
-                // m.exec_repl_command("list").await?;
             }
             
             
@@ -1069,293 +816,6 @@ impl CacheManager {
             },
         }
 
-        // for (key, value) in map {
-        //     writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
-        //     println!("WRITE {}", key);
-        // }
-
         Ok(())
     }
 }
-
-// #[derive(Clone)]
-// pub struct Context {
-//     marco_sparko: Arc<ContextImpl>,
-// }
-
-// impl Context {
-//     fn new(marco_sparko: Arc<ContextImpl>) -> Context {
-//         Context {
-//             marco_sparko
-//         }
-//     }
-
-//     // pub fn new_test() -> Context {
-//     //     Context {
-//     //         marco_sparko: Arc::new(ContextImpl::new(None))
-//     //     }
-//     // }
-
-//     pub fn args(&self) -> &Option<Args> {
-//         &self.marco_sparko.args
-//     }
-
-//     pub fn get_active_profile(&self) -> &Option<Profile> {
-//         self.marco_sparko.get_active_profile()
-//     }
-
-//     pub fn update_cache<T>(&self, module_id: &str, profile: &T) -> Result<(), Error>
-//     where
-//         T: Serialize
-//      {
-//         let path = self.marco_sparko.get_cache_file_path(module_id)?;
-
-//         serde_json::to_writer_pretty(fs::File::create(path)?, &profile)?;
-            
-
-//         Ok(())
-//      }
-
-
-
-//     pub fn read_cache<T>(&self, module_id: &str) -> Option<T>
-//     where
-//         T: DeserializeOwned
-//      {
-//         if let Ok(path) = self.marco_sparko.get_cache_file_path(module_id) {
-//             if let Ok(reader) = fs::File::open(path) {
-//                 if let Ok(result) = serde_json::from_reader(reader) {
-//                     return Some(result)
-//                 }
-//             }
-//         }
-//         return None
-//     }
-
-//     //     let path = ContextImpl::get_cache_file_path(module_id).unwrap();
-//     //     let reader = fs::File::open(path).unwrap();
-//     //     let result = serde_json::from_reader(reader).unwrap();
-        
-//     //                 return Some(result)
-//     // }
-       
-
-//      pub fn update_profile<T>(&mut self, module_id: &str, profile: T) -> Result<(), Error>
-//      where
-//          T: Serialize
-//       {
-//          let mutex = self.marco_sparko.updated_profile.lock()?;
-//          let mut updated_profile = mutex;
- 
-//          updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
-//          Ok(())
-//       }
-      
-//     fn create_cache_manager(&self, module_id: &str) -> Result<CacheManager, Error> {
-//         let dir_path = self.marco_sparko.get_cache_data_dir_path(module_id)?;
-//         fs::create_dir_all(&dir_path)?;
-
-//         Ok(CacheManager {
-//             dir_path,
-//         })
-//     }
-
-//     fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
-//         let profile_name = if let Some(active_profile) = &self.active_profile {
-//             &active_profile.name
-//         }
-//         else {
-//             return Err(Error::InternalError("No Active Profile".to_string()))
-//         };
-
-//         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
-//         path.push(".marco-sparko-cache");
-//         path.push(format!("{}-{}", profile_name, module_id));
-
-//         println!("Path is {:?}", &path);
-//         Ok(path)
-//     }
-// }
-
-// #[derive(Debug)]
-// struct ContextImpl {
-//     pub args: Option<Args>,
-//     before_profiles: Vec<Profile>,
-//     active_profile: Option<Profile>,
-//     after_profiles: Vec<Profile>,
-//     updated_profile: Mutex<Profile>,
-// }
-
-// impl ContextImpl {
-//     fn new(args: Option<Args>) -> ContextImpl {
-        
-//         ContextImpl{
-//             args,
-//             before_profiles: Vec::new(),
-//             active_profile: None,
-//             after_profiles: Vec::new(),
-//             updated_profile: Mutex::new(Profile {
-//                 name: DEFAULT_PROFILE.to_string(),
-//                 modules: ModuleProfiles::new()
-//             })
-//         }
-//     }
-
-//     fn get_active_profile(&self) -> &Option<Profile> {
-//         &self.active_profile
-//     }
-
-//     fn get_cache_file_path(&self, module_id: &str) -> Result<PathBuf, Error> {
-//         let profile_name = if let Some(active_profile) = &self.active_profile {
-//             &active_profile.name
-//         }
-//         else {
-//             return Err(Error::InternalError("No Active Profile".to_string()))
-//         };
-
-//         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
-//         path.push(".marco-sparko-cache");
-//         path.push(format!("{}-{}.json", profile_name, module_id));
-
-//         println!("Path is {:?}", &path);
-//                 Ok(path)
-//      }
-
-//      fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
-//         let profile_name = if let Some(active_profile) = &self.active_profile {
-//             &active_profile.name
-//         }
-//         else {
-//             return Err(Error::InternalError("No Active Profile".to_string()))
-//         };
-
-//         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
-//         path.push(".marco-sparko-cache");
-//         path.push(format!("{}-{}", profile_name, module_id));
-
-//         println!("Path is {:?}", &path);
-//         Ok(path)
-//       }
-
-//     fn get_file_path() -> Result<PathBuf, Error> {
-//         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
-
-//         path.push(".marco-sparko");
-
-//         println!("Path is <{:?}>", path.to_str());
-//         Ok(path)
-//     }
-
-//     fn save_updated_profile(&self) -> Result<(), Error> {
-//         let updated_profile = self.updated_profile.lock()?;
-
-//         if updated_profile.modules.is_empty() {
-//             Ok(())
-//         }
-//         else {
-
-//             let mut profiles = Vec::new();
-            
-//             profiles.extend(&self.before_profiles);
-//             profiles.push(&updated_profile);
-//             profiles.extend(&self.after_profiles);
-            
-//             serde_json::to_writer_pretty(fs::File::create(ContextImpl::get_file_path()?)?, &profiles)?;
-            
-//             return Ok(())
-//         }
-//     }
-
-//     fn load_cli() -> Result<ContextImpl, Error> {
-//         Ok(ContextImpl::do_load(Some(Args::parse()))?)
-//     }
-
-
-//     // pub fn get_args(&self) -> Result<&Option<Args>, Error> {
-//     //     Ok(&self.args)
-//     // }
-
-//     fn remove_active_profile(args: &Option<Args>, mut profiles: Vec<Profile>) -> 
-//         Result<(Vec<Profile>, Option<Profile>, Vec<Profile>), Error> {
-        
-        
-//         if let Some(args) = args {
-//             if let Some(profile_name) = &args.profile {
-//                 let mut active_profile = None;
-//                 let mut before_profiles = Vec::new();
-//                 let mut after_profiles = Vec::new();
-//                 let mut after = false;
-                
-                
-//                 for profile in profiles {
-//                     if profile.name.eq(profile_name) {
-//                         active_profile = Some(profile);
-//                         after = true;
-//                     }
-//                     else {
-//                         if after {
-//                             after_profiles.push(profile);
-//                         }
-//                         else {
-//                             before_profiles.push(profile);
-//                         }
-//                     }
-//                 }
-
-//                 if let None = active_profile {
-//                     return Result::Err(Error::UserError(format!("No profile called {}", profile_name)))
-//                 }
-//                 return Ok((before_profiles, active_profile, after_profiles))
-//             }
-//         }
-
-//         if profiles.is_empty() {
-//             Ok((Vec::new(), None, profiles))
-//         }
-//         else {
-//             Ok((Vec::new(), Some(profiles.remove(0)), profiles))
-//         }
-//     }
-
-
-//     pub fn load() -> Result<ContextImpl, Error> {
-//         ContextImpl::do_load(None)
-//     }
-
-
-//     fn do_load(args: Option<Args>) -> Result<ContextImpl, Error> {
-
-//         if let Ok(file)= fs::File::open(ContextImpl::get_file_path()?) {
-//             let profiles: Vec<Profile> = serde_json::from_reader(file)?;
-            
-//             let (before_profiles, active_profile, after_profiles) = ContextImpl::remove_active_profile(&args, profiles)?;
-
-//             let profile_name = if let Some(existing_profile) = &active_profile {
-//                 existing_profile.name.clone()
-//             }
-//             else {
-//                 DEFAULT_PROFILE.to_string()
-//             };
-
-//             return Ok(ContextImpl {
-//                 args, 
-//                 before_profiles,
-//                 active_profile,
-//                 after_profiles,
-//                 updated_profile: Mutex::new(Profile {
-//                     name: profile_name,
-//                     modules: ModuleProfiles::new()
-//                 })
-//              })
-//         }
-//         else {
-//             Ok(ContextImpl::new(args))
-//         }
-
-//     }
-// }
-
-// // pub trait Token {
-// //     fn fetch(&self) -> Arc<String>;
-// //     fn has_expired(&self) -> bool;
-// // }

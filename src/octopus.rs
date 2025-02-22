@@ -3,7 +3,7 @@ pub mod token;
 pub mod decimal;
 mod bill;
 
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 use async_trait::async_trait;
 
 use graphql::summary::get_account_summary::AccountUserType;
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 pub use error::Error;
 use sparko_graphql::types::{Date, DateTime};
 use token::{OctopusTokenManager, TokenManagerBuilder};
-use clap::{ArgMatches, Parser};
+use clap::Parser;
 
 use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
@@ -46,35 +46,6 @@ impl Profile {
     }
 }
 
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// struct Location {
-// line: i32,
-// column: i32,
-// }
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// struct ValidationError {
-//     message: String,
-//     input_path: Vec<String>
-// }
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// struct Extensions {
-// error_type: String,
-// error_code: String,
-// error_description: String,
-// error_class: String,
-// validation_errors: Vec<ValidationError>
-// }
-
-
-
-//  self.config.get_active_profile()?.modules.octopus.clone()
-// #[derive(Debug)]
 pub struct Client{
     context: Arc<MarcoSparkoContext>, 
     profile: Option<Profile>,
@@ -668,7 +639,7 @@ impl CommandProvider for Client {
         }
     }
 
-    async fn get_repl_commands(&mut self) -> Vec<ReplCommand> {
+    fn get_repl_commands(&self) -> Vec<ReplCommand> {
         vec!(
             ReplCommand {
                 command:"list",
