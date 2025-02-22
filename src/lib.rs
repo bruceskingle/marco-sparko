@@ -252,7 +252,11 @@ impl MarcoSparkoContext {
             }
 
             if let None = active_profile {
-                return Result::Err(Error::UserError(format!("No profile called {}", profile_name)))
+                active_profile = Some(Profile {
+                    name: profile_name.clone(),
+                    modules: ModuleProfiles::new()
+                });
+                // return Result::Err(Error::UserError(format!("No profile called {}", profile_name)))
             }
             return Ok((before_profiles, active_profile, after_profiles))
         }
@@ -289,8 +293,6 @@ impl MarcoSparkoContext {
         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
 
         path.push(".marco-sparko");
-
-        println!("Path is <{:?}>", path.to_str());
         Ok(path)
     }
 
@@ -299,8 +301,6 @@ impl MarcoSparkoContext {
         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}.json", profile_name, module_id));
-
-        println!("Path is {:?}", &path);
                 Ok(path)
     }
 
@@ -314,9 +314,6 @@ impl MarcoSparkoContext {
         else {
             path.push(format!("{}-history.txt", profile_name));
         }
-        
-
-        println!("Path is {:?}", &path);
                 Ok(path)
     }
 
@@ -326,8 +323,6 @@ impl MarcoSparkoContext {
         let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}", profile_name, module_id));
-
-        println!("Path is {:?}", &path);
         Ok(path)
     }
       
@@ -389,9 +384,8 @@ impl MarcoSparko {
 
     async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
         match command {
-            "list" => {
-                self.list_handler(args).await
-            },
+            "list" => self.list_handler(args).await,
+            "init" => self.init_handler(args).await,
             _ => Err(Error::UserError(format!("Invalid command '{}'", command)))
         }
     }
@@ -408,6 +402,16 @@ usage: list modules|profiles
 "modules" lists all known modules and whether they are activated.
 "profiles" lists all known profiles (run configurations) and indicates the active one.
 "#,
+            },
+            ReplCommand {
+                command:"init",
+                description: "Initialize a module",
+                help:
+r#"
+usage: init module_id
+
+Initialize (activate) the given module.
+"#,
             }
         )
     }
@@ -421,6 +425,27 @@ usage: list modules|profiles
             },
 
             ReplCommand {
+                command:"home",
+                description: "Return to the main command context (outside any module)",
+                help: 
+r#"
+usage: home
+
+The main command context allows you to manage modules and the application as a whole. Each module has its own command context 
+which provides access to the features of that module.
+"#,
+            },
+            ReplCommand {
+                command:"module",
+                description: "Switch to the command context of an active module",
+                help:
+r#"
+usage: module module_id
+
+Switch to the command context of the given active module. To activate an inactive module use the init command.
+"#,
+            },
+            ReplCommand {
                 command:"help",
                 description: "Print this message (try \"help help\" for more detail).",
                 help: 
@@ -432,6 +457,36 @@ prints more detailed help on that specific command.
 "#,
             }
         )
+    }
+
+    pub async fn init_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) -> Result<(), Error> {
+        if let Some(module_id) = args.next() {
+            if let Some(module_registration) = self.module_registrations.get(module_id) {
+                if self.modules.contains_key(module_id) {
+                    println!("ERROR: module '{}' is already active", module_id); 
+                }
+                else {
+                    let constructor = module_registration.as_ref();
+                    let profile = if let Some(value) = self.context.active_profile.modules.get(module_id) {
+                        Some(value.clone())
+                    }
+                    else {
+                        None
+                    };
+                    let builder = constructor(self.context.clone(), profile)?;
+                    let module = builder.build(true).await?;
+                    self.modules.insert(module_id.to_string(),module);
+
+                    if self.current_module.is_none() {
+                        self.current_module = Some(module_id.to_string());
+                    }
+                }
+            }
+            else {
+                println!("ERROR: unknown module '{}'", module_id); 
+            }
+        }
+        Ok(())
     }
 
     pub async fn list_handler(&self, mut args: std::str::SplitWhitespace<'_>) -> Result<(), Error> {
@@ -471,27 +526,40 @@ prints more detailed help on that specific command.
         Ok(())
     }
 
-    pub async fn new() -> Result<MarcoSparko, Error> {
+pub async fn new() -> Result<MarcoSparko, Error> {
 
-        let mut marco_sparko_manager = MarcoSparko {
-            context: MarcoSparkoContext::new()?,
-            module_registrations: HashMap::new(),
-            modules: HashMap::new(),
-            current_module: None,
-       };
+    let mut marco_sparko_manager = MarcoSparko {
+        context: MarcoSparkoContext::new()?,
+        module_registrations: HashMap::new(),
+        modules: HashMap::new(),
+        current_module: None,
+    };
 
     //    let active_profile = marco_sparko_manager.marco_sparko.get_active_profile();
 
-       let init = marco_sparko_manager.context.args.init;
+    let init = marco_sparko_manager.context.args.init;
 
-       marco_sparko_manager.load_modules();
+    marco_sparko_manager.load_modules();
 
-       for module_id in  marco_sparko_manager.get_module_list() {
-            marco_sparko_manager.initialize(module_id, init).await?;
-       }
+    let list = marco_sparko_manager.get_module_list();
 
-       Ok(marco_sparko_manager)
+    if list.is_empty() {
+        let mut keys = Vec::new();
+        for module_id in marco_sparko_manager.context.active_profile.modules.keys() {
+            keys.push(module_id.to_string());
+        }
+        for module_id in &keys {
+            marco_sparko_manager.initialize(module_id, false).await?;
+        }
     }
+    else {
+        for module_id in &list {
+            marco_sparko_manager.initialize(module_id, init).await?;
+        }
+    }
+
+    Ok(marco_sparko_manager)
+}
 
     fn get_module_list(&self) -> Vec<String> {
         self.context.args.modules.clone()
@@ -553,144 +621,174 @@ prints more detailed help on that specific command.
 
     async fn repl(&mut self) -> Result<(), crate::Error> {
         let marco_sparko_prompt = "Marco Sparko".to_string();
-        let (module_id, commands) = if let Some(module_id) = &self.current_module {
-            let commands = if let Some(module) = self.modules.get(module_id) {
-                module.get_repl_commands()
-            }
-            else {
-                Vec::new()
-            };
-            (module_id, commands)
-        }
-        else {
-            (&marco_sparko_prompt, self.get_repl_commands())
-        };
 
-        let mut command_map = BTreeMap::new();
-        let mut command_list = Vec::new();
-        let mut max_command_len = 0;
+        
 
-        for cmd in commands {
-            if cmd.command.len() > max_command_len {
-                max_command_len = cmd.command.len();
-            }
-            command_list.push(cmd.command.to_string());
-            command_map.insert(cmd.command, cmd);
-        }
-
-        for cmd in self.get_global_repl_commands() {
-            if cmd.command.len() > max_command_len {
-                max_command_len = cmd.command.len();
-            }
-            command_list.push(cmd.command.to_string());
-            command_map.insert(cmd.command, cmd);
-        }
-
-        let validator = Box::new(DefaultValidator);
-
-        // command_list.push("lime".into());
-        // command_list.push("limit".into());
-        // command_list.push("limitation".into());
-        // command_list.push("limeted".into());
-
-        println!("command_list ={:?}", &command_list);
-
-
-        let completer = Box::new(DefaultCompleter::new_with_wordlen(command_list.clone(), 2));
-
-        // let completer = Box::new(completer::ReplCompleter::new(command_list.clone()));
-
-
-        // Use the interactive menu to select options from the completer
-        let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
-        // Set up the required keybindings
-        let mut keybindings = default_emacs_keybindings();
-        keybindings.add_binding(
-            KeyModifiers::NONE,
-            KeyCode::Tab,
-            ReedlineEvent::Menu("completion_menu".to_string()),
-            // ReedlineEvent::UntilFound(vec![
-            //     ReedlineEvent::Menu("completion_menu".to_string()),
-            //     ReedlineEvent::MenuNext,
-            // ]),
-        );
-
-        let edit_mode = Box::new(Emacs::new(keybindings));
-
-        let history = Box::new(
-            FileBackedHistory::with_file(50, self.context.get_history_file_path(&self.current_module)?)
-                .expect("Error configuring history with file"),
-            );
-
-        let mut line_editor = //Reedline::create();
-            Reedline::create()
-                .with_hinter(Box::new(
-                    DefaultHinter::default()
-                        .with_style(Style::new().italic().fg(Color::LightGray)),
-            )).with_validator(validator)
-
-            .with_highlighter(Box::new(ExampleHighlighter::new(command_list.clone())))
-            .with_completer(completer)
-            .with_partial_completions(true)
-            .with_quick_completions(true)
-            .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
-            .with_edit_mode(edit_mode)
-            .with_history(history)
-            ;
-
-        let prompt = //SparkoPrompt::new(); //DefaultPrompt::default();
-        DefaultPrompt {
-            left_prompt: DefaultPromptSegment::Basic(module_id.clone()),
-            right_prompt: DefaultPromptSegment::CurrentDateTime,
-        };
+        
 
         loop {
-            let out = line_editor.read_line(&prompt).unwrap();
-            match out {
-                Signal::Success(content) => {
-                    // process content
-                    println!("GOT <{}>", content);
+            let (module_id, commands) = if let Some(module_id) = &self.current_module {
+                let commands = if let Some(module) = self.modules.get(module_id) {
+                    module.get_repl_commands()
+                }
+                else {
+                    Vec::new()
+                };
+                (&module_id.clone(), commands)
+            }
+            else {
+                (&marco_sparko_prompt, self.get_repl_commands())
+            };
 
-                    let mut arg_iterator = content.split_whitespace();
-                    if let Some(command) = arg_iterator.next() {
-                        match command {
-                            "quit" => break,
-                            "help" => {
-                                if let Some(param) = arg_iterator.next() {
-                                    if let Some(cmd) = command_map.get(param) {
-                                        println!("{}", cmd.help);
+            let mut command_map = BTreeMap::new();
+            let mut command_list = Vec::new();
+            let mut max_command_len = 0;
+
+            for cmd in commands {
+                if cmd.command.len() > max_command_len {
+                    max_command_len = cmd.command.len();
+                }
+                command_list.push(cmd.command.to_string());
+                command_map.insert(cmd.command, cmd);
+            }
+
+            for cmd in self.get_global_repl_commands() {
+                if cmd.command.len() > max_command_len {
+                    max_command_len = cmd.command.len();
+                }
+                command_list.push(cmd.command.to_string());
+                command_map.insert(cmd.command, cmd);
+            }
+
+
+            let completer = Box::new(DefaultCompleter::new_with_wordlen(command_list.clone(), 2));
+
+            // let completer = Box::new(completer::ReplCompleter::new(command_list.clone()));
+
+            let validator = Box::new(DefaultValidator);
+            // Use the interactive menu to select options from the completer
+            let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
+            // Set up the required keybindings
+            let mut keybindings = default_emacs_keybindings();
+            keybindings.add_binding(
+                KeyModifiers::NONE,
+                KeyCode::Tab,
+                ReedlineEvent::Menu("completion_menu".to_string()),
+                // ReedlineEvent::UntilFound(vec![
+                //     ReedlineEvent::Menu("completion_menu".to_string()),
+                //     ReedlineEvent::MenuNext,
+                // ]),
+            );
+            
+            let edit_mode = Box::new(Emacs::new(keybindings));
+            let history = Box::new(
+                FileBackedHistory::with_file(50, self.context.get_history_file_path(&self.current_module)?)
+                    .expect("Error configuring history with file"),
+                );
+
+            let mut line_editor = //Reedline::create();
+                Reedline::create()
+                    .with_hinter(Box::new(
+                        DefaultHinter::default()
+                            .with_style(Style::new().italic().fg(Color::LightGray)),
+                )).with_validator(validator)
+
+                .with_highlighter(Box::new(ExampleHighlighter::new(command_list.clone())))
+                .with_completer(completer)
+                .with_partial_completions(true)
+                .with_quick_completions(true)
+                .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+                .with_edit_mode(edit_mode)
+                .with_history(history)
+                ;
+
+            let prompt = //SparkoPrompt::new(); //DefaultPrompt::default();
+            DefaultPrompt {
+                left_prompt: DefaultPromptSegment::Basic(module_id.clone()),
+                right_prompt: DefaultPromptSegment::CurrentDateTime,
+            };
+
+            loop {
+                let out = line_editor.read_line(&prompt).unwrap();
+                match out {
+                    Signal::Success(content) => {
+
+                        let mut arg_iterator = content.split_whitespace();
+                        if let Some(command) = arg_iterator.next() {
+                            match command {
+                                "quit" => return Ok(()),
+                                "home" => {
+                                    if self.current_module.is_none() {
+                                        println!("You are already in the main command context.")
                                     }
                                     else {
-                                        println!("Unrecognized command '{}'", param);
+                                        self.current_module = None;
+                                        break;
                                     }
-                                }
-                                else {
-                                    for (name, command) in &command_map {
-                                        println!("{:l$} {}", name, command.description, l = max_command_len);
+                                },
+                                "module" => {
+                                    if let Some(new_module) = arg_iterator.next() {
+                                        if let Some(module_id) = &self.current_module {
+                                            if module_id == new_module {
+                                                println!("You are already in the '{}' command context.", new_module);
+                                                continue;
+                                            }
+                                        }
+                                        if self.module_registrations.contains_key(new_module) {
+                                            if self.modules.contains_key(new_module) {
+                                                self.current_module = Some(new_module.to_string());
+                                                break;
+                                            }
+                                            else {
+                                                println!("Module '{}' is inactive", new_module);
+                                            }
+                                        }
+                                        else {
+                                            println!("Unknown module '{}'", new_module);
+                                        }
+                                        break;
                                     }
-                                }
-                            },
-                            _ => {
+                                    else {
+                                        println!("usage: module module_id");
+                                    }
+                                },
+                                "help" => {
+                                    if let Some(param) = arg_iterator.next() {
+                                        if let Some(cmd) = command_map.get(param) {
+                                            println!("{}", cmd.help);
+                                        }
+                                        else {
+                                            println!("Unrecognized command '{}'", param);
+                                        }
+                                    }
+                                    else {
+                                        for (name, command) in &command_map {
+                                            println!("{:l$} {}", name, command.description, l = max_command_len);
+                                        }
+                                    }
+                                },
+                                _ => {
 
-                                let result = if let Some(module_id) = &self.current_module {
-                                    let module: &mut Box<dyn Module> = self.modules.get_mut(module_id).unwrap();
-                                    module.exec_repl_command(&command, arg_iterator).await
-                                }
-                                else {
-                                    self.exec_repl_command(&command, arg_iterator).await
-                                };
-                                if let Err(error) = result {
-                                    println!("{}", error);
+                                    let result = if let Some(module_id) = &self.current_module {
+                                        let module: &mut Box<dyn Module> = self.modules.get_mut(module_id).unwrap();
+                                        module.exec_repl_command(&command, arg_iterator).await
+                                    }
+                                    else {
+                                        self.exec_repl_command(&command, arg_iterator).await
+                                    };
+                                    if let Err(error) = result {
+                                        println!("{}", error);
+                                    }
                                 }
                             }
+
                         }
+                    }
+                    Signal::CtrlD => return Ok(()),
+                    _ => {
+                        eprintln!("Entry aborted!");
 
                     }
-                }
-                Signal::CtrlD => break,
-                _ => {
-                    eprintln!("Entry aborted!");
-
                 }
             }
         }
@@ -725,10 +823,10 @@ prints more detailed help on that specific command.
         Ok(())
     }
     
-    async fn initialize(&mut self, module_id: String, init: bool) -> Result<(), Error> {
-        if let Some(module_registration) = self.module_registrations.get(&module_id) {
+    async fn initialize(&mut self, module_id: &String, init: bool) -> Result<(), Error> {
+        if let Some(module_registration) = self.module_registrations.get(module_id) {
             let constructor = module_registration.as_ref();
-            let profile = if let Some(value) = self.context.active_profile.modules.get(&module_id) {
+            let profile = if let Some(value) = self.context.active_profile.modules.get(module_id) {
                 Some(value.clone())
             }
             else {
