@@ -328,13 +328,13 @@ impl MarcoSparkoContext {
         Ok(path)
     }
       
-    fn create_cache_manager(&self, module_id: &str) -> Result<CacheManager, Error> {
+    fn create_cache_manager(&self, module_id: &str) -> Result<Arc<CacheManager>, Error> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         fs::create_dir_all(&dir_path)?;
 
-        Ok(CacheManager {
+        Ok(Arc::new(CacheManager {
             dir_path,
-        })
+        }))
     }
     
     pub fn update_profile<T>(&self, module_id: &str, profile: T) -> Result<(), Error>

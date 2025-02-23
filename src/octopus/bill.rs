@@ -3,31 +3,77 @@ use std::sync::Arc;
 use sparko_graphql::AuthenticatedRequestManager;
 
 use crate::octopus::decimal::Decimal;
-use crate::octopus::graphql::bill::get_statement_transactions::TransactionType;
 use crate::util::as_decimal;
 use crate::CacheManager;
 
-use super::graphql::bill::get_bills::BillInterface;
+use super::graphql::bill;
+use bill::get_bills::BillInterface;
+use bill::get_statement_transactions::TransactionType;
 use super::graphql::BillTypeEnum;
 use super::RequestManager;
 use super::{token::OctopusTokenManager, Error};
 
 pub struct BillManager {
+    pub account_number: String,
+    pub cache_manager: Arc<CacheManager>,
+    pub request_manager: Arc<RequestManager>,
     pub bills: BillList,
 }
 
 impl BillManager {
-    pub async fn new(cache_manager: &CacheManager, request_manager: &RequestManager, account_number: String)  -> Result<Self, Error> {
-        let bills = BillList::new(cache_manager, request_manager, account_number).await?;
+    pub async fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String)  -> Result<Self, Error> {
+        let bills = BillList::new(cache_manager, request_manager, account_number.clone()).await?;
 
         Ok(Self {
+            account_number,
+            cache_manager: cache_manager.clone(),
+            request_manager: request_manager.clone(),
             bills,
         })
     }
 
+    pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
+        BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
+    }
 
     pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
         self.bills.print_summary_lines();
+        Ok(())
+    }
+
+
+    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
+        if let Some(bill_id) = args.next() {
+            for (_id, bill) in &self.bills.bills {
+                if bill_id == bill.as_bill_interface().id_ {
+                    let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+                        Some(self.get_statement_transactions(self.account_number.clone(), bill_id.to_string()).await?)
+                    }
+                    else {
+                        None
+                    };
+
+                    bill.print(transactions);
+                    return Ok(())
+                }
+            }
+            println!("Unknown bill '{}'", bill_id);
+        }
+        else {
+            if self.bills.bills.is_empty() {
+                println!("There are no bills in this account");
+            }
+            else {
+                let (_id, bill) = self.bills.bills.get(self.bills.bills.len() - 1).unwrap();
+                let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+                    Some(self.get_statement_transactions(self.account_number.clone(), bill.as_bill_interface().id_.to_string()).await?)
+                }
+                else {
+                    None
+                };
+                bill.print(transactions);
+            }
+        }
         Ok(())
     }
 }
@@ -122,115 +168,116 @@ impl BillInterface {
         println!();
     }
 
-    // pub fn print(&self) {
-    //     let abstract_bill = self.as_bill_interface();
+    pub fn print(&self, transactions: Option<BillTransactionList>) {
+        let abstract_bill = self.as_bill_interface();
 
-    //     println!("Energy Account Statement");
-    //     println!("========================");
-    //     println!("Date                 {}", abstract_bill.issued_date_);
-    //     println!("Ref                  {}", abstract_bill.id_);
-    //     println!("From                 {}", abstract_bill.from_date_);
-    //     println!("To                   {}", abstract_bill.to_date_);
-    //     println!();
+        println!("Energy Account Statement");
+        println!("========================");
+        println!("Date                 {}", abstract_bill.issued_date_);
+        println!("Ref                  {}", abstract_bill.id_);
+        println!("From                 {}", abstract_bill.from_date_);
+        println!("To                   {}", abstract_bill.to_date_);
+        println!();
 
-    //     if let BillInterface::StatementType(statement) = self {
-    //         print!("{:20} {:10} ", 
-    //             "Description",
-    //             "Posted"
-    //         );
-    //         print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //             "Net",
-    //             "Tax", 
-    //             "Total",
-    //             "Balance"
-    //         );
-    //         print!("{:10} {:10} {:>12} ", 
-    //             "From",
-    //             "To",
-    //             "Units"
-    //         );
-    //         print!("{:>12}", "p / unit");
-    //         println!();
+        if let Some(transactions) = transactions {
+            transactions.print();
+            // print!("{:20} {:10} ", 
+            //     "Description",
+            //     "Posted"
+            // );
+            // print!("{:>10} {:>10} {:>10} {:>10} ", 
+            //     "Net",
+            //     "Tax", 
+            //     "Total",
+            //     "Balance"
+            // );
+            // print!("{:10} {:10} {:>12} ", 
+            //     "From",
+            //     "To",
+            //     "Units"
+            // );
+            // print!("{:>12}", "p / unit");
+            // println!();
 
-    //         let mut total_electric_charge = 0;
-    //         let mut total_electric_units = Decimal::new(0, 0);
+            // let mut total_electric_charge = 0;
+            // let mut total_electric_units = Decimal::new(0, 0);
 
-    //         // for transaction in &mut map.values() {
-    //         for edge in (&statement.transactions_.edges).into_iter().rev() {
-    //             let txn = edge.node.as_transaction_type();
+            // // // for transaction in &mut map.values() {
+            // for (_hash, transaction) in transactions.transactions {
+            //     let txn = transaction.as_transaction_type();
 
-    //             if let TransactionType::Charge(charge) = &edge.node {
-    //                 if charge.is_export_ {
-    //                     print!("{} {:width$} ", txn.title_, "Export", width = 20 - txn.title_.len() - 1);
-    //                 }
-    //                 else {
-    //                         print!("{:20} ", txn.title_);
-    //                 }
-    //             }
-    //             else {
-    //                 print!("{:20} ", txn.title_);
-    //             }
-    //             print!("{:10} ", 
-    //                         txn.posted_date_
-    //                     );
-    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //                 as_decimal(txn.amounts_.net_, 2),
-    //                 as_decimal(txn.amounts_.tax_, 2), 
-    //                 as_decimal(txn.amounts_.gross_, 2),
-    //                 as_decimal(txn.balance_carried_forward_, 2)
-    //             );
-    //             if let TransactionType::Charge(charge) = &edge.node {
-    //                 if let Some(consumption) = &charge.consumption_ {
-    //                     print!("{:10} {:10} {:>12.4} ", 
-    //                         consumption.start_date_,
-    //                         consumption.end_date_,
-    //                         consumption.quantity_
-    //                     );
+            //     if let TransactionType::Charge(charge) = &transaction {
+            //         if charge.is_export_ {
+            //             print!("{} {:width$} ", txn.title_, "Export", width = 20 - txn.title_.len() - 1);
+            //         }
+            //         else {
+            //                 print!("{:20} ", txn.title_);
+            //         }
+            //     }
+            //     else {
+            //         print!("{:20} ", txn.title_);
+            //     }
+            //     print!("{:10} ", 
+            //                 txn.posted_date_
+            //             );
+            //     print!("{:>10} {:>10} {:>10} {:>10} ", 
+            //         as_decimal(txn.amounts_.net_, 2),
+            //         as_decimal(txn.amounts_.tax_, 2), 
+            //         as_decimal(txn.amounts_.gross_, 2),
+            //         as_decimal(txn.balance_carried_forward_, 2)
+            //     );
+            //     if let TransactionType::Charge(charge) = &transaction {
+            //         if let Some(consumption) = &charge.consumption_ {
+            //             print!("{:10} {:10} {:>12.4} ", 
+            //                 consumption.start_date_,
+            //                 consumption.end_date_,
+            //                 consumption.quantity_
+            //             );
 
-    //                     let rate = Decimal::from(txn.amounts_.gross_) / consumption.quantity_;
+            //             let rate = Decimal::from(txn.amounts_.gross_) / consumption.quantity_;
 
-    //                     print!("{:>12.4}", rate); //.round_dp(2));
+            //             print!("{:>12.4}", rate); //.round_dp(2));
 
-    //                     if charge.is_export_ {
+            //             if charge.is_export_ {
                             
-    //                     }
-    //                     else {
-    //                             if txn.title_.eq("Electricity") {
-    //                                 total_electric_charge += *&txn.amounts_.gross_;
-    //                                 total_electric_units += consumption.quantity_;
-    //                             }
-    //                         }
-    //                 }
-    //             }
-    //             print!(" {:?}", txn.note_);
-    //             println!();
-    //         }
+            //             }
+            //             else {
+            //                     if txn.title_.eq("Electricity") {
+            //                         total_electric_charge += *&txn.amounts_.gross_;
+            //                         total_electric_units += consumption.quantity_;
+            //                     }
+            //                 }
+            //         }
+            //     }
+            //     print!(" {:?}", txn.note_);
+            //     println!();
+            // }
 
-    //         println!("\nTOTALS");
+            // println!("\nTOTALS");
 
-    //         if total_electric_units.is_positive() {
-    //             let rate = Decimal::from(total_electric_charge) / total_electric_units;
+            // if total_electric_units.is_positive() {
+            //     let rate = Decimal::from(total_electric_charge) / total_electric_units;
 
-    //             print!("{:20} {:10} ", 
-    //                 "Electricity Import",
-    //                 ""
-    //             );
-    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //                 "",
-    //                 "", 
-    //                 as_decimal(total_electric_charge, 2),
-    //                 ""
-    //             );
-    //             print!("{:10} {:10} {:>12.4} ", 
-    //                 "",
-    //                 "",
-    //                 total_electric_units
-    //             );
-    //             print!("{:>12.4}", rate);
-    //             println!();
-    //         }
-    //     }
-    // }
+            //     print!("{:20} {:10} ", 
+            //         "Electricity Import",
+            //         ""
+            //     );
+            //     print!("{:>10} {:>10} {:>10} {:>10} ", 
+            //         "",
+            //         "", 
+            //         as_decimal(total_electric_charge, 2),
+            //         ""
+            //     );
+            //     print!("{:10} {:10} {:>12.4} ", 
+            //         "",
+            //         "",
+            //         total_electric_units
+            //     );
+            //     print!("{:>12.4}", rate);
+            //     println!();
+            // }
+        }
+    }
 }
 
 
@@ -248,44 +295,13 @@ impl BillInterface {
 //     Ok(response.account_.bills_.edges_.remove(0).node_)
 // }
 
-pub async fn get_bills(cache_manager: &CacheManager, request_manager: &RequestManager, account_number: String)  -> Result<BillList, Error> {
+// pub async fn get_bills(cache_manager: &CacheManager, request_manager: &RequestManager, account_number: String)  -> Result<BillList, Error> {
 
-    BillList::new(cache_manager, request_manager, account_number).await
-}
+//     BillList::new(cache_manager, request_manager, account_number).await
+// }
 
 
-pub async fn get_statement_transactions(request_manager: &RequestManager, account_number: String, statement_id: String, first: i32)  -> Result<BillTransactionList, Error> {
 
-    let query = super::graphql::bill::get_statement_transactions::Query::from(super::graphql::bill::get_statement_transactions::Variables::builder()
-        .with_account_number(account_number.clone())
-        .with_statement_id(statement_id.clone())
-        .with_transactions_first(first)
-        .build()?
-    );
-    let response = request_manager.call(&query).await?;
-
-    if let super::graphql::bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
-
-        let mut transactions = Vec::new();
-
-        // let end_cursor = statement.transactions_.page_info.end_cursor;
-        // let has_next_page = statement.transactions_.page_info.has_next_page;
-
-        for txn in statement.transactions_.edges {
-            transactions.push(txn.node);
-        }
-        Ok(BillTransactionList {
-            account_number,
-            statement_id,
-            end_cursor: statement.transactions_.page_info.end_cursor,
-            has_next_page: statement.transactions_.page_info.has_next_page,
-            transactions,
-        })
-    }
-    else {
-        Err(Error::CallerError("Given bill ID is not a statement"))
-    }
-}
 
 // pub async fn fetch_statement_transactions(request_manager: &RequestManager, account_number: String, first: i32, transactions: i32)  -> Result<BillList, Error> {
 
@@ -411,9 +427,7 @@ impl BillList {
                 bills,
                 hash_key,
             }
-        }
-
-         ;
+        };
 
         result.fetch_all(request_manager).await?;
 
@@ -429,12 +443,74 @@ impl BillList {
 pub struct BillTransactionList {
     pub account_number: String,
     pub statement_id: String,
-    pub end_cursor: Option<String>,
-    pub has_next_page: bool,
-    pub transactions: Vec<TransactionType>
+    pub start_cursor: Option<String>,
+    pub has_previous_page: bool,
+    pub transactions: Vec<(String, TransactionType)>,
+    hash_key: String,
 }
 
 impl BillTransactionList {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> Result<Self, Error> {
+        let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
+    
+            let mut transactions = Vec::new();
+    
+            cache_manager.read(&hash_key, &mut transactions)?;
+    
+            let cached_cnt = transactions.len();
+    
+            let mut result = if transactions.is_empty() {
+                
+                let query = super::graphql::bill::get_statement_transactions::Query::from(
+                    super::graphql::bill::get_statement_transactions::Variables::builder()
+                        .with_account_number(account_number.clone())
+                        .with_statement_id(statement_id.clone())
+                        .with_transactions_last(1)
+                        .build()?
+                );
+                let response = request_manager.call(&query).await?;
+                let bill = response.account_.bill_;
+
+                if let bill::get_statement_transactions::BillInterface::StatementType(statement) = bill {
+
+                    for edge in statement.transactions_.edges {
+                        let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
+                        transactions.push((sort_key, edge.node));
+                    }
+        
+                    BillTransactionList {
+                        account_number,
+                        statement_id,
+                        start_cursor: statement.transactions_.page_info.start_cursor,
+                        has_previous_page: statement.transactions_.page_info.has_previous_page,
+                        transactions,
+                        hash_key,
+                    }
+                }
+                else {
+                    return Err(Error::StringError(format!("Bill {} is not a statement", statement_id)))
+                }
+            }
+            else {
+                let (start_cursor, _) = transactions.get(transactions.len() - 1).unwrap();
+                BillTransactionList {
+                    account_number,
+                    statement_id,
+                    start_cursor: Some(start_cursor.clone()),
+                    has_previous_page: true,
+                    transactions,
+                    hash_key,
+                }
+            };
+    
+            result.fetch_all(request_manager).await?;
+    
+            if result.transactions.len() > cached_cnt {
+                cache_manager.write(&result.hash_key, &result.transactions, cached_cnt)?;
+            }
+            
+            Ok(result)
+        }
     // pub fn print_summary_lines(&self) {
     //     BillInterface::print_summary_line_headers();
 
@@ -469,7 +545,7 @@ impl BillTransactionList {
         let mut total_electric_charge = 0;
         let mut total_electric_units = Decimal::new(0, 0);
 
-        for transaction in self.transactions.iter().rev() {
+        for (_key, transaction) in &self.transactions {
         // for edge in (&statement.transactions_.edges).into_iter().rev() {
             let txn = transaction.as_transaction_type();
 
@@ -541,7 +617,7 @@ impl BillTransactionList {
             println!("\nTOTALS");
             let rate = Decimal::from(total_electric_charge) / total_electric_units;
 
-            print!("{:20} {:10} ", 
+            print!("{:30} {:10} ", 
                 "Electricity Import",
                 ""
             );
@@ -562,19 +638,20 @@ impl BillTransactionList {
     }
 
     pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
-        let mut has_next_page = self.has_next_page;
+        let mut has_previous_page = self.has_previous_page;
 
         println!("fetch_all statement transactions {} in buffer", self.transactions.len());
 
         
 
-        while has_next_page {
+        while has_previous_page {
             let mut builder = super::graphql::bill::get_statement_transactions::Variables::builder()
+                .with_account_number(self.account_number.clone())
                 .with_statement_id(self.statement_id.clone())
                 .with_transactions_first(100);
 
-            if let Some(end_cursor) = &self.end_cursor {
-                builder = builder.with_transactions_after(end_cursor.clone());
+            if let Some(end_cursor) = &self.start_cursor {
+                builder = builder.with_transactions_before(end_cursor.clone());
             }
             let query = super::graphql::bill::get_statement_transactions::Query::from(
                 builder.build()?
@@ -583,18 +660,20 @@ impl BillTransactionList {
 
             
             if let super::graphql::bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
-                println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.end_cursor, statement.transactions_.len());
+                println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
 
-                self.end_cursor = statement.transactions_.page_info.end_cursor.clone();
-                has_next_page = statement.transactions_.page_info.has_next_page.clone();
-                for txn in statement.transactions_ {
-                    self.transactions.push(txn);
+                self.start_cursor = statement.transactions_.page_info.start_cursor.clone();
+                has_previous_page = statement.transactions_.page_info.has_previous_page.clone();
+
+                for edge in statement.transactions_.edges.into_iter().rev() {
+                    let sort_key = edge.cursor;
+                    self.transactions.push((sort_key, edge.node));
                 }
                 
-                println!("has_next_page = {:?}", has_next_page);
+                println!("has_previous_page = {:?}", has_previous_page);
             }
         }
-        self.has_next_page = has_next_page;
+        self.has_previous_page = has_previous_page;
         Ok(())
     }
 }

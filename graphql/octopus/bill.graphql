@@ -67,8 +67,8 @@ query getStatementTransactions(
 fragment StatementTransactions on StatementType {
     transactions(before: $transactions_before, after: $transactions_after, first: $transactions_first, last: $transactions_last) {
         pageInfo {
-            endCursor
-            hasNextPage
+            startCursor
+            hasPreviousPage
         }
         edges {
             cursor

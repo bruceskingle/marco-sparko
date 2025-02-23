@@ -50,9 +50,9 @@ impl Profile {
 pub struct Client{
     context: Arc<MarcoSparkoContext>, 
     profile: Option<Profile>,
-    request_manager: RequestManager,
+    request_manager: Arc<RequestManager>,
     default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
-    cache_manager: CacheManager,
+    cache_manager: Arc<CacheManager>,
     bill_manager: Option<BillManager>,
 }
 
@@ -67,6 +67,12 @@ impl CommandProvider for Client {
                 Ok(self.get_bill_manager()
                 .await?
                 .bills_handler(args)
+                .await?)
+            },
+            "bill" => {
+                Ok(self.get_bill_manager()
+                .await?
+                .bill_handler(args)
                 .await?)
             },
             _ => Err(super::Error::UserError(format!("Invalid command '{}'", command)))
@@ -84,6 +90,17 @@ usage: bills
 
 Print a one line summary of all bills in the account.
 "#,
+            },
+
+            ReplCommand {
+                command:"bill",
+                description: "Print details of a bill",
+                help:
+r#"
+usage: bill [bill_id]
+
+Print the contents of the bill whose id is given, or the most recent bill, if none.
+"#,
             }
         )
     }
@@ -91,7 +108,7 @@ Print a one line summary of all bills in the account.
 
 impl Client {
     fn new(context: Arc<MarcoSparkoContext>, profile: Option<Profile>, 
-        request_manager: RequestManager) -> Result<Client, Error> {   
+        request_manager: Arc<RequestManager>) -> Result<Client, Error> {   
 
         let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID)?;
         Ok(Client {
@@ -690,37 +707,15 @@ impl Module for Client {
     }
 
     async fn bill(&mut self) -> Result<(), crate::Error>{
-        let account = self.get_default_account().await?;
-        // let account_number =  &account.number_;
+        println!("DEPRECATED");
+        // let account = self.get_default_account().await?;
+        // // let account_number =  &account.number_;
 
-        let mut bills = bill::get_bills(&self.cache_manager, &self.request_manager, account.number_.clone()).await?;
+        // let mut bills = bill::get_bills(&self.cache_manager, &self.request_manager, account.number_.clone()).await?;
 
-        // bills.fetch_all(&self.request_manager).await?;
+        // // bills.fetch_all(&self.request_manager).await?;
 
-        bills.print_summary_lines();
-
-        // for (key, bill) in &bills.bills {
-        //     if let graphql::bill::get_bills::BillInterface::StatementType(statement) = bill {
-        //         let transactions = bill::get_statement_transactions(&self.request_manager, account.number_.clone(), bill.as_bill_interface().id_.clone(), 50).await?;
-
-        //         transactions.print();
-        //         // break;
-
-        //     }
-        // }
-
-
-
-
-
-
-
-
-        
-        // self.bill_manager.print_transactions(&bill).await;
-
-        // self.handle_bill(bill).await?;
-
+        // bills.print_summary_lines();
 
         Ok(())
     }
@@ -839,7 +834,7 @@ impl ClientBuilder {
             .with_context(self.context.clone())
             .build(init)?;
 
-        let authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?;
+        let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?);
        
         let mut client = Client::new(self.context, option_profile, 
             authenticated_request_manager
