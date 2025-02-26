@@ -17,10 +17,14 @@ use clap::{Parser, Subcommand};
 
 use reedline::{Emacs, ExampleHighlighter, FileBackedHistory, MenuBuilder, ReedlineMenu};
 use reedline::{default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, KeyCode, KeyModifiers, Reedline, ReedlineEvent, Signal};
+use sparko_graphql::types::Date;
+use time::Month;
 use {
     nu_ansi_term::{Color, Style},
     reedline::{DefaultValidator, DefaultHinter},
   };
+
+pub const CHECK_FOR_UPDATES: bool = true;
 
 #[derive(Debug)]
 pub enum Error {
@@ -56,6 +60,12 @@ impl StdError for Error {
 //         Error::WrappedError(Box::new(err))
 //     }
 // }
+
+impl From<sparko_graphql::Error> for Error {
+    fn from(err: sparko_graphql::Error) -> Error {
+        Error::WrappedError(Box::new(err))
+    }
+}
 
 impl From<Box<dyn StdError>> for Error {
     fn from(err: Box<dyn StdError>) -> Error {
@@ -149,9 +159,9 @@ impl Profile {
 
 #[async_trait]
 pub trait Module: CommandProvider {
-    async fn summary(&mut self) -> Result<(), Error>;
-    async fn bill(&mut self) -> Result<(), Error>;
-    async fn test(&mut self) -> Result<(), Error>;
+    // async fn summary(&mut self) -> Result<(), Error>;
+    // async fn bill(&mut self) -> Result<(), Error>;
+    // async fn test(&mut self) -> Result<(), Error>;
 }
 
 #[async_trait(?Send)]
@@ -580,42 +590,43 @@ pub async fn new() -> Result<MarcoSparko, Error> {
     }
 
     pub async fn run(&mut self) -> Result<(), Error> {
-        if let Some(command) =  &self.args().command {
-            match command {
-                Commands::Summary => {
-                    self.summary().await?; 
+        // if let Some(command) =  &self.args().command {
+        //     match command {
+        //         Commands::Summary => {
+        //             self.summary().await?; 
                     
-                }
-                Commands::Bill => {
-                    self.bill().await?; 
+        //         }
+        //         Commands::Bill => {
+        //             self.bill().await?; 
                     
-                }
-                Commands::Test => {
-                    self.test().await?; 
+        //         }
+        //         Commands::Test => {
+        //             self.test().await?; 
                     
-                },
-            };
+        //         },
+        //     };
 
             
-        }
-        else {
-            // match &self.current_module {
-            //     Some(name) => {
-            //         match self.modules.get_mut(name) {
-            //             Some(module) => {
-            //                 module.repl().await?;
-            //             },
-            //             None => return Err(Error::UserError(format!("Unable to find current module {}", name))),
-            //         }
-            //     },
-            //     None => {
-            //         self.repl().await?;
-            //     },
-            // }
+        // }
+        // else {
+        //     // match &self.current_module {
+        //     //     Some(name) => {
+        //     //         match self.modules.get_mut(name) {
+        //     //             Some(module) => {
+        //     //                 module.repl().await?;
+        //     //             },
+        //     //             None => return Err(Error::UserError(format!("Unable to find current module {}", name))),
+        //     //         }
+        //     //     },
+        //     //     None => {
+        //     //         self.repl().await?;
+        //     //     },
+        //     // }
 
-            self.repl().await?;
-        }
-    self.context.save_updated_profile()?;
+        //     self.repl().await?;
+        // }
+        self.repl().await?;
+        self.context.save_updated_profile()?;
 
         return Ok(())
         // Err(Error::UserError(String::from("No command given - try 'Summary'")))
@@ -794,36 +805,34 @@ pub async fn new() -> Result<MarcoSparko, Error> {
                 }
             }
         }
-
-        Ok(())
     }
 
-    async fn summary(&mut self) -> Result<(), Error> {
-        for (_module_id, module) in self.modules.iter_mut() {
-            println!("Summary {}", _module_id);
-            module.summary().await?;
-        }
+    // async fn summary(&mut self) -> Result<(), Error> {
+    //     for (_module_id, module) in self.modules.iter_mut() {
+    //         println!("Summary {}", _module_id);
+    //         module.summary().await?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    async fn bill(&mut self) -> Result<(), Error> {
-        for (_module_id, module) in self.modules.iter_mut() {
-            println!("Bill {}", _module_id);
-            module.bill().await?;
-        }
+    // async fn bill(&mut self) -> Result<(), Error> {
+    //     for (_module_id, module) in self.modules.iter_mut() {
+    //         println!("Bill {}", _module_id);
+    //         module.bill().await?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    async fn test(&mut self) -> Result<(), Error> {
-        for (_module_id, module) in self.modules.iter_mut() {
-            println!("Test {}", _module_id);
-            module.test().await?;
-        }
+    // async fn test(&mut self) -> Result<(), Error> {
+    //     for (_module_id, module) in self.modules.iter_mut() {
+    //         println!("Test {}", _module_id);
+    //         module.test().await?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
     
     async fn initialize(&mut self, module_id: &String, init: bool) -> Result<(), Error> {
         if let Some(module_registration) = self.module_registrations.get(module_id) {
@@ -857,9 +866,36 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
+    fn path_for_date(path: &mut PathBuf, date: &Date) {
+        path.push(date.year().to_string());
+        // path.push(date.month().to_string());
+    }
+
+    fn path_hash_key_for_date(path: &mut PathBuf, date: &Date, hash_key: &str) {
+        // path.push(format!("{}#{}", date.day(), hash_key));
+        path.push(format!("{}#{}", date.month(), hash_key));
+    }
+
     pub fn write<T: Serialize>(&self, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
         let mut path = self.dir_path.clone();
         path.push(hash_key);
+
+        self.do_write(path, vec, cached_cnt)
+    }
+
+    pub fn write_for_date<T: Serialize>(&self, date: &Date, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
+        let mut path = self.dir_path.clone();
+
+        Self::path_for_date(&mut path, date);
+
+        fs::create_dir_all(&path)?;
+
+        Self::path_hash_key_for_date(&mut path, date, hash_key);
+
+        self.do_write(path, vec, cached_cnt)
+    }
+
+    fn do_write<T: Serialize>(&self, path: PathBuf, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
 
         if cached_cnt == 0 {
             let mut out = fs::File::create(path)?;
@@ -894,6 +930,28 @@ impl CacheManager {
         let mut path = self.dir_path.clone();
         path.push(hash_key);
 
+        self.do_read(path, vec)
+    }
+
+    pub fn read_for_date<T: DeserializeOwned>(&self, date: &Date, hash_key: &str, vec: &mut Vec<(String, T)>) -> Result<(Date, Date), Error> {
+        let start_date = Date::from_calendar_date(date.year(), date.month(), 1)?;
+        let end_date = if date.month() == Month::December {
+            Date::from_calendar_date(date.year() + 1, Month::January, 1)?
+        }
+        else {
+            Date::from_calendar_date(date.year(), date.month().next(), 1)?
+        };
+        let mut path = self.dir_path.clone();
+
+        Self::path_for_date(&mut path, date);
+        Self::path_hash_key_for_date(&mut path, date, hash_key);
+
+        self.do_read(path, vec)?;
+
+        Ok((start_date, end_date))
+    }
+
+    fn do_read<T: DeserializeOwned>(&self, path: PathBuf, vec: &mut Vec<(String, T)>) -> Result<(), Error> {
         match Self::read_lines(path) {
             Ok(lines) => {
                 // Consumes the iterator, returns an (Optional) String
@@ -917,5 +975,35 @@ impl CacheManager {
         }
 
         Ok(())
+    }
+
+
+    pub fn write_one<T: Serialize>(&self, hash_key: &str, value: &T) -> Result<(), Error> {
+        let mut path = self.dir_path.clone();
+        path.push(hash_key);
+
+        let mut out = fs::File::create(path)?;
+        writeln!(out, "{}", serde_json::to_string(&value)?)?;
+
+        Ok(())
+    }
+
+    pub fn read_one<T: DeserializeOwned>(&self, hash_key: &str) -> Result<Option<T>, Error> {
+        let mut path = self.dir_path.clone();
+        path.push(hash_key);
+
+        Ok(match File::open(path) {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+                Some(serde_json::from_reader(reader)?)
+            },
+            Err(error) => {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    println!("ERROR {:?}", error);
+                    return Err(Error::IOError(error))
+                }
+                None
+            },
+        })
     }
 }

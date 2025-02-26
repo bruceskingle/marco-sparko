@@ -1,12 +1,15 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use sparko_graphql::AuthenticatedRequestManager;
 
 use crate::octopus::decimal::Decimal;
+use crate::octopus::meter::MeterType;
 use crate::util::as_decimal;
 use crate::CacheManager;
 
 use super::graphql::bill;
+use super::meter::MeterManager;
 use bill::get_bills::BillInterface;
 use bill::get_statement_transactions::TransactionType;
 use super::graphql::BillTypeEnum;
@@ -14,40 +17,83 @@ use super::RequestManager;
 use super::{token::OctopusTokenManager, Error};
 
 pub struct BillManager {
-    pub account_number: String,
+    // pub account_number: String,
     pub cache_manager: Arc<CacheManager>,
     pub request_manager: Arc<RequestManager>,
-    pub bills: BillList,
+    pub bills: HashMap<String, BillList>,
 }
 
 impl BillManager {
-    pub async fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String)  -> Result<Self, Error> {
-        let bills = BillList::new(cache_manager, request_manager, account_number.clone()).await?;
-
-        Ok(Self {
-            account_number,
+    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> Self {
+        Self {
+            // account_number,
             cache_manager: cache_manager.clone(),
             request_manager: request_manager.clone(),
-            bills,
-        })
+            bills: HashMap::new(),
+        }
     }
 
-    pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
-        BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
+    pub async fn get_bills(&mut self, account_number: &String) -> Result<&BillList, Error> {
+        Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, account_number.clone(), crate::CHECK_FOR_UPDATES).await?))
     }
 
-    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
-        self.bills.print_summary_lines();
+    // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
+    //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
+    // }
+
+    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
+        BillTransactionList::new(cache_manager, request_manager, account_number, statement_id).await
+    }
+
+    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  Result<(), Error> {
+        self.get_bills(account_number).await?.print_summary_lines();
         Ok(())
     }
 
 
-    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
+    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager) ->  Result<(), Error> {
+        let one_hundred = Decimal::new(100, 0);
+        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        let cache_manager = self.cache_manager.clone();
+        let request_manager = self.request_manager.clone();
+        let bills = self.get_bills(account_number).await?;
+
         if let Some(bill_id) = args.next() {
-            for (_id, bill) in &self.bills.bills {
+            for (_id, bill) in &bills.bills {
                 if bill_id == bill.as_bill_interface().id_ {
                     let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-                        Some(self.get_statement_transactions(self.account_number.clone(), bill_id.to_string()).await?)
+
+
+                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string()).await?;
+                        for (_cursor, transaction) in &transactions.transactions {
+                            if let TransactionType::Charge(charge) = transaction {
+                                if let Some(consumption) = &charge.consumption_ {
+                                    // print the line items making up this charge
+                                    let line_item_map = meter_manager.get_line_items(account_number, &MeterType::Electricity, charge.is_export_, &consumption.start_date_, &consumption.end_date_).await?;
+
+                                    // println!("got_line_items {}", line_item_map.len());
+
+                                    for (agreement_id, line_items) in line_item_map {
+                                        let mut total = Decimal::new(0,0);
+                                        println!("Line items for agreement {}", agreement_id);
+                                        println!("{:-^20} {:-^20} {:-^10} {:-^10} {:-^10}", "From", "To", "Amount", "Units", "p / unit");
+                                
+                                        for item in line_items {
+                                            let amount = item.net_amount_ / one_hundred;
+
+                                            total += amount;
+
+                                            println!("{:20} {:20} {:10.3} {:10.3} {:10.3}", item.start_at_.format(&format).unwrap(), item.end_at_.format(&format).unwrap(), amount, item.number_of_units_, 
+                                                if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ }  );
+                                        }
+                                        println!("{:20} {:20} {:10.3}", "TOTAL", "", total);
+                                    }
+
+                                }
+                            }
+                        }
+
+                        Some(transactions)
                     }
                     else {
                         None
@@ -60,13 +106,13 @@ impl BillManager {
             println!("Unknown bill '{}'", bill_id);
         }
         else {
-            if self.bills.bills.is_empty() {
+            if bills.bills.is_empty() {
                 println!("There are no bills in this account");
             }
             else {
-                let (_id, bill) = self.bills.bills.get(self.bills.bills.len() - 1).unwrap();
+                let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-                    Some(self.get_statement_transactions(self.account_number.clone(), bill.as_bill_interface().id_.to_string()).await?)
+                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string()).await?)
                 }
                 else {
                     None
@@ -181,150 +227,9 @@ impl BillInterface {
 
         if let Some(transactions) = transactions {
             transactions.print();
-            // print!("{:20} {:10} ", 
-            //     "Description",
-            //     "Posted"
-            // );
-            // print!("{:>10} {:>10} {:>10} {:>10} ", 
-            //     "Net",
-            //     "Tax", 
-            //     "Total",
-            //     "Balance"
-            // );
-            // print!("{:10} {:10} {:>12} ", 
-            //     "From",
-            //     "To",
-            //     "Units"
-            // );
-            // print!("{:>12}", "p / unit");
-            // println!();
-
-            // let mut total_electric_charge = 0;
-            // let mut total_electric_units = Decimal::new(0, 0);
-
-            // // // for transaction in &mut map.values() {
-            // for (_hash, transaction) in transactions.transactions {
-            //     let txn = transaction.as_transaction_type();
-
-            //     if let TransactionType::Charge(charge) = &transaction {
-            //         if charge.is_export_ {
-            //             print!("{} {:width$} ", txn.title_, "Export", width = 20 - txn.title_.len() - 1);
-            //         }
-            //         else {
-            //                 print!("{:20} ", txn.title_);
-            //         }
-            //     }
-            //     else {
-            //         print!("{:20} ", txn.title_);
-            //     }
-            //     print!("{:10} ", 
-            //                 txn.posted_date_
-            //             );
-            //     print!("{:>10} {:>10} {:>10} {:>10} ", 
-            //         as_decimal(txn.amounts_.net_, 2),
-            //         as_decimal(txn.amounts_.tax_, 2), 
-            //         as_decimal(txn.amounts_.gross_, 2),
-            //         as_decimal(txn.balance_carried_forward_, 2)
-            //     );
-            //     if let TransactionType::Charge(charge) = &transaction {
-            //         if let Some(consumption) = &charge.consumption_ {
-            //             print!("{:10} {:10} {:>12.4} ", 
-            //                 consumption.start_date_,
-            //                 consumption.end_date_,
-            //                 consumption.quantity_
-            //             );
-
-            //             let rate = Decimal::from(txn.amounts_.gross_) / consumption.quantity_;
-
-            //             print!("{:>12.4}", rate); //.round_dp(2));
-
-            //             if charge.is_export_ {
-                            
-            //             }
-            //             else {
-            //                     if txn.title_.eq("Electricity") {
-            //                         total_electric_charge += *&txn.amounts_.gross_;
-            //                         total_electric_units += consumption.quantity_;
-            //                     }
-            //                 }
-            //         }
-            //     }
-            //     print!(" {:?}", txn.note_);
-            //     println!();
-            // }
-
-            // println!("\nTOTALS");
-
-            // if total_electric_units.is_positive() {
-            //     let rate = Decimal::from(total_electric_charge) / total_electric_units;
-
-            //     print!("{:20} {:10} ", 
-            //         "Electricity Import",
-            //         ""
-            //     );
-            //     print!("{:>10} {:>10} {:>10} {:>10} ", 
-            //         "",
-            //         "", 
-            //         as_decimal(total_electric_charge, 2),
-            //         ""
-            //     );
-            //     print!("{:10} {:10} {:>12.4} ", 
-            //         "",
-            //         "",
-            //         total_electric_units
-            //     );
-            //     print!("{:>12.4}", rate);
-            //     println!();
-            // }
         }
     }
 }
-
-
-
-// pub async fn get_latest_bill(request_manager: &RequestManager, account_number: &String)  -> Result<BillInterface, Error> {
-//     // let account_number = self.get_default_account().await?.number_;
-//     let query = super::graphql::latest_bill::get_account_latest_bill::Query::from(super::graphql::latest_bill::get_account_latest_bill::Variables::builder()
-//         .with_account_number(account_number.clone())
-//         .with_bills_first(1)
-//         .with_bills_transactions_first(100)
-//         .build()?
-//     );
-//     let mut response = request_manager.call(&query).await?;
-
-//     Ok(response.account_.bills_.edges_.remove(0).node_)
-// }
-
-// pub async fn get_bills(cache_manager: &CacheManager, request_manager: &RequestManager, account_number: String)  -> Result<BillList, Error> {
-
-//     BillList::new(cache_manager, request_manager, account_number).await
-// }
-
-
-
-
-// pub async fn fetch_statement_transactions(request_manager: &RequestManager, account_number: String, first: i32, transactions: i32)  -> Result<BillList, Error> {
-
-//     let query = super::graphql::bill::get_bills_and_transactions::Query::from(super::graphql::bill::get_bills_and_transactions::Variables::builder()
-//         .with_account_number(account_number.clone())
-//         .with_first(first)
-//         .with_transactions_first(transactions)
-//         .build()?
-//     );
-//     let response = request_manager.call(&query).await?;
-
-//     let mut bills = Vec::new();
-
-//     for edge in response.account_.bills_.edges {
-//         bills.push(edge.node);
-//     }
-//     Ok(BillList {
-//         account_number,
-//         end_cursor: response.account_.bills_.page_info.end_cursor,
-//         has_next_page: response.account_.bills_.page_info.has_next_page,
-//         bills,
-//     })
-// }
 
 
 pub struct BillList {
@@ -342,9 +247,6 @@ impl BillList {
         for (_key, bill) in &self.bills {
             bill.print_summary_line();
         }
-
-        // let bill = self.bills.get(0).unwrap();
-        // bill.print();
     }
 
     pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
@@ -354,7 +256,7 @@ impl BillList {
 
         while has_previous_page 
         {
-            let mut builder = super::graphql::bill::get_bills::Variables::builder()
+            let mut builder = super::graphql::bill::get_bills::Query::builder()
             .with_account_number(self.account_number.clone())
             .with_last(20);
 
@@ -362,8 +264,8 @@ impl BillList {
                 builder = builder.with_before(start_cursor.clone())
             }
 
-            
-            let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
+            let query = builder.build()?;
+            // let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
             let response = request_manager.call(&query).await?;
 
             println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
@@ -380,14 +282,12 @@ impl BillList {
                 let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
                 self.bills.push((sort_key, edge.node));
             }
-            
-            println!("has_previous_page = {:?}", has_previous_page);
         }
         self.has_previous_page = has_previous_page;
         Ok(())
     }
     
-   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String) -> Result<Self, Error> {
+   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool) -> Result<Self, Error> {
     let hash_key = format!("{}#Bills", account_number);
 
         let mut bills = Vec::new();
@@ -398,11 +298,10 @@ impl BillList {
 
         let mut result = if bills.is_empty() {
         
-            let query = super::graphql::bill::get_bills::Query::from(super::graphql::bill::get_bills::Variables::builder()
+            let query = super::graphql::bill::get_bills::Query::builder()
                 .with_account_number(account_number.clone())
                 .with_last(1)
-                .build()?
-            );
+                .build()?;
             let response = request_manager.call(&query).await?;
 
             for edge in response.account_.bills_.edges {
@@ -429,7 +328,9 @@ impl BillList {
             }
         };
 
-        result.fetch_all(request_manager).await?;
+        if check_for_updates {
+            result.fetch_all(request_manager).await?;
+        }
 
         if result.bills.len() > cached_cnt {
             cache_manager.write(&result.hash_key, &result.bills, cached_cnt)?;
@@ -461,13 +362,11 @@ impl BillTransactionList {
     
             let mut result = if transactions.is_empty() {
                 
-                let query = super::graphql::bill::get_statement_transactions::Query::from(
-                    super::graphql::bill::get_statement_transactions::Variables::builder()
+                let query = super::graphql::bill::get_statement_transactions::Query::builder()
                         .with_account_number(account_number.clone())
                         .with_statement_id(statement_id.clone())
                         .with_transactions_last(1)
-                        .build()?
-                );
+                        .build()?;
                 let response = request_manager.call(&query).await?;
                 let bill = response.account_.bill_;
 
@@ -478,14 +377,18 @@ impl BillTransactionList {
                         transactions.push((sort_key, edge.node));
                     }
         
-                    BillTransactionList {
+                    let mut result = BillTransactionList {
                         account_number,
                         statement_id,
                         start_cursor: statement.transactions_.page_info.start_cursor,
                         has_previous_page: statement.transactions_.page_info.has_previous_page,
                         transactions,
                         hash_key,
-                    }
+                    };
+
+                    result.fetch_all(request_manager).await?;
+
+                    result
                 }
                 else {
                     return Err(Error::StringError(format!("Bill {} is not a statement", statement_id)))
@@ -503,7 +406,8 @@ impl BillTransactionList {
                 }
             };
     
-            result.fetch_all(request_manager).await?;
+            // don't think this will ever be necessary but could be gated on check_for_updates
+            // result.fetch_all(request_manager).await?;
     
             if result.transactions.len() > cached_cnt {
                 cache_manager.write(&result.hash_key, &result.transactions, cached_cnt)?;
@@ -511,16 +415,6 @@ impl BillTransactionList {
             
             Ok(result)
         }
-    // pub fn print_summary_lines(&self) {
-    //     BillInterface::print_summary_line_headers();
-
-    //     for bill in &self.bills {
-    //         bill.print_summary_line();
-    //     }
-
-    //     let bill = self.bills.get(0).unwrap();
-    //     bill.print();
-    // }
 
     pub fn print(&self) {
         
@@ -610,7 +504,6 @@ impl BillTransactionList {
                 print!(" {}", note);
             }
             println!();
-
         }
 
         if total_electric_units.is_positive() {
@@ -645,7 +538,7 @@ impl BillTransactionList {
         
 
         while has_previous_page {
-            let mut builder = super::graphql::bill::get_statement_transactions::Variables::builder()
+            let mut builder = super::graphql::bill::get_statement_transactions::Query::builder()
                 .with_account_number(self.account_number.clone())
                 .with_statement_id(self.statement_id.clone())
                 .with_transactions_first(100);
@@ -653,9 +546,8 @@ impl BillTransactionList {
             if let Some(end_cursor) = &self.start_cursor {
                 builder = builder.with_transactions_before(end_cursor.clone());
             }
-            let query = super::graphql::bill::get_statement_transactions::Query::from(
-                builder.build()?
-            );
+            let query = //super::graphql::bill::get_statement_transactions::Query::from(
+                builder.build()?;
             let response = request_manager.call(&query).await?;
 
             

@@ -25,9 +25,10 @@ fn build()  -> Result<(), Box<dyn Error>> {
         .with_type("Decimal", "crate::octopus::decimal::Decimal")
         .with_schema("graphql/octopus/octopus-schema.graphql")
         .with_query("graphql/octopus/Login.graphql", "login")
-        .with_query("graphql/octopus/Summary.graphql", "summary")
-        .with_query("graphql/octopus/meters.graphql", "meters")
+        .with_query("graphql/octopus/account.graphql", "account")
+        .with_query("graphql/octopus/meter.graphql", "meter")
         .with_query("graphql/octopus/bill.graphql", "bill")
+        // .with_print(true)
         .build()?;
 
     // panic!("Panic test!"); 

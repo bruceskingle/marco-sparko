@@ -1,0 +1,190 @@
+query accountPropertiesMeters($accountNumber: String!) @ms_required_by_default {
+  account(accountNumber: $accountNumber) {
+    properties {
+      id
+      address
+      postcode
+      occupancyPeriods {
+        id
+        effectiveFrom
+        effectiveTo @ms_optional
+        isOccupier
+      }
+      coordinates {
+        latitude
+        longitude
+      }
+      
+      electricityMeterPoints {
+        id
+        supplyEndDate @ms_optional
+        mpan
+        status
+        meters {
+          nodeId
+          serialNumber
+          consumptionUnits
+          hasAndAllowsHhReadings
+          importMeter @ms_optional {
+            id
+            nodeId
+            serialNumber
+          }
+        }
+      }
+      gasMeterPoints {
+        id
+        supplyEndDate @ms_optional
+        mprn
+        status
+        meters {
+          nodeId
+          serialNumber
+          consumptionUnits
+          hasAndAllowsHhReadings
+        }
+      }
+      smartDeviceNetworks {
+        smartDevices {
+          deviceId
+          type
+        }
+      }
+    }
+  }
+}
+
+query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_default {
+  node(id: $meterNodeId) {
+    ... on ElectricityMeterType @ms_required_by_default {
+      importMeter @ms_optional {
+        meterPoint {
+          mpan
+        }
+      }
+      meterPoint {
+        mpan
+        agreements(excludeFuture: false, validAfter: $validAfter, includeInactive: true) {
+          id
+          validFrom
+          validTo @ms_optional
+          tariff {
+            ... on HalfHourlyTariff @ms_required_by_default {
+              displayName
+              fullName
+              standingCharge
+              unitRates {
+                validFrom
+                validTo
+                preVatValue
+                value
+              }
+              description
+              preVatStandingCharge
+              productCode
+              tariffCode
+            }
+            ... on StandardTariff @ms_required_by_default {
+              id
+              description
+              displayName
+              fullName
+              preVatStandingCharge
+              preVatUnitRate
+              standingCharge
+              tariffCode
+              unitRate
+            }
+            ... on DayNightTariff @ms_required_by_default {
+              id
+              dayRate
+              description
+              displayName
+              fullName
+              nightRate
+              preVatDayRate
+              preVatNightRate
+              preVatStandingCharge
+              standingCharge
+              tariffCode
+            }
+            ... on ThreeRateTariff @ms_required_by_default {
+              id
+              dayRate
+              description
+              displayName
+              fullName
+              nightRate
+              offPeakRate
+              preVatDayRate
+              preVatNightRate
+              preVatOffPeakRate
+              preVatStandingCharge
+              standingCharge
+              tariffCode
+            }
+            ... on PrepayTariff @ms_required_by_default {
+              id
+              displayName
+              fullName
+              preVatStandingCharge
+              preVatUnitRate
+              productCode
+              standingCharge
+              tariffCode
+              unitRate
+            }
+          }
+        }
+      }
+    }
+    ... on GasMeterType @ms_required_by_default {
+      meterPoint {
+        agreements(excludeFuture: false, validAfter: $validAfter) @ms_required_by_default {
+          id
+          validFrom
+          validTo @ms_optional
+          tariff {
+            fullName
+            tariffCode
+            standingCharge
+            preVatUnitRate
+            unitRate
+          }
+        }
+      }
+    }
+  }
+}
+
+query electricityAgreementLineItems($agreementId: ID!, $startAt: DateTime!, $first: Int, $timezone: String!, $itemType: LineItemTypeOptions!, $lineItemGrouping: LineItemGroupingOptions!, $after: String) @ms_required_by_default {
+  electricityAgreement(id: $agreementId) @ms_required_by_default {
+    ... on ElectricityAgreementType  @ms_required_by_default{
+      meterPoint {
+        mpan
+      }
+      lineItems(first: $first, grouping: $lineItemGrouping, startAt: $startAt, itemType: $itemType, timezone: $timezone, after: $after) {
+        ...lineItems
+      }
+    }
+  }
+}
+
+fragment lineItems on LineItemConnection @ms_required_by_default {
+  edges {
+    node {
+      startAt
+      endAt
+      netAmount
+      numberOfUnits
+      settlementUnit
+    }
+    cursor
+  }
+  pageInfo {
+    hasNextPage
+    hasPreviousPage
+    endCursor
+    startCursor
+  }
+}
