@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::sync::Arc;
 
 use sparko_graphql::AuthenticatedRequestManager;
@@ -8,13 +9,16 @@ use crate::octopus::meter::MeterType;
 use crate::util::as_decimal;
 use crate::CacheManager;
 
-use super::graphql::bill;
-use super::meter::MeterManager;
+use super::graphql::{bill, meter};
+use super::meter::{MeterManager, Tariff};
 use bill::get_bills::BillInterface;
 use bill::get_statement_transactions::TransactionType;
 use super::graphql::BillTypeEnum;
 use super::RequestManager;
 use super::{token::OctopusTokenManager, Error};
+
+// const one_hundred: Decimal = Decimal::new(100, 0);
+// const format: time::format_description = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
 
 pub struct BillManager {
     // pub account_number: String,
@@ -41,8 +45,34 @@ impl BillManager {
     //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
     // }
 
-    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
-        BillTransactionList::new(cache_manager, request_manager, account_number, statement_id).await
+    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager)  -> Result<Vec<BillTransactionBreakDown>, Error> {
+
+
+        let mut result = Vec::new();
+        let transactions = BillTransactionList::new(cache_manager, request_manager, account_number.clone(), statement_id).await?;
+
+
+        for (_cursor, transaction) in transactions.transactions {
+            if let TransactionType::Charge(charge) = &transaction {
+                if let Some(consumption) = &charge.consumption_ {
+                    // print the line items making up this charge
+                    println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
+                    let line_items = Some(meter_manager.get_line_items(&account_number, &MeterType::Electricity, charge.is_export_, &consumption.start_date_, &consumption.end_date_).await?);
+
+                    result.push(BillTransactionBreakDown{
+                        transaction,
+                        line_items,
+                    });
+                    continue;
+                }
+            }
+            result.push(BillTransactionBreakDown{
+                transaction,
+                line_items: None,
+            });
+        }
+
+        Ok(result)
     }
 
     pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  Result<(), Error> {
@@ -52,8 +82,8 @@ impl BillManager {
 
 
     pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager) ->  Result<(), Error> {
-        let one_hundred = Decimal::new(100, 0);
-        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        // let one_hundred = Decimal::new(100, 0);
+        // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let cache_manager = self.cache_manager.clone();
         let request_manager = self.request_manager.clone();
         let bills = self.get_bills(account_number).await?;
@@ -64,34 +94,7 @@ impl BillManager {
                     let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
 
 
-                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string()).await?;
-                        for (_cursor, transaction) in &transactions.transactions {
-                            if let TransactionType::Charge(charge) = transaction {
-                                if let Some(consumption) = &charge.consumption_ {
-                                    // print the line items making up this charge
-                                    let line_item_map = meter_manager.get_line_items(account_number, &MeterType::Electricity, charge.is_export_, &consumption.start_date_, &consumption.end_date_).await?;
-
-                                    // println!("got_line_items {}", line_item_map.len());
-
-                                    for (agreement_id, line_items) in line_item_map {
-                                        let mut total = Decimal::new(0,0);
-                                        println!("Line items for agreement {}", agreement_id);
-                                        println!("{:-^20} {:-^20} {:-^10} {:-^10} {:-^10}", "From", "To", "Amount", "Units", "p / unit");
-                                
-                                        for item in line_items {
-                                            let amount = item.net_amount_ / one_hundred;
-
-                                            total += amount;
-
-                                            println!("{:20} {:20} {:10.3} {:10.3} {:10.3}", item.start_at_.format(&format).unwrap(), item.end_at_.format(&format).unwrap(), amount, item.number_of_units_, 
-                                                if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ }  );
-                                        }
-                                        println!("{:20} {:20} {:10.3}", "TOTAL", "", total);
-                                    }
-
-                                }
-                            }
-                        }
+                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager).await?;
 
                         Some(transactions)
                     }
@@ -112,7 +115,7 @@ impl BillManager {
             else {
                 let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string()).await?)
+                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager).await?)
                 }
                 else {
                     None
@@ -214,7 +217,7 @@ impl BillInterface {
         println!();
     }
 
-    pub fn print(&self, transactions: Option<BillTransactionList>) {
+    pub fn print(&self, transactions: Option<Vec<BillTransactionBreakDown>>) {
         let abstract_bill = self.as_bill_interface();
 
         println!("Energy Account Statement");
@@ -226,11 +229,277 @@ impl BillInterface {
         println!();
 
         if let Some(transactions) = transactions {
-            transactions.print();
+            let mut total_charges = TotalCharges::new();
+            TransactionType::print_summary_line_headers();
+            for transaction in &transactions {
+                transaction.print_summary_line(&mut total_charges);
+            }
+
+            if total_charges.units.is_positive() {
+
+
+
+
+
+                println!("\nTOTALS");
+                let rate = Decimal::from(total_charges.charge) / total_charges.units;
+
+                print!("{:30} {:10} ", 
+                    "Electricity Import",
+                    ""
+                );
+                print!("{:>10} {:>10} {:>10} {:>10} ", 
+                    "",
+                    "", 
+                    as_decimal(total_charges.charge, 2),
+                    ""
+                );
+                print!("{:10} {:10} {:10} {:>12.4} ", 
+                    "",
+                    "",
+                    "",
+                    total_charges.units
+                );
+                print!("{:>10.3}", rate);
+                println!();
+            }
+            println!();
+            println!("Detailed Breakdown");
+            println!("==================");
+            total_charges = TotalCharges::new();
+            
+            for transaction in &transactions {
+                transaction.print(&mut total_charges);
+            }
+        }
+        
+    }
+}
+
+pub struct TotalCharges {
+    charge: i32,
+    units: Decimal,
+}
+
+impl TotalCharges {
+    fn new() -> Self {
+        TotalCharges{
+            charge: 0,
+            units: Decimal::new(0, 0),
         }
     }
 }
 
+impl TransactionType {
+    pub fn print_summary_line_headers() {
+        print!("{:-^30} {:-^10} ", 
+            "Description",
+            "Posted"
+        );
+        print!("{:-^10} {:-^10} {:-^10} {:-^10} ", 
+            "Net",
+            "Tax", 
+            "Total",
+            "Balance"
+        );
+        println!("{:-^10} {:-^10} {:-^10} {:-^12} {:-^10}", "From", "To", "Amount", "Units", "p/unit");
+    }
+
+    pub fn print_break_down_line_headers() {
+        println!("{:-^20} {:-^20} {:-^10} {:-^12} {:-^10}", "From", "To", "Amount", "Units", "p/unit");
+    }
+
+    pub fn print_summary_line(&self, total_charges: &mut TotalCharges) {
+            let txn = self.as_transaction_type();
+
+            if let TransactionType::Charge(charge) = &self {
+                if charge.is_export_ {
+                    print!("{} {:width$} ", txn.title_, "Export", width = 30 - txn.title_.len() - 1);
+                }
+                else {
+                        print!("{:30} ", txn.title_);
+                }
+            }
+            else {
+                print!("{:30} ", txn.title_);
+            }
+            print!("{:10} ", 
+                        txn.posted_date_
+                    );
+
+            if let TransactionType::Charge(charge) = &self {
+                print!("{:>10} {:>10} {:>10} {:>10} ", 
+                    as_decimal(txn.amounts_.net_, 2),
+                    as_decimal(txn.amounts_.tax_, 2), 
+                    as_decimal(txn.amounts_.gross_, 2),
+                    as_decimal(txn.balance_carried_forward_, 2)
+                );
+                if let Some(consumption) = &charge.consumption_ {
+                    print!("{:10} {:10} {:>10} {:>12.4} ", 
+                        consumption.start_date_,
+                        consumption.end_date_,
+                        as_decimal(txn.amounts_.net_, 3),
+                        consumption.quantity_
+                    );
+
+                    let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
+
+                    print!("{:>10.3}", rate); //.round_dp(2));
+
+                    if charge.is_export_ {
+                        
+                    }
+                    else {
+                            if txn.title_.eq("Electricity") {
+                                total_charges.charge += *&txn.amounts_.gross_;
+                                total_charges.units += consumption.quantity_;
+                            }
+                        }
+                }
+                else {
+                    print!("{:27}","");
+                }
+            }
+            else {
+                print!("{:>10} {:>10} {:>10} {:>10} ", 
+                    as_decimal(-txn.amounts_.net_, 2),
+                    as_decimal(-txn.amounts_.tax_, 2), 
+                    as_decimal(-txn.amounts_.gross_, 2),
+                    as_decimal(txn.balance_carried_forward_, 2)
+                );
+                print!("{:47}","");
+            }
+            if let Some(note) = &txn.note_ {
+                let note = note.trim();
+                print!(" {}", note);
+            }
+            println!();
+    }
+}
+
+pub struct BillTransactionBreakDown {
+    transaction: TransactionType,
+    line_items: Option<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>,
+}
+
+impl BillTransactionBreakDown {
+    pub fn print_summary_line(&self, total_charges: &mut TotalCharges) {
+        self.transaction.print_summary_line(total_charges);
+    }
+
+    pub fn print(&self, total_charges: &mut TotalCharges) {
+        let one_hundred = Decimal::new(100, 0);
+        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        let time_format = time::format_description::parse("           [hour]:[minute]:[second]").unwrap();
+
+        if let Some(line_item_map) = &self.line_items {
+
+
+
+            for (agreement_id, (tariff, line_items)) in line_item_map {
+
+                let mut amount_map = IndexMap::new();
+                let mut total_amount = Decimal::new(0,0);
+                let mut total_units = Decimal::new(0,0);
+
+                println!();
+                tariff.print();
+                println!();
+
+                TransactionType::print_break_down_line_headers();
+                // println!("Line items for agreement {}", agreement_id);
+                // println!("{:-^20} {:-^20} {:-^10} {:-^10} {:-^10}", "From", "To", "Amount", "Units", "p / unit");
+        
+                let mut prev = None;
+                for item in line_items {
+                    let amount = item.net_amount_ / one_hundred;
+
+                    total_amount += amount;
+                    total_units += item.number_of_units_;
+
+                    let unit_cost = if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ };
+
+
+                    println!("{:20} {:20} {:10.3} {:12.4} {:10.3}", 
+                        if let Some(prev) = prev {
+                            if prev == item.start_at_.date() {
+                                item.start_at_.format(&time_format).unwrap()
+                            } else {
+                                item.start_at_.format(&format).unwrap()
+                            }
+                        } else {
+                            item.start_at_.format(&format).unwrap()
+                        },
+                        if item.end_at_.date() == item.start_at_.date() {item.end_at_.format(&time_format).unwrap()} else {item.end_at_.format(&format).unwrap()},
+                             amount, item.number_of_units_, 
+                        &unit_cost  );
+                    
+                    if item.number_of_units_.is_positive() {
+                        let key = format!("{:.2}", unit_cost);
+                        if let Some((total_amount, total_units)) = amount_map.get(&key) {
+                            amount_map.insert(key, (amount + *total_amount, item.number_of_units_ + *total_units));
+                        }
+                        else {
+                            amount_map.insert(key, (amount, item.number_of_units_));
+                        }
+                    }
+                    
+                    prev = Some(item.start_at_.date());
+                }
+                println!("{:41} {:10.3} {:12.4}", "Total Consumption", total_amount, total_units);
+                if line_items.len() > 0 {
+                    let start_date = line_items.get(0).unwrap().start_at_.date();
+                    let end_date = line_items.get(line_items.len() - 1).unwrap().end_at_.date();
+                    let days = end_date.to_julian_day() - start_date.to_julian_day();
+                    let standing_charge = Decimal::new((tariff.standing_charge() * (10000 * days) as f64) as i64,6);
+                    println!("{:41} {:10.3}", format!("Standing charge ({} days @ {})", days,tariff.standing_charge()) , standing_charge);
+                    println!("{:41} {:10.3}", "Total", total_amount + standing_charge);
+            
+        
+                    let txn = self.transaction.as_transaction_type();
+                    print!("{:30} {:10} ", "as shown on bill", "");
+            
+                    if let TransactionType::Charge(charge) = &self.transaction {
+                        print!("{:>9}  ", as_decimal(txn.amounts_.net_, 2));
+                        if let Some(consumption) = &charge.consumption_ {
+                            print!("{:>12.4} ",consumption.quantity_);
+            
+                            let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
+            
+                            print!("{:>10.3}", rate);
+                        }
+                        println!("");
+                    }
+                    println!("");
+                    println!("Analysis");
+                    println!("--------");
+            
+                    if !amount_map.is_empty() {
+                        println!("{:-^15} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10}", "Unit Rate", "Cost", "Units", "% Cost", "% Units", "% Bill");
+                        for (key, (amount, units)) in amount_map {
+                            println!("{:>15} {:10.2} {:10.2} {:10.2} {:10.2} {:10.2}",
+                                key,
+                                amount,
+                                units,
+                                one_hundred * amount / total_amount,
+                                one_hundred * units / total_units,
+                                one_hundred * amount / (standing_charge + total_amount)
+                            );
+                        }
+                        println!("{:60}{:10.2}",
+                            "Standing Charge",
+                            one_hundred * standing_charge / (standing_charge + total_amount)
+                        );
+                    }
+                    println!("");
+                    println!("");
+                    println!("");
+                }
+            }
+        }
+
+    }
+}
 
 pub struct BillList {
     pub account_number: String,
@@ -415,120 +684,6 @@ impl BillTransactionList {
             
             Ok(result)
         }
-
-    pub fn print(&self) {
-        
-        print!("{:30} {:10} ", 
-            "Description",
-            "Posted"
-        );
-        print!("{:>10} {:>10} {:>10} {:>10} ", 
-            "Net",
-            "Tax", 
-            "Total",
-            "Balance"
-        );
-        print!("{:10} {:10} {:>12} ", 
-            "From",
-            "To",
-            "Units"
-        );
-        print!("{:>12}", "p / unit");
-        println!();
-
-        let mut total_electric_charge = 0;
-        let mut total_electric_units = Decimal::new(0, 0);
-
-        for (_key, transaction) in &self.transactions {
-        // for edge in (&statement.transactions_.edges).into_iter().rev() {
-            let txn = transaction.as_transaction_type();
-
-            if let TransactionType::Charge(charge) = &transaction {
-                if charge.is_export_ {
-                    print!("{} {:width$} ", txn.title_, "Export", width = 30 - txn.title_.len() - 1);
-                }
-                else {
-                        print!("{:30} ", txn.title_);
-                }
-            }
-            else {
-                print!("{:30} ", txn.title_);
-            }
-            print!("{:10} ", 
-                        txn.posted_date_
-                    );
-
-            if let TransactionType::Charge(charge) = &transaction {
-                print!("{:>10} {:>10} {:>10} {:>10} ", 
-                    as_decimal(txn.amounts_.net_, 2),
-                    as_decimal(txn.amounts_.tax_, 2), 
-                    as_decimal(txn.amounts_.gross_, 2),
-                    as_decimal(txn.balance_carried_forward_, 2)
-                );
-                if let Some(consumption) = &charge.consumption_ {
-                    print!("{:10} {:10} {:>12.4} ", 
-                        consumption.start_date_,
-                        consumption.end_date_,
-                        consumption.quantity_
-                    );
-
-                    let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
-
-                    print!("{:>12.4}", rate); //.round_dp(2));
-
-                    if charge.is_export_ {
-                        
-                    }
-                    else {
-                            if txn.title_.eq("Electricity") {
-                                total_electric_charge += *&txn.amounts_.gross_;
-                                total_electric_units += consumption.quantity_;
-                            }
-                        }
-                }
-                else {
-                    print!("{:47}","");
-                }
-            }
-            else {
-                print!("{:>10} {:>10} {:>10} {:>10} ", 
-                    as_decimal(-txn.amounts_.net_, 2),
-                    as_decimal(-txn.amounts_.tax_, 2), 
-                    as_decimal(-txn.amounts_.gross_, 2),
-                    as_decimal(txn.balance_carried_forward_, 2)
-                );
-                print!("{:47}","");
-            }
-            if let Some(note) = &txn.note_ {
-                let note = note.trim();
-                print!(" {}", note);
-            }
-            println!();
-        }
-
-        if total_electric_units.is_positive() {
-            println!("\nTOTALS");
-            let rate = Decimal::from(total_electric_charge) / total_electric_units;
-
-            print!("{:30} {:10} ", 
-                "Electricity Import",
-                ""
-            );
-            print!("{:>10} {:>10} {:>10} {:>10} ", 
-                "",
-                "", 
-                as_decimal(total_electric_charge, 2),
-                ""
-            );
-            print!("{:10} {:10} {:>12.4} ", 
-                "",
-                "",
-                total_electric_units
-            );
-            print!("{:>12.4}", rate);
-            println!();
-        }
-    }
 
     pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
         let mut has_previous_page = self.has_previous_page;

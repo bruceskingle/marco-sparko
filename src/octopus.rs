@@ -111,9 +111,9 @@ Print the contents of the bill whose id is given, or the most recent bill, if no
 
 impl Client {
     async fn new(context: Arc<MarcoSparkoContext>, profile: Option<Profile>, 
-        request_manager: Arc<RequestManager>) -> Result<Client, Error> {   
+        request_manager: Arc<RequestManager>, verbose: bool) -> Result<Client, Error> {   
 
-        let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID)?;
+        let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
         let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
         let bill_manager = BillManager::new(&cache_manager, &request_manager);
         let meter_manager = MeterManager::new(&cache_manager, &request_manager);
@@ -860,7 +860,7 @@ impl ClientBuilder {
         let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?);
        
         let mut client = Client::new(self.context, option_profile, 
-            authenticated_request_manager
+            authenticated_request_manager, self.verbose
         ).await?;
 
         if init {

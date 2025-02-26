@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
+use indexmap::IndexMap;
 use sparko_graphql::types::{Date, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
 
@@ -32,7 +33,7 @@ pub struct MeterManager {
     pub cache_manager: Arc<CacheManager>,
     pub request_manager: Arc<RequestManager>,
     pub properties: HashMap<String, PropertyList>,
-    pub agreements: HashMap<String,MeterAgreementList>,
+    pub agreements: IndexMap<String,MeterAgreementList>,
 }
 
 //   Rita the
@@ -46,11 +47,11 @@ impl MeterManager {
             cache_manager: cache_manager.clone(),
             request_manager: request_manager.clone(),
             properties: HashMap::new(),
-            agreements: HashMap::new(),
+            agreements: IndexMap::new(),
         }
     }
 
-    pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date) -> Result<HashMap<String, Vec<meter::electricity_agreement_line_items::LineItemType>>, Error>{
+    pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date) -> Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>, Error>{
         if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
             entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
         }
@@ -69,6 +70,8 @@ impl MeterManager {
         let start_date_time = start_date.at_midnight();
         let end_date_time = end_date.at_next_midnight();
 
+        println!("get_line_items {:?} - {:?}", start_date_time, end_date_time);
+
         let in_scope_agreements = meter_agreements.get_in_scope(meter_type, is_export, &start_date_time, &end_date_time);
 
         async fn get_line_items2(
@@ -83,6 +86,7 @@ impl MeterManager {
                     for (_cursor, item) in line_items.line_items {
                         if &item.start_at_ >= end_date_time {
                             // thats it
+                            println!("Line item has date {:?} so we are done", item.start_at_);
                             return Ok(in_scope_items)
                         }
                         if &item.start_at_ >= start_date_time {
@@ -91,144 +95,34 @@ impl MeterManager {
                     }
 
                     bucket_date = line_items.end_date;
+
+                    println!("New bucket date {:?}", bucket_date);
+
+                    if *bucket_date > end_date_time.date() {
+                        println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
+                        return Ok(in_scope_items)
+                    }
                 }
-                // Ok(in_scope_items)
-
-
-
-        //     // TODO this is the whole months worth of line items
-        //     let line_items = AgreementLineItems::new(&self.cache_manager, &self.request_manager, account_number.clone(), meter_type, agreement_id, start_date).await?;
-
-        //     for (cursor, item) in &line_items.line_items {
-        //         if item.start_at_ >= end_date_time {
-        //             // thats it
-        //             return Ok(())
-        //         }
-        //         if item.start_at_ >= start_date_time {
-        //             result.push(item);
-        //         }
-        //     }
         }
         
-        let mut item_map = HashMap::new();
+        let mut item_map = IndexMap::new();
 
-        for agreement_id in in_scope_agreements {
-            let agreement_id = agreement_id.to_string(); // Ugh!
+        for (agreement_id, tariff) in in_scope_agreements {
+            // let agreement_id = agreement_id.to_string(); // Ugh!
 
+            tariff.print();
             let in_scope_items = get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_type, &agreement_id, start_date, &start_date_time, &end_date_time).await?;
-            item_map.insert(agreement_id, in_scope_items);
+
+            println!("Got {} in scope items", in_scope_items.len());
+            println!("First {}", serde_json::to_string_pretty(in_scope_items.get(0).unwrap())?);
+            println!("Last {}", serde_json::to_string_pretty(in_scope_items.get(in_scope_items.len() - 1).unwrap())?);
+
+
+            item_map.insert(agreement_id, (tariff, in_scope_items));
         }
-
-        // self.properties.entry(account_number.clone()).or_insert_with(||  PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?)
-        // first get the properties belonging to the account
-        // let properties = PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?;
-
-        // Now find all of the in scope meters
-
-        // for property in &properties.properties.account_.properties_ {
-        //     match meter_type {
-        //         MeterType::Gas => todo!(),
-        //         MeterType::Electricity => {
-        //             for meter_point in property.electricity_meter_points_ {
-        //                 for meter in meter_point.meters_ {
-        //                     println("Meter {}", meter.node_id_);
-        //                 }
-        //             }
-        //         },
-        //     }
-            
-        // }
-
-        
 
         Ok(item_map)
     }
-
-    fn in_scope(from: &Date, to: &Option<Date>, valid_from: &DateTime, valid_to: &Option<DateTime>) -> bool {
-        let end_in_scope = if let Some(to) = to {
-            // if let Some(valid_from) = valid_from {
-                valid_from.to_date() <= *to
-            // }
-            // else {
-            //     false
-            // }
-        }
-        else {
-            true
-        };
-
-        let start_in_scope = if let Some(valid_to) = valid_to {
-                valid_to.to_date() >= *from
-
-        }
-        else {
-            true
-        };
-        
-        // println!("in_scope({:?},{:?},{:?},{:?}) = {}",
-        //     from,
-        //     to,
-        //     valid_from,
-        //     valid_to,
-        //     end_in_scope && start_in_scope
-        // );
-        end_in_scope && start_in_scope
-    }
-    
-    // pub async fn get_electric_line_items(&self,
-    //     from: &Date,
-    //     to: &Option<Date>) {
-    //         for (meter_node_id, agreement) in self.agreements.electricity_map {
-    //             if Self::in_scope(&from, &to, &agreement.valid_from_, &agreement.valid_to_) {
-    //                 // let agreement_id = Self::unexpected_none()?.to_string();
-    //                 // println!("Electricity agreement {}", &agreement.id_);
-
-    //                 self.get_electric_line_items(format!("{}", &agreement.id_), from, to).await?;
-
-    //             }
-    //         }
-    // }
-
-    // pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
-    //     self.bills.print_summary_lines();
-    //     Ok(())
-    // }
-
-
-    // pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
-    //     if let Some(bill_id) = args.next() {
-    //         for (_id, bill) in &self.bills.bills {
-    //             if bill_id == bill.as_bill_interface().id_ {
-    //                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-    //                     Some(self.get_statement_transactions(self.account_number.clone(), bill_id.to_string()).await?)
-    //                 }
-    //                 else {
-    //                     None
-    //                 };
-
-    //                 bill.print(transactions);
-    //                 return Ok(())
-    //             }
-    //         }
-    //         println!("Unknown bill '{}'", bill_id);
-    //     }
-    //     else {
-    //         if self.bills.bills.is_empty() {
-    //             println!("There are no bills in this account");
-    //         }
-    //         else {
-    //             let (_id, bill) = self.bills.bills.get(self.bills.bills.len() - 1).unwrap();
-    //             let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-    //                 Some(self.get_statement_transactions(self.account_number.clone(), bill.as_bill_interface().id_.to_string()).await?)
-    //             }
-    //             else {
-    //                 None
-    //             };
-    //             bill.print(transactions);
-    //         }
-    //     }
-    //     Ok(())
-    // }
 }
 
 pub struct PropertyList {
@@ -326,6 +220,71 @@ impl PropertyList {
     }
 }
 
+pub enum Tariff {
+    Electricity(meter::meter_agreements::ElectricityTariffType),
+    Gas(meter::meter_agreements::GasTariffType)
+}
+
+impl Tariff {
+    pub fn standing_charge(&self) -> f64 {
+        match self {
+            Tariff::Electricity(electricity_tariff_type) => {
+                match electricity_tariff_type {
+                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                }
+            },
+            Tariff::Gas(tariff) => { tariff.standing_charge_},
+        }
+    }
+    
+    pub fn print(&self) {
+        match self {
+            Tariff::Electricity(electricity_tariff_type) => {
+                match electricity_tariff_type {
+                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => {
+
+                        println!("Electricity Tariff {}", tariff.display_name_);
+                        println!("Full Name          {}", tariff.full_name_);
+                        println!("Code               {}", tariff.tariff_code_);
+                        // println!("Product Code       {}", tariff.product_code_);
+                        // println!("Description        {}", half_hourly_tariff.description_);
+                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_);
+                        println!("Standing Charge    {:7.4}", tariff.standing_charge_);
+                        println!("Pre-VAT Unit Rate  {:7.4}", tariff.pre_vat_unit_rate_);
+                        println!("Unit Rate          {:7.4}", tariff.unit_rate_);
+                    },
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => {
+                        println!("Electricity Tariff {}", tariff.display_name_);
+                        println!("Full Name          {}", tariff.full_name_);
+                        println!("Code               {}", tariff.tariff_code_);
+                        println!("Product Code       {}", tariff.product_code_);
+                        // println!("Description        {}", half_hourly_tariff.description_);
+                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_);
+                        println!("Standing Charge    {:7.4}", tariff.standing_charge_);
+                        // println!("Unit Rates");
+                        // for rate in &half_hourly_tariff.unit_rates_ {
+                        //     println!("{:?} {:?} {:10.4} {:10.4}", rate.valid_from_, rate.valid_to_, rate.pre_vat_value_, rate.value_);
+                        // }
+                    },
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => todo!(),
+                }
+            },
+            Tariff::Gas(gas_tariff_type) => {
+                println!("Gas Tariff         {}", gas_tariff_type.full_name_);
+                println!("Code               {}", gas_tariff_type.tariff_code_);
+                println!("Standing Charge    {:7.4}", gas_tariff_type.standing_charge_);
+                println!("Pre-VAT Unit Rate  {:7.4}", gas_tariff_type.pre_vat_unit_rate_);
+                println!("Unit Rate          {:7.4}", gas_tariff_type.unit_rate_);
+            },
+        }
+    }
+}
 
 pub struct MeterAgreementList {
     pub account_number: String,
@@ -388,37 +347,37 @@ impl MeterAgreementList {
             })
         }
 
-    fn get_in_scope(&self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<i32> {
+    fn get_in_scope(mut self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<(String, Tariff)> {
         let mut in_scope_agreements = Vec::new();
 
         match meter_type {
             MeterType::Gas => {
-                for agreement_vec in self.gas_map.values() {
+                for (_meter_node_id, agreement_vec) in self.gas_map {
                     for agreement in agreement_vec {
                         if &agreement.valid_from_ <= end_date {
                             if let Some(valid_to) = &agreement.valid_to_ {
                                 if valid_to >= start_date {
-                                    in_scope_agreements.push(agreement.id_.clone());
+                                    in_scope_agreements.push((agreement.id_.to_string(), Tariff::Gas(agreement.tariff_)));
                                 }
                             }
                             else {
-                                in_scope_agreements.push(agreement.id_.clone());
+                                in_scope_agreements.push((agreement.id_.to_string(), Tariff::Gas(agreement.tariff_)));
                             }
                         }
                     }
                 }
             },
             MeterType::Electricity => {
-                for agreement_vec in if is_export {self.export_electricity_map.values()} else {self.import_electricity_map.values()} {
+                for (_meter_node_id, agreement_vec) in if is_export {self.export_electricity_map} else {self.import_electricity_map} {
                     for agreement in agreement_vec {
                         if &agreement.valid_from_ <= end_date {
                             if let Some(valid_to) = &agreement.valid_to_ {
                                 if valid_to >= start_date {
-                                    in_scope_agreements.push(agreement.id_.clone());
+                                    in_scope_agreements.push((agreement.id_.to_string(), Tariff::Electricity(agreement.tariff_)));
                                 }
                             }
                             else {
-                                in_scope_agreements.push(agreement.id_.clone());
+                                in_scope_agreements.push((agreement.id_.to_string(), Tariff::Electricity(agreement.tariff_)));
                             }
                         }
                     }

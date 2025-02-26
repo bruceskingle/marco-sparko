@@ -338,12 +338,13 @@ impl MarcoSparkoContext {
         Ok(path)
     }
       
-    fn create_cache_manager(&self, module_id: &str) -> Result<Arc<CacheManager>, Error> {
+    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> Result<Arc<CacheManager>, Error> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         fs::create_dir_all(&dir_path)?;
 
         Ok(Arc::new(CacheManager {
             dir_path,
+            verbose,
         }))
     }
     
@@ -863,6 +864,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
 
 pub struct CacheManager {
     pub dir_path: PathBuf,
+    pub verbose: bool,
 }
 
 impl CacheManager {
@@ -901,7 +903,10 @@ impl CacheManager {
             let mut out = fs::File::create(path)?;
             for (key, value) in vec {
                 writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
-                println!("WRITE {}", key);
+                if self.verbose 
+                {
+                    println!("WRITE {}", key);
+                }
             }
         }
         else {
@@ -956,7 +961,10 @@ impl CacheManager {
             Ok(lines) => {
                 // Consumes the iterator, returns an (Optional) String
                 for line in lines.map_while(Result::ok) {
-                    println!("READ {}", line);
+                    if self.verbose 
+                    {
+                        println!("READ {}", line);
+                    }
 
                     match line.split_once('\t') {
                         Some((key, value)) => vec.push((key.to_string(), serde_json::from_str(value)?)),
