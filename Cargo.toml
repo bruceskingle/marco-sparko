@@ -32,6 +32,9 @@ futures = "0.3.31"
 reedline = "0.38.0"
 nu-ansi-term = "0.50.1"
 indexmap = "2.7.1"
+time-tz = "2.0.0"
+#tzdb = "0.7.2"
+#tz-rs = "0.7.0"
 
 [dev-dependencies]
 tokio-test = "*"

@@ -45,7 +45,7 @@ impl BillManager {
     //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
     // }
 
-    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager)  -> Result<Vec<BillTransactionBreakDown>, Error> {
+    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz)  -> Result<Vec<BillTransactionBreakDown>, Error> {
 
 
         let mut result = Vec::new();
@@ -56,8 +56,15 @@ impl BillManager {
             if let TransactionType::Charge(charge) = &transaction {
                 if let Some(consumption) = &charge.consumption_ {
                     // print the line items making up this charge
-                    println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
-                    let line_items = Some(meter_manager.get_line_items(&account_number, &MeterType::Electricity, charge.is_export_, &consumption.start_date_, &consumption.end_date_).await?);
+                    //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
+
+                    let meter_type = match transaction.as_transaction_type().title_.as_str() {
+                        "Gas" => MeterType::Gas,
+                        "Electricity" => MeterType::Electricity,
+                        _ => panic!("Unknown consumption type")
+                    };
+
+                    let line_items = Some(meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?);
 
                     result.push(BillTransactionBreakDown{
                         transaction,
@@ -81,7 +88,7 @@ impl BillManager {
     }
 
 
-    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager) ->  Result<(), Error> {
+    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
         // let one_hundred = Decimal::new(100, 0);
         // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let cache_manager = self.cache_manager.clone();
@@ -94,7 +101,7 @@ impl BillManager {
                     let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
 
 
-                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager).await?;
+                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
 
                         Some(transactions)
                     }
@@ -106,16 +113,16 @@ impl BillManager {
                     return Ok(())
                 }
             }
-            println!("Unknown bill '{}'", bill_id);
+            //println!("Unknown bill '{}'", bill_id);
         }
         else {
             if bills.bills.is_empty() {
-                println!("There are no bills in this account");
+                //println!("There are no bills in this account");
             }
             else {
                 let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager).await?)
+                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
                 }
                 else {
                     None
@@ -357,7 +364,7 @@ impl TransactionType {
                         }
                 }
                 else {
-                    print!("{:27}","");
+                    print!("{:56}","");
                 }
             }
             else {
@@ -367,7 +374,7 @@ impl TransactionType {
                     as_decimal(-txn.amounts_.gross_, 2),
                     as_decimal(txn.balance_carried_forward_, 2)
                 );
-                print!("{:47}","");
+                print!("{:56}","");
             }
             if let Some(note) = &txn.note_ {
                 let note = note.trim();
@@ -452,7 +459,7 @@ impl BillTransactionBreakDown {
                     let end_date = line_items.get(line_items.len() - 1).unwrap().end_at_.date();
                     let days = end_date.to_julian_day() - start_date.to_julian_day();
                     let standing_charge = Decimal::new((tariff.standing_charge() * (10000 * days) as f64) as i64,6);
-                    println!("{:41} {:10.3}", format!("Standing charge ({} days @ {})", days,tariff.standing_charge()) , standing_charge);
+                    println!("{:41} {:10.3}", format!("Standing charge ({} days @ {:.3})", days,tariff.standing_charge()) , standing_charge);
                     println!("{:41} {:10.3}", "Total", total_amount + standing_charge);
             
         
@@ -521,7 +528,7 @@ impl BillList {
     pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
         let mut has_previous_page = self.has_previous_page;
 
-        println!("fetch_all bills {} in buffer", self.bills.len());
+        //println!("fetch_all bills {} in buffer", self.bills.len());
 
         while has_previous_page 
         {
@@ -537,7 +544,7 @@ impl BillList {
             // let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
             let response = request_manager.call(&query).await?;
 
-            println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
+            //println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
 
             if let Some(start_cursor) = response.account_.bills_.page_info.start_cursor {
                 self.start_cursor = Some(start_cursor.clone());
@@ -688,7 +695,7 @@ impl BillTransactionList {
     pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
         let mut has_previous_page = self.has_previous_page;
 
-        println!("fetch_all statement transactions {} in buffer", self.transactions.len());
+        //println!("fetch_all statement transactions {} in buffer", self.transactions.len());
 
         
 
@@ -707,7 +714,7 @@ impl BillTransactionList {
 
             
             if let super::graphql::bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
-                println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
+                //println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
 
                 self.start_cursor = statement.transactions_.page_info.start_cursor.clone();
                 has_previous_page = statement.transactions_.page_info.has_previous_page.clone();
@@ -717,7 +724,7 @@ impl BillTransactionList {
                     self.transactions.push((sort_key, edge.node));
                 }
                 
-                println!("has_previous_page = {:?}", has_previous_page);
+                //println!("has_previous_page = {:?}", has_previous_page);
             }
         }
         self.has_previous_page = has_previous_page;

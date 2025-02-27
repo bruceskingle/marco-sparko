@@ -188,3 +188,16 @@ fragment lineItems on LineItemConnection @ms_required_by_default {
     startCursor
   }
 }
+
+query gasAgreementLineItems($agreementId: ID!, $startAt: DateTime!, $first: Int, $timezone: String!, $itemType: LineItemTypeOptions!, $lineItemGrouping: LineItemGroupingOptions!, $after: String) @ms_required_by_default {
+  gasAgreement(id: $agreementId) @ms_required_by_default {
+    ... on GasAgreementType  @ms_required_by_default {
+      meterPoint {
+        mprn
+      }
+      lineItems(first: $first, grouping: $lineItemGrouping, startAt: $startAt, itemType: $itemType, timezone: $timezone, after: $after) {
+        ...lineItems
+      }
+    }
+  }
+}

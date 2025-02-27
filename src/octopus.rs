@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 pub use error::Error;
 use sparko_graphql::types::{Date, DateTime};
+use time_tz::timezones;
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
@@ -36,6 +37,7 @@ pub struct OctopusArgs {
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub api_key:  Option<String>,
+    pub billing_timezone: Option<String>,
     #[serde(skip)]
     // #[serde(default = false)]
     pub init: bool,
@@ -45,6 +47,7 @@ impl Profile {
     pub fn new() -> Profile {
         Profile {
             api_key: None,
+            billing_timezone: Some("Europe/London".to_string()),
             init: false,
         }
     }
@@ -60,6 +63,7 @@ pub struct Client{
     bill_manager: BillManager,
     meter_manager: MeterManager,
     account_manager: AccountManager,
+    billing_timezone: &'static time_tz::Tz,
 }
 
 const MODULE_ID: &str = "octopus";
@@ -76,7 +80,7 @@ impl CommandProvider for Client {
                 .await?)
             },
             "bill" => {
-                Ok(self.bill_manager.bill_handler(args, &account_id, &mut self.meter_manager).await?)
+                Ok(self.bill_manager.bill_handler(args, &account_id, &mut self.meter_manager, self.billing_timezone).await?)
             },
             _ => Err(super::Error::UserError(format!("Invalid command '{}'", command)))
         }
@@ -113,10 +117,11 @@ impl Client {
     async fn new(context: Arc<MarcoSparkoContext>, profile: Option<Profile>, 
         request_manager: Arc<RequestManager>, verbose: bool) -> Result<Client, Error> {   
 
+        let billing_timezone = Self::get_billing_timezone(&profile);
         let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
         let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
         let bill_manager = BillManager::new(&cache_manager, &request_manager);
-        let meter_manager = MeterManager::new(&cache_manager, &request_manager);
+        let meter_manager = MeterManager::new(&cache_manager, &request_manager, &billing_timezone);
 
         Ok(Client {
             context,
@@ -127,7 +132,20 @@ impl Client {
             account_manager,
             bill_manager,
             meter_manager,
+            billing_timezone,
         })
+    }
+
+    fn get_billing_timezone(profile: &Option<Profile>) -> &'static time_tz::Tz {
+        if let Some(profile) = profile {
+            if let Some(name) = &profile.billing_timezone {
+                if let Some(tz) =  timezones::get_by_name(&name) {
+                    return tz;
+                }
+                panic!("Unable to load billing_timezone '{}'", name);
+            }
+        }
+        return timezones::db::europe::LONDON;
     }
 
     fn get_api_key(&self) -> &Option<String> {
@@ -435,7 +453,7 @@ impl Client {
                         ..old_profile.clone()
                     };
 
-                    println!("UPDATE profile <{:?}>", &new_profile);
+                    //println!("UPDATE profile <{:?}>", &new_profile);
 
                     self.context.update_profile(MODULE_ID, new_profile)?;
                 }
@@ -444,7 +462,7 @@ impl Client {
                 let mut new_profile  = Profile::new();
                 new_profile.api_key = Some(new_api_key.clone());
 
-                println!("CREATE profile <{:?}>", &new_profile);
+                //println!("CREATE profile <{:?}>", &new_profile);
                 self.context.update_profile(MODULE_ID, new_profile)?;
             }
         }
