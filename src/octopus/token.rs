@@ -1,39 +1,20 @@
-/*****************************************************************************
- MIT License
-
-Copyright (c) 2024 Bruce Skingle
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-******************************************************************************/
-
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 use serde::{Deserialize, Serialize};
-
-use crate::Context;
+use tokio::sync::Mutex;
+use crate::MarcoSparkoContext;
 
 use super::error::Error;
 use super::graphql::ObtainJsonWebTokenInput;
 
 use sparko_graphql::{RequestManager, TokenManager};
 use super::graphql::login::obtain_kraken_token::ObtainKrakenJsonWebToken;
+
+/*
+Implementation of TokenManager for the Octopus API
+==================================================
+*/
 
 // // Yeah, I know. They declare a GenericScalar in fact its the JWT payload
 // #[derive(GraphQLType)]
@@ -153,18 +134,15 @@ impl OctopusAuthenticator {
             else {
                 panic!("Unreachable");
             }
-
-            
         }
-
     }
 }
 
 pub struct OctopusTokenManager {
-    context:            Context,
+    context: Arc<MarcoSparkoContext>,
     request_manager: Arc<RequestManager>,
     authenticator: OctopusAuthenticator,
-    token: Option<OctopusToken>
+    token: Mutex<Option<OctopusToken>>,
 }
 
 impl OctopusTokenManager {
@@ -172,7 +150,7 @@ impl OctopusTokenManager {
         TokenManagerBuilder::new()
     }
 
-    fn new(context: Context,
+    fn new(context: Arc<MarcoSparkoContext>,
         request_manager: Arc<RequestManager>,
         authenticator: OctopusAuthenticator,
     ) -> OctopusTokenManager {
@@ -187,85 +165,62 @@ impl OctopusTokenManager {
             context,
             request_manager,
             authenticator,
-            token,
-        }
-    }
-
-    pub fn clone_delete_me(&self) -> OctopusTokenManager {
-        OctopusTokenManager {
-            context: self.context.clone(),
-            request_manager: self.request_manager.clone(),
-            authenticator: OctopusAuthenticator {
-                api_key: self.authenticator.api_key.clone(),
-                email: self.authenticator.email.clone(),
-                password: self.authenticator.password.clone(),
-            },
-            token: if let Some(token) = &self.token {
-                Some(OctopusToken {
-                    token_expires: token.token_expires,
-                    token: token.token.clone()
-                })
-            }
-            else {
-                None
-            }
+            token: Mutex::new(token),
         }
     }
 }
 
 impl TokenManager for OctopusTokenManager {
 
-    async fn get_authenticator(&mut self)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
-        let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32;
+    async fn get_authenticator(&self, refresh: bool)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
+        let mut locked_token = self.token.lock().await;
 
-        if let Some(token) = &self.token {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as u32;
-
-            if token.token_expires - GRACE_PERIOD > now {
-                Ok(token.token.clone())
-            }
-            else {
-
-                self.authenticate().await
-            }
-        } else {
-            self.authenticate().await
+        let current_token = if refresh {
+            None
         }
-    }
+        else {
+            if let Some(token) = &*locked_token {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as u32;
 
-    async fn authenticate(&mut self)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
+                if token.token_expires - GRACE_PERIOD > now {
+                    Some(token.token.clone())
+                }
+                else {
 
-        let input = self.authenticator.to_obtain_json_web_token_input()?;
-        let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-        let response = self.request_manager.call(&mutation, None).await?;
-        // println!("Result {}", serde_json::to_string_pretty(&response)?);
+                    None
+                }
+            } else {
+                None
+            }
+        };
 
-        //     token_arc = Arc::new(response.obtain_kraken_token_.token_);
-        //     token = Some(&token_arc);
-
-        // let response = self.request_manager.mutation::<ObtainJSONWebTokenInput, ObtainKrakenJSONWebToken>("Login", "obtainKrakenToken", variables).await?;
-        let token = OctopusToken::from(response.obtain_kraken_token_);
-
-        self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
-
-        let result = token.token.clone();
-
-        self.token = Some(token);
-
-
-        Ok(result)
+        if let Some(token) = current_token {
+            Ok(token)
+        }
+        else {
+            let input = self.authenticator.to_obtain_json_web_token_input()?;
+            let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
+            let response = self.request_manager.call(&mutation, None).await?;
+    
+            let token = OctopusToken::from(response.obtain_kraken_token_);
+    
+            self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
+    
+            let result = token.token.clone();
+    
+            *locked_token = Some(token);
+            
+            Ok(result)
+        }
     }
 
 }
 
 pub struct TokenManagerBuilder {
-    context:            Option<Context>,
+    context:            Option<Arc<MarcoSparkoContext>>,
     authenticator:      Option<OctopusAuthenticator>,
     request_manager: Option<Arc<RequestManager>>,
 }
@@ -279,7 +234,7 @@ impl TokenManagerBuilder{
         }
     }
     
-    pub fn with_context(mut self, context: Context) -> TokenManagerBuilder {
+    pub fn with_context(mut self, context: Arc<MarcoSparkoContext>) -> TokenManagerBuilder {
         self.context = Some(context);
         self
     }

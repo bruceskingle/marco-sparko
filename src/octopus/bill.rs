@@ -1,1500 +1,768 @@
-/*****************************************************************************
-MIT License
+use std::collections::HashMap;
+use indexmap::IndexMap;
+use std::sync::Arc;
 
-Copyright (c) 2024 Bruce Skingle
+use sparko_graphql::AuthenticatedRequestManager;
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-******************************************************************************/
-
-use display_json::DisplayAsJsonPretty;
-use serde::{Deserialize, Serialize};
-
-
-use std::ops::Not;
-// use sparko_graphql_derive::{GraphQLQueryParams, GraphQLType};
-use sparko_graphql::{types::{Boolean, Date, ForwardPageOf, Int, ID}, GraphQL, GraphQLQueryParams, GraphQLType, NoParams, ParamBuffer};
-use super::transaction::StatementTransactionParams;
-use super::transaction::Transaction;
 use crate::octopus::decimal::Decimal;
+use crate::octopus::meter::MeterType;
+use crate::util::as_decimal;
+use crate::CacheManager;
 
+use super::graphql::{bill, meter};
+use super::meter::{MeterManager, Tariff};
+use bill::get_bills::BillInterface;
+use bill::get_statement_transactions::TransactionType;
+use super::graphql::BillTypeEnum;
+use super::RequestManager;
+use super::{token::OctopusTokenManager, Error};
 
-// #[derive(GraphQLQueryParams)]
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct SimpleBillParams {
-//     pub first: Int,
-//     pub transactions: TransactionSimpleViewParams
-// }
+// const one_hundred: Decimal = Decimal::new(100, 0);
+// const format: time::format_description = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
 
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-// #[serde(tag = "billType")]
-// pub enum SimpleBill {
-//     Statement(SimpleStatementType)
-// }
-
-// impl GraphQLType<SimpleBillParams> for SimpleBill {
-//     fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
-//         format!(r#"
-//                 {}
-//                 {}
-//         "#, SimpleBillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
-//             SimpleStatementType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions"))
-//         )
-//     }
-// }
-
-// #[derive(GraphQLType)]
-// #[graphql(params = "SimpleBillParams")]
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct SimpleBillInterfaceType {
-//     pub id: String,
-//     pub from_date: String,
-//     pub to_date: String
-// }
-
-// // #[derive(GraphQLType)]
-// // #[graphql(params = "SimpleBillParams")]
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct SimpleStatementType {
-//     #[serde(flatten)]
-//     // #[graphql(flatten)] maybe?
-//     pub simple_bill_interface_type: SimpleBillInterfaceType,
-//     pub transactions: ForwardPageOf<TransactionSimpleView>
-// }
-
-
-// /* This is what gets generated
-// impl GraphQLType < SimpleBillParams > for SimpleStatementType
-// {
-//     fn get_query_part(params : & SimpleBillParams, prefix : String) -> String
-//     {
-//         format!
-//         ("simpleBillInterfaceType({}){{\n    {}\n}}\ntransactions({}){{\n    {}\n}}\n",
-//         params.simple_bill_interface_type.get_actual(GraphQL ::
-//         prefix(& prefix, "simpleBillInterfaceType")), SimpleBillInterfaceType
-//         ::
-//         get_query_part(& params.simple_bill_interface_type, GraphQL ::
-//         prefix(& prefix, "simpleBillInterfaceType")),
-//         params.transactions.get_actual(GraphQL ::
-//         prefix(& prefix, "transactions")), TransactionSimpleView ::
-//         get_query_part(& params.transactions, GraphQL ::
-//         prefix(& prefix, "transactions")),)
-//     }
-// }
-//      */
-
-// impl GraphQLType<SimpleBillParams> for SimpleStatementType {
-//     fn get_query_attributes(params: &SimpleBillParams, prefix: &str) -> String {
-//         format!(r#"
-//                 id
-//                 fromDate
-//                 toDate
-//                 ...on StatementType {{
-//                     transactions{} {{
-//                         pageInfo
-//                         {{
-//                             startCursor
-//                             hasNextPage
-//                         }}
-//                         edges
-//                         {{
-//                             node
-//                             {}
-//                         }}
-//                     }}
-//                 }}
-//         "#, params.transactions.get_actual(&GraphQL::prefix(prefix, "transactions")), TransactionSimpleView::get_query_part(&params.transactions, &GraphQL::prefix(prefix, "transactions"))
-//         )
-//     }
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// #[derive(GraphQLQueryParams)]
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct AccountBillsQueryParams {
-//     pub account: AccountBillsViewParams
-// }
-
-// impl GraphQLQueryParams for AccountBillsQueryParams
-// {
-//     fn get_formal_part(& self, params : & mut ParamBuffer, prefix : & str)
-//     {
-//         self.account.get_formal_part(params, & GraphQL ::
-//         prefix(prefix, "account"));
-//     }
-    
-//     fn get_actual_part(& self, params : & mut ParamBuffer, prefix : & str)
-//     { 
-//         params.push_actual(prefix, & GraphQL :: prefix(prefix, "account")); ; 
-//     }
-    
-//     fn get_variables_part(& self, variables : & mut VariableBuffer, prefix : &
-//     str) -> Result < (), serde_json :: Error >
-//     {
-//         self.account.get_variables_part(variables, & GraphQL ::
-//         prefix(prefix, "account")) ? ; Ok(())
-//     }
-// }
-
-// // #[derive(GraphQLType)]
-// // #[graphql(params = "AccountBillsQueryParams")]
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "camelCase")]
-// pub struct AccountBillsQuery {
-//     pub account: AccountBillsView
-// }
-
-// impl GraphQLQuery<AccountBillsQueryParams> for AccountBillsQuery {
-//     fn get_query(request_name: &str, params: &AccountBillsQueryParams) -> String {
-//         format!(r#"
-//             query {}{} {{
-//                 {}: account{} {}
-//             }}
-//         "#, 
-//             request_name,
-//             params.get_formal(),
-//             request_name,
-//             params.account.get_actual("account_"),
-//             AccountBillsView::get_query_part(&params.account, "account_")
-//         )
-//     }
-    
-//     // fn get_request_name() -> &'static str {
-//     //     "getAccountPropertiesView"
-//     // }
-// }
-
-#[derive(GraphQLQueryParams)]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum BillsOrderBy {
-    #[default]
-    FromDateDesc,
-    IssuedDateDesc
+pub struct BillManager {
+    // pub account_number: String,
+    pub cache_manager: Arc<CacheManager>,
+    pub request_manager: Arc<RequestManager>,
+    pub bills: HashMap<String, BillList>,
 }
 
-#[derive(GraphQLQueryParams)]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct BillQueryParams {
-    // Include bills without PDFs.
-    #[serde(rename = "includeBillsWithoutPDF")]
-    #[serde(skip_serializing_if = "<&bool>::not")]
-    pub include_bills_without_pdf: Boolean,
-
-    //
-    // Include open statements. This flag needs to be used along with
-    // includeBillsWithoutPDF=false otherwise results will prove unexpected.
-    //
-    pub include_open_statements: Boolean,
-
-    // Include held statements within the results.
-    pub include_held_statements: Boolean,
-
-    // Include pre-Kraken / historical statements within the results.
-    pub include_historic_statements: Boolean,
-
-    // Only include bills emailed to the current user's email.
-    pub only_current_email: Boolean,
-
-    // Optional date representing the beginning of the search results. This date value is inclusive.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_date: Option<Date>,
-
-    // Optional date representing the end of the search results. This date value is exclusive.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_date: Option<Date>,
-
-    // Optional date representing the beginning of the search results based on issued date. This date value is inclusive.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub issued_from_date: Option<Date>,
-
-    // Optional date representing the end of the search results based on issued date. This date value is exclusive.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub issued_to_date: Option<Date>,
-
-    // The order in which to return the bills.
-    pub order_by: BillsOrderBy,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub offset: Option<Int>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub before: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub after: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first: Option<Int>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last: Option<Int>,
-
-    pub transactions: StatementTransactionParams
-}
-
-impl Default for BillQueryParams {
-    fn default() -> Self {
+impl BillManager {
+    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> Self {
         Self {
-            include_bills_without_pdf: false.into(),
-            include_open_statements: false.into(),
-            include_held_statements: false.into(),
-            include_historic_statements: true.into(),
-            only_current_email: false.into(),
-            from_date:None,
-            to_date:None,
-            issued_from_date:None,
-            issued_to_date:None,
-            order_by: Default::default(),
-            offset:None,
-            before:None,
-            after:None,
-            first:None,
-            last:None,
-            transactions: Default::default()
+            // account_number,
+            cache_manager: cache_manager.clone(),
+            request_manager: request_manager.clone(),
+            bills: HashMap::new(),
+        }
+    }
+
+    pub async fn get_bills(&mut self, account_number: &String) -> Result<&BillList, Error> {
+        Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, account_number.clone(), crate::CHECK_FOR_UPDATES).await?))
+    }
+
+    // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
+    //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
+    // }
+
+    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz)  -> Result<Vec<BillTransactionBreakDown>, Error> {
+
+
+        let mut result = Vec::new();
+        let transactions = BillTransactionList::new(cache_manager, request_manager, account_number.clone(), statement_id).await?;
+
+
+        for (_cursor, transaction) in transactions.transactions {
+            if let TransactionType::Charge(charge) = &transaction {
+                if let Some(consumption) = &charge.consumption_ {
+                    // print the line items making up this charge
+                    //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
+
+                    let meter_type = match transaction.as_transaction_type().title_.as_str() {
+                        "Gas" => MeterType::Gas,
+                        "Electricity" => MeterType::Electricity,
+                        _ => panic!("Unknown consumption type")
+                    };
+
+                    let line_items = Some(meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?);
+
+                    result.push(BillTransactionBreakDown{
+                        transaction,
+                        line_items,
+                    });
+                    continue;
+                }
+            }
+            result.push(BillTransactionBreakDown{
+                transaction,
+                line_items: None,
+            });
+        }
+
+        Ok(result)
+    }
+
+    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  Result<(), Error> {
+        self.get_bills(account_number).await?.print_summary_lines();
+        Ok(())
+    }
+
+
+    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
+        // let one_hundred = Decimal::new(100, 0);
+        // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        let cache_manager = self.cache_manager.clone();
+        let request_manager = self.request_manager.clone();
+        let bills = self.get_bills(account_number).await?;
+
+        if let Some(bill_id) = args.next() {
+            for (_id, bill) in &bills.bills {
+                if bill_id == bill.as_bill_interface().id_ {
+                    let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+
+
+                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
+
+                        Some(transactions)
+                    }
+                    else {
+                        None
+                    };
+
+                    bill.print(transactions);
+                    return Ok(())
+                }
+            }
+            //println!("Unknown bill '{}'", bill_id);
+        }
+        else {
+            if bills.bills.is_empty() {
+                //println!("There are no bills in this account");
+            }
+            else {
+                let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
+                let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
+                }
+                else {
+                    None
+                };
+                bill.print(transactions);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl BillTypeEnum {
+    fn as_str(&self) -> &'static str {
+        match self {
+            BillTypeEnum::Statement => "Statement",
+            BillTypeEnum::Invoice => "Invoice",
+            BillTypeEnum::CreditNote => "CreditNote",
+            BillTypeEnum::PreKraken => "PreKraken",
         }
     }
 }
 
-#[derive(GraphQLQueryParams)]
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountBillsViewParams {
-    #[graphql(required)]
-    pub account_number: String,
-    pub bills: BillQueryParams
-}
+impl BillInterface {
+    pub fn print_summary_line_headers() {
+        println!("{:-^54} {:-^10} {:-^32} {:-^32} {:-^10}",
+            "",
+            "Balance",
+            "Charges",
+            "Credits",
+            "Balance"
+        );
+        println!("{:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10}", 
+            "Date",
+            "Ref",
+            "From",
+            "To",
+            "Type",
+            "b/f",
+            "Net",
+            "Tax",
+            "Gross",
+            "Net",
+            "Tax",
+            "Gross",
+            "c/f"
+        );
+    }
+    pub fn print_summary_line(&self) {
+        let abstract_bill = self.as_bill_interface();
 
-#[derive(GraphQLType)]
-#[graphql(params = "AccountBillsViewParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountBillsView {
-    pub id: String,
-    pub status: String,
-    pub number: String,
-    pub balance: Int,
-    pub bills: ForwardPageOf<Bill>
-}
+        print!("{:10} {:>10} {:10} {:10} {:10}", 
+            abstract_bill.issued_date_,
+            abstract_bill.id_,
+            abstract_bill.from_date_,
+            abstract_bill.to_date_,
+            abstract_bill.bill_type_.as_str(),
+        );
 
-#[derive(GraphQLType)]
-#[graphql(params = "BillQueryParams")]
-#[graphql(super_type = ["BillInterfaceType"])]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "billType")]
-pub enum Bill {
-    Statement(StatementType)
-}
-
-// impl GraphQLType<BillQueryParams> for Bill {
-//   fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
-//       format!(r#"
-//       #bill
-//             billType
-//             {}
-//         #/bill
-//       "#, 
-//       //BillInterfaceType::get_query_part(&params, &GraphQL::prefix(prefix, "transactions")), 
-//       StatementType::get_query_attributes(&params, &GraphQL::prefix(prefix, "transactions"))
-//       )
-//   }
-// }
-
-impl Bill {
-    pub fn print(&self) {
         match self {
-            Bill::Statement(bill) => bill.print(),
-        };
+            BillInterface::StatementType(statement) => {
+                print!(" {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}",
+                    as_decimal(statement.opening_balance_, 2),
+                    as_decimal(statement.total_charges_.net_total_, 2),
+                    as_decimal(statement.total_charges_.tax_total_, 2),
+                    as_decimal(statement.total_charges_.gross_total_, 2),
+                    as_decimal(statement.total_credits_.net_total_, 2),
+                    as_decimal(statement.total_credits_.tax_total_, 2),
+                    as_decimal(statement.total_credits_.gross_total_, 2),
+                    as_decimal(statement.closing_balance_, 2)
+                );
+            },
+            BillInterface::PreKrakenBillType(_) => {},
+            BillInterface::PeriodBasedDocumentType(period_based_document) => {
+                print!(" {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}",
+                    "",
+                    as_decimal(period_based_document.total_charges_.net_total_, 2),
+                    as_decimal(period_based_document.total_charges_.tax_total_, 2),
+                    as_decimal(period_based_document.total_charges_.gross_total_, 2),
+                    as_decimal(period_based_document.total_credits_.net_total_, 2),
+                    as_decimal(period_based_document.total_credits_.tax_total_, 2),
+                    as_decimal(period_based_document.total_credits_.gross_total_, 2),
+                    ""
+                );
+            },
+            BillInterface::InvoiceType(invoice) => {
+                print!(" {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    as_decimal(invoice.gross_amount_, 2),
+                    "",
+                );
+            },
+        }
+
+        println!();
     }
-}
 
-// impl Bill {
-//     pub fn from_json(json: &str) -> Result<Bill, Error> {
-//         // let value: serde_json::Value = serde_json::from_str(json)?;
-//         let bill_interface: BillInterfaceType = serde_json::from_str(json)?;
+    pub fn print(&self, transactions: Option<Vec<BillTransactionBreakDown>>) {
+        let abstract_bill = self.as_bill_interface();
 
-//         match bill_interface.bill_type {
-//             BillTypeEnum::Statement => {
-//                 let result: StatementType = serde_json::from_str(json)?;
-//                 Ok(Bill::Statement(result))
-//             },
-//             BillTypeEnum::Invoice => todo!(),
-//             BillTypeEnum::CreditNote => todo!(),
-//             BillTypeEnum::PreKraken => todo!(),
-//         }
-//     }
-// }
-
-
-
-#[derive(GraphQLType)]
-#[graphql(params = "BillQueryParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct BillInterfaceType {
-    pub id: ID,
-    pub from_date: Date,
-    pub to_date: Date,
-
-    // Requesting this field generates a temporary URL at which bill is available.
-    //         This URL will expire after approximately an hour.  It is intended for redirection purposes,
-    //         NOT persistence in any form (e.g. inclusion in emails or the body of a web page).
-    //         This field can raise an error with errorClass NOT_FOUND if the bill document has not
-    //         been created/issued yet.
-    //
-    //
-    //
-    // temporary_url: String,
-
-    // The date the bill was sent to the customer.
-    pub issued_date: Date
-}
-
-#[derive(GraphQLType)]
-#[graphql(params = "BillQueryParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct StatementType {
-    #[serde(flatten)]
-    pub bill: BillInterfaceType,
-    
-
-    // This field returns the closing balance of an issued statement.
-    pub closing_balance: Int,
-
-    // This field returns the opening balance of a statement.
-    pub opening_balance: Int,
-
-    // Whether the bill originated in Kraken or externally.
-    pub is_external_bill: bool,
-
-    // Transactions on the bill.
-    //   transactions(
-    //     before: String
-    //     after: String
-    //     first: Int
-    //     last: Int
-    //   ): TransactionConnectionTypeConnection
-    pub transactions: ForwardPageOf<Transaction>,
-
-    // Email recipient user ID.
-    pub user_id: Int,
-
-    // Email recipient address.
-    pub to_address: String,
-
-    // The date the bill is due to be paid.
-    pub payment_due_date: Date,
-
-    // The first day of consumption that this statement includes.
-    pub consumption_start_date: Option<Date>,
-
-    // The last day of consumption that this statement includes.
-    pub consumption_end_date: Option<Date>,
-
-    // How many charges have been reversed after the close date.
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    pub reversals_after_close: StatementReversalsAfterClose,
-
-    // Current status of the associated statement.
-    #[graphql(no_params)]
-    #[graphql(scalar)]
-    pub status: AccountStatementStatus,
-
-    // Retrieve the held status of a account statement.
-    #[graphql(no_params)]
-    pub held_status: HeldStatus,
-
-    // The total amounts for all charges on the statement.
-    #[graphql(no_params)]
-    pub total_charges: StatementTotalType,
-
-    // The total amounts for all credits on the statement.
-    #[graphql(no_params)]
-    pub total_credits: StatementTotalType
-}
-
-/*
-impl GraphQLType < BillQueryParams > for StatementType
-{
-    fn get_query_attributes(params : & BillQueryParams, prefix : & str) ->
-    String
-    {
-        format!
-        ("...on StatementType {{\n# flattened bill\nclosingBalance\nopeningBalance\nisExternalBill\ntransactions{}\n  # pageOf \"transactions\"\n  {{ # pageOf\n    pageInfo {{\n        startCursor\n        hasNextPage\n    }}\n    edges {{ # pageOf.edges\n  # pageOf.node \"transactions\"\n        node {}\n  # /pageOf.node \"transactions\"\n    }} # /pageOf.edges\n  }} # /pageOf\n  # /pageOf \"transactions\"\nuserId\ntoAddress\npaymentDueDate\nconsumptionStartDate\nconsumptionEndDate\nreversalsAfterClose\nstatus\nheldStatus{}\n  # object \"heldStatus\"\n    {}\n  # /object \"heldStatus\"\ntotalCharges{}\n  # object \"totalCharges\"\n    {}\n  # /object \"totalCharges\"\ntotalCredits{}\n  # object \"totalCredits\"\n    {}\n  # /object \"totalCredits\"\n\n}}\n",
-        params.transactions.get_actual(& GraphQL ::
-        prefix(prefix, "transactions")), Transaction ::
-        get_query_part(& params.transactions, & GraphQL ::
-        prefix(prefix, "transactions")), "", HeldStatus ::
-        get_query_part(& NoParams, & GraphQL :: prefix(prefix, "heldStatus")),
-        "", StatementTotalType ::
-        get_query_part(& NoParams, & GraphQL ::
-        prefix(prefix, "totalCharges")), "", StatementTotalType ::
-        get_query_part(& NoParams, & GraphQL ::
-        prefix(prefix, "totalCredits")),)
-    }
-}
-
- */
-/*
-
-impl GraphQLType < BillQueryParams > for StatementType
-{
-    fn get_query_attributes(params : & BillQueryParams, prefix : & str) ->
-    String
-    {
-        format!
-        ("
-            bill{}
-              # object \"bill\"
-                {}
-              # /object \"bill\"
-            closingBalance
-            openingBalance
-            isExternalBill
-            transactions{}
-              # pageOf \"transactions\"
-              {{ # pageOf
-                pageInfo {{
-                    startCursor
-                    hasNextPage
-                }}
-                edges {{ # pageOf.edges
-              # pageOf.node \"transactions\"
-                    node {}
-              # /pageOf.node \"transactions\"
-                }} # /pageOf.edges
-              }} # /pageOf
-              # /pageOf \"transactions\"
-            userId
-            toAddress
-            paymentDueDate
-            consumptionStartDate
-            consumptionEndDate
-            reversalsAfterClose{}
-              # object \"reversalsAfterClose\"
-                {}
-              # /object \"reversalsAfterClose\"
-            status{}
-              # object \"status\"
-                {}
-              # /object \"status\"
-            heldStatus{}
-              # object \"heldStatus\"
-                {}
-              # /object \"heldStatus\"
-            totalCharges{}
-              # object \"totalCharges\"
-                {}
-              # /object \"totalCharges\"
-            totalCredits{}
-              # object \"totalCredits\"
-                {}
-              # /object \"totalCredits\"
-            ",
-        params.bill.get_actual(& GraphQL :: prefix(prefix, "bill")),
-        BillInterfaceType ::
-        get_query_part(& params.bill, & GraphQL :: prefix(prefix, "bill")),
-        params.transactions.get_actual(& GraphQL ::
-        prefix(prefix, "transactions")), Transaction ::
-        get_query_part(& params.transactions, & GraphQL ::
-        prefix(prefix, "transactions")),
-        params.reversals_after_close.get_actual(& GraphQL ::
-        prefix(prefix, "reversalsAfterClose")), StatementReversalsAfterClose
-        ::
-        get_query_part(& params.reversals_after_close, & GraphQL ::
-        prefix(prefix, "reversalsAfterClose")),
-        params.status.get_actual(& GraphQL :: prefix(prefix, "status")),
-        AccountStatementStatus ::
-        get_query_part(& params.status, & GraphQL ::
-        prefix(prefix, "status")),
-        params.held_status.get_actual(& GraphQL ::
-        prefix(prefix, "heldStatus")), HeldStatus ::
-        get_query_part(& params.held_status, & GraphQL ::
-        prefix(prefix, "heldStatus")),
-        params.total_charges.get_actual(& GraphQL ::
-        prefix(prefix, "totalCharges")), StatementTotalType ::
-        get_query_part(& params.total_charges, & GraphQL ::
-        prefix(prefix, "totalCharges")),
-        params.total_credits.get_actual(& GraphQL ::
-        prefix(prefix, "totalCredits")), StatementTotalType ::
-        get_query_part(& params.total_credits, & GraphQL ::
-        prefix(prefix, "totalCredits")),)
-    }
-}
-
-*/
-
-
-
-// impl GraphQLType<BillQueryParams> for StatementType {
-//     fn get_query_attributes(params: &BillQueryParams, prefix: &str) -> String {
-//         format!(r#"
-//           {}
-//           ...on StatementType {{
-//             closingBalance
-//             openingBalance
-//             isExternalBill
-//             transactions{} {{
-//                 pageInfo {{
-//                     startCursor
-//                     hasNextPage
-//                 }}
-//                 edges {{
-//                     node {}
-//                 }}
-//             }}
-//             userId
-//             toAddress
-//             paymentDueDate
-//             consumptionStartDate
-//             consumptionEndDate
-//             reversalsAfterClose
-//             status
-//             heldStatus
-//                 {}
-//             totalCharges
-//                 {}
-//             totalCredits
-//                 {}
-//           }}
-//         "#, BillInterfaceType::get_query_attributes(&params, &GraphQL::prefix(prefix, "bill")), 
-
-//             params.transactions.get_actual(prefix),
-//             Transaction::get_query_part(&NoParams, prefix),
-
-//             HeldStatus::get_query_part(&NoParams, prefix),
-//             StatementTotalType::get_query_part(&NoParams, prefix),
-//             StatementTotalType::get_query_part(&NoParams, prefix),
-//         )
-//     }
-//   }
-
-impl StatementType {
-
-    pub fn print(&self) {
         println!("Energy Account Statement");
         println!("========================");
-        println!("Date                 {}", self.bill.issued_date);
-        println!("Ref                  {}", self.bill.id);
-        println!("From                 {}", self.bill.from_date);
-        println!("To                   {}", self.bill.to_date);
+        println!("Date                 {}", abstract_bill.issued_date_);
+        println!("Ref                  {}", abstract_bill.id_);
+        println!("From                 {}", abstract_bill.from_date_);
+        println!("To                   {}", abstract_bill.to_date_);
         println!();
 
-        // let mut map = BTreeMap::new();
-        // for edge in &self.transactions.edges {
-        //     let txn = edge.node.as_transaction();
+        if let Some(transactions) = transactions {
+            let mut total_charges = TotalCharges::new();
+            TransactionType::print_summary_line_headers();
+            for transaction in &transactions {
+                transaction.print_summary_line(&mut total_charges);
+            }
 
-        //     map.insert(&txn.posted_date, &edge.node);
-        // }
+            if total_charges.units.is_positive() {
 
-        print!("{:20} {:10} ", 
+
+
+
+
+                println!("\nTOTALS");
+                let rate = Decimal::from(total_charges.charge) / total_charges.units;
+
+                print!("{:30} {:10} ", 
+                    "Electricity Import",
+                    ""
+                );
+                print!("{:>10} {:>10} {:>10} {:>10} ", 
+                    "",
+                    "", 
+                    as_decimal(total_charges.charge, 2),
+                    ""
+                );
+                print!("{:10} {:10} {:10} {:>12.4} ", 
+                    "",
+                    "",
+                    "",
+                    total_charges.units
+                );
+                print!("{:>10.3}", rate);
+                println!();
+            }
+            println!();
+            println!("Detailed Breakdown");
+            println!("==================");
+            total_charges = TotalCharges::new();
+            
+            for transaction in &transactions {
+                transaction.print(&mut total_charges);
+            }
+        }
+        
+    }
+}
+
+pub struct TotalCharges {
+    charge: i32,
+    units: Decimal,
+}
+
+impl TotalCharges {
+    fn new() -> Self {
+        TotalCharges{
+            charge: 0,
+            units: Decimal::new(0, 0),
+        }
+    }
+}
+
+impl TransactionType {
+    pub fn print_summary_line_headers() {
+        print!("{:-^30} {:-^10} ", 
             "Description",
             "Posted"
         );
-        print!("{:>10} {:>10} {:>10} {:>10} ", 
+        print!("{:-^10} {:-^10} {:-^10} {:-^10} ", 
             "Net",
             "Tax", 
             "Total",
             "Balance"
         );
-        print!("{:10} {:10} {:>12} ", 
-            "From",
-            "To",
-            "Units"
-        );
-        print!("{:>12}", "p / unit");
-        println!();
+        println!("{:-^10} {:-^10} {:-^10} {:-^12} {:-^10}", "From", "To", "Amount", "Units", "p/unit");
+    }
 
-        let mut total_electric_charge = Int::new(0); //0;
-        let mut total_electric_units = Decimal::new(0, 0);
+    pub fn print_break_down_line_headers() {
+        println!("{:-^20} {:-^20} {:-^10} {:-^12} {:-^10}", "From", "To", "Amount", "Units", "p/unit");
+    }
 
-        // for transaction in &mut map.values() {
-        for edge in (&self.transactions.edges).into_iter().rev() {
-            let transaction = &edge.node;
-            let txn = transaction.as_transaction();
-            if let Transaction::Charge(charge) = &transaction {
-                if *charge.is_export {
-                    print!("{} {:width$} ", txn.title, "Export", width = 20 - txn.title.len() - 1);
+    pub fn print_summary_line(&self, total_charges: &mut TotalCharges) {
+            let txn = self.as_transaction_type();
+
+            if let TransactionType::Charge(charge) = &self {
+                if charge.is_export_ {
+                    print!("{} {:width$} ", txn.title_, "Export", width = 30 - txn.title_.len() - 1);
                 }
                 else {
-                    print!("{} {:width$} ", txn.title, "Import",width =  20 - txn.title.len() - 1);
-
-                    if txn.title.eq("Electricity") {
-                        total_electric_charge += *&txn.amounts.gross;
-                        total_electric_units += charge.consumption.quantity;
-                    }
+                        print!("{:30} ", txn.title_);
                 }
             }
             else {
-                print!("{:20} ", txn.title);
+                print!("{:30} ", txn.title_);
             }
             print!("{:10} ", 
-                        txn.posted_date
+                        txn.posted_date_
                     );
-            print!("{:>10} {:>10} {:>10} {:>10} ", 
-                txn.amounts.net.as_decimal(2),
-                txn.amounts.tax.as_decimal(2), 
-                txn.amounts.gross.as_decimal(2),
-                txn.balance_carried_forward.as_decimal(2)
-            );
-            if let Transaction::Charge(charge) = &transaction {
-                print!("{:10} {:10} {:>12.4} ", 
-                    charge.consumption.start_date,
-                    charge.consumption.end_date,
-                    charge.consumption.quantity
+
+            if let TransactionType::Charge(charge) = &self {
+                print!("{:>10} {:>10} {:>10} {:>10} ", 
+                    as_decimal(txn.amounts_.net_, 2),
+                    as_decimal(txn.amounts_.tax_, 2), 
+                    as_decimal(txn.amounts_.gross_, 2),
+                    as_decimal(txn.balance_carried_forward_, 2)
                 );
+                if let Some(consumption) = &charge.consumption_ {
+                    print!("{:10} {:10} {:>10} {:>12.4} ", 
+                        consumption.start_date_,
+                        consumption.end_date_,
+                        as_decimal(txn.amounts_.net_, 3),
+                        consumption.quantity_
+                    );
 
-                let rate = Decimal::from_int(&txn.amounts.gross) / charge.consumption.quantity;
+                    let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
 
-                print!("{:>12.4}", rate); //.round_dp(2));
+                    print!("{:>10.3}", rate); //.round_dp(2));
+
+                    if charge.is_export_ {
+                        
+                    }
+                    else {
+                            if txn.title_.eq("Electricity") {
+                                total_charges.charge += *&txn.amounts_.gross_;
+                                total_charges.units += consumption.quantity_;
+                            }
+                        }
+                }
+                else {
+                    print!("{:56}","");
+                }
+            }
+            else {
+                print!("{:>10} {:>10} {:>10} {:>10} ", 
+                    as_decimal(-txn.amounts_.net_, 2),
+                    as_decimal(-txn.amounts_.tax_, 2), 
+                    as_decimal(-txn.amounts_.gross_, 2),
+                    as_decimal(txn.balance_carried_forward_, 2)
+                );
+                print!("{:56}","");
+            }
+            if let Some(note) = &txn.note_ {
+                let note = note.trim();
+                print!(" {}", note);
             }
             println!();
-        }
-
-        println!("\nTOTALS");
-
-        if total_electric_units.is_positive() {
-            let rate = Decimal::from_int(&total_electric_charge) / total_electric_units;
-
-            print!("{:20} {:10} ", 
-                "Electricity Import",
-                ""
-            );
-            print!("{:>10} {:>10} {:>10} {:>10} ", 
-                "",
-                "", 
-                total_electric_charge.as_decimal(2),
-                ""
-            );
-            print!("{:10} {:10} {:>12.4} ", 
-                "",
-                "",
-                total_electric_units
-            );
-            print!("{:>12.4}", rate);
-            println!();
-        }
     }
 }
 
-// impl Display for StatementType {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         if let Ok(json) = serde_json::to_string_pretty(self) {
-//             f.write_str(&json)?;
-//             Ok(())
-//         }
-//         else {
-//             Err(std::fmt::Error)
-//         }
-//     }
-// }
-
-// #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-// #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-// enum BillTypeEnum {
-//     Statement,
-//     Invoice,
-//     CreditNote,
-//     PreKraken
-//   }
-
-#[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct StatementTotalType {
-    pub net_total: Int,
-    pub tax_total: Int,
-    pub gross_total: Int,
+pub struct BillTransactionBreakDown {
+    transaction: TransactionType,
+    line_items: Option<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>,
 }
 
-// impl StatementTotalType {
-//     pub fn get_field_names() -> &'static str {
-//         r#"
-//             netTotal
-//             taxTotal
-//             grossTotal
-//         "#
-//     }
-// }
-
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum StatementReversalsAfterClose {
-    All,
-    Some,
-    None,
-    NotClosed
-}
-
-
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AccountStatementStatus {
-    Open,
-    Closed
-}
-
-#[derive(GraphQLType)]
-#[graphql(params = "NoParams")]
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-pub struct HeldStatus {
-    pub is_held: bool,
-    pub reason: Option<String>
-}
-
-// impl HeldStatus {
-//     pub fn get_field_names() -> &'static str {
-//         r#"
-//             isHeld
-//             reason
-//         "#
-//     }
-// }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_bill_query_params() {
-
-    let variables = BillQueryParams {
-                first: Some(Int::new(1)),
-                transactions: StatementTransactionParams {
-                    first: Some(Int::new(100)),
-                    ..Default::default()
-                },
-                ..Default::default()
-    };
-    let variables_string =serde_json::to_string_pretty(&variables).unwrap();
-    //&variables.to_string();
-
-
-    let expected_variables = r#"{
-  "includeOpenStatements": false,
-  "includeHeldStatements": false,
-  "includeHistoricStatements": true,
-  "onlyCurrentEmail": false,
-  "orderBy": "FROM_DATE_DESC",
-  "first": 1,
-  "transactions": {
-    "first": 100
-  }
-}"#;
-
-    println!("\n\n\n\nVARIABLES\n\n\n\n{}", &variables_string);
-
-    assert_eq!(variables_string, expected_variables);
+impl BillTransactionBreakDown {
+    pub fn print_summary_line(&self, total_charges: &mut TotalCharges) {
+        self.transaction.print_summary_line(total_charges);
     }
 
+    pub fn print(&self, total_charges: &mut TotalCharges) {
+        let one_hundred = Decimal::new(100, 0);
+        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        let time_format = time::format_description::parse("           [hour]:[minute]:[second]").unwrap();
 
-    #[test]
-    fn test_parse_statement_total() {
-        let json = r#"
-        {
-            "netTotal": 1667,
-            "taxTotal": 85,
-            "grossTotal": 1752
-        }
-        "#;
+        if let Some(line_item_map) = &self.line_items {
 
 
-        let value: StatementTotalType = serde_json::from_str(json).unwrap();
+
+            for (agreement_id, (tariff, line_items)) in line_item_map {
+
+                let mut amount_map = IndexMap::new();
+                let mut total_amount = Decimal::new(0,0);
+                let mut total_units = Decimal::new(0,0);
+
+                println!();
+                tariff.print();
+                println!();
+
+                TransactionType::print_break_down_line_headers();
+                // println!("Line items for agreement {}", agreement_id);
+                // println!("{:-^20} {:-^20} {:-^10} {:-^10} {:-^10}", "From", "To", "Amount", "Units", "p / unit");
         
-        assert_eq!(value.net_total, Int::new(1667));
-        assert_eq!(value.tax_total, Int::new(85));
-        assert_eq!(value.gross_total, Int::new(1752));
-    }
+                let mut prev = None;
+                for item in line_items {
+                    let amount = item.net_amount_ / one_hundred;
 
-    #[test]
-    fn test_parse_statement() {
+                    total_amount += amount;
+                    total_units += item.number_of_units_;
+
+                    let unit_cost = if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ };
+
+
+                    println!("{:20} {:20} {:10.3} {:12.4} {:10.3}", 
+                        if let Some(prev) = prev {
+                            if prev == item.start_at_.date() {
+                                item.start_at_.format(&time_format).unwrap()
+                            } else {
+                                item.start_at_.format(&format).unwrap()
+                            }
+                        } else {
+                            item.start_at_.format(&format).unwrap()
+                        },
+                        if item.end_at_.date() == item.start_at_.date() {item.end_at_.format(&time_format).unwrap()} else {item.end_at_.format(&format).unwrap()},
+                             amount, item.number_of_units_, 
+                        &unit_cost  );
+                    
+                    if item.number_of_units_.is_positive() {
+                        let key = format!("{:.2}", unit_cost);
+                        if let Some((total_amount, total_units)) = amount_map.get(&key) {
+                            amount_map.insert(key, (amount + *total_amount, item.number_of_units_ + *total_units));
+                        }
+                        else {
+                            amount_map.insert(key, (amount, item.number_of_units_));
+                        }
+                    }
+                    
+                    prev = Some(item.start_at_.date());
+                }
+                println!("{:41} {:10.3} {:12.4}", "Total Consumption", total_amount, total_units);
+                if line_items.len() > 0 {
+                    let start_date = line_items.get(0).unwrap().start_at_.date();
+                    let end_date = line_items.get(line_items.len() - 1).unwrap().end_at_.date();
+                    let days = end_date.to_julian_day() - start_date.to_julian_day();
+                    let standing_charge = Decimal::new((tariff.standing_charge() * (10000 * days) as f64) as i64,6);
+                    println!("{:41} {:10.3}", format!("Standing charge ({} days @ {:.3})", days,tariff.standing_charge()) , standing_charge);
+                    println!("{:41} {:10.3}", "Total", total_amount + standing_charge);
+            
         
-let json = r#"
-{
-    "id": "236646425",
-    "billType": "STATEMENT",
-    "fromDate": "2024-07-22",
-    "toDate": "2024-08-21",
-    "issuedDate": "2024-08-22",
-    "__typename": "StatementType",
-    "closingBalance": 39303,
-    "openingBalance": 17791,
-    "isExternalBill": false,
-    "transactions": {
-    "pageInfo": {
-        "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
-        "hasNextPage": false
-    },
-    "edges": [
-        {
-        "node": {
-            "id": "-1871040199",
-            "postedDate": "2024-08-20",
-            "createdAt": "2024-08-21T21:36:10.492186+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 2711,
-            "tax": 136,
-            "gross": 2847
-            },
-            "balanceCarriedForward": 39303,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Gas",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "consumption": {
-            "startDate": "2024-07-21",
-            "endDate": "2024-08-20",
-            "quantity": "360.7100",
-            "unit": "kWh",
-            "usageCost": 0,
-            "supplyCharge": 0
-            },
-            "isExport": false,
-            "__typename": "Charge"
+                    let txn = self.transaction.as_transaction_type();
+                    print!("{:30} {:10} ", "as shown on bill", "");
+            
+                    if let TransactionType::Charge(charge) = &self.transaction {
+                        print!("{:>9}  ", as_decimal(txn.amounts_.net_, 2));
+                        if let Some(consumption) = &charge.consumption_ {
+                            print!("{:>12.4} ",consumption.quantity_);
+            
+                            let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
+            
+                            print!("{:>10.3}", rate);
+                        }
+                        println!("");
+                    }
+                    println!("");
+                    println!("Analysis");
+                    println!("--------");
+            
+                    if !amount_map.is_empty() {
+                        println!("{:-^15} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10}", "Unit Rate", "Cost", "Units", "% Cost", "% Units", "% Bill");
+                        for (key, (amount, units)) in amount_map {
+                            println!("{:>15} {:10.2} {:10.2} {:10.2} {:10.2} {:10.2}",
+                                key,
+                                amount,
+                                units,
+                                one_hundred * amount / total_amount,
+                                one_hundred * units / total_units,
+                                one_hundred * amount / (standing_charge + total_amount)
+                            );
+                        }
+                        println!("{:60}{:10.2}",
+                            "Standing Charge",
+                            one_hundred * standing_charge / (standing_charge + total_amount)
+                        );
+                    }
+                    println!("");
+                    println!("");
+                    println!("");
+                }
+            }
         }
-        },
-        {
-        "node": {
-            "id": "-1871043601",
-            "postedDate": "2024-08-20",
-            "createdAt": "2024-08-21T21:32:19.902722+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": -2716,
-            "tax": 0,
-            "gross": -2716
-            },
-            "balanceCarriedForward": 42150,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Electricity",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "consumption": {
-            "startDate": "2024-08-13",
-            "endDate": "2024-08-20",
-            "quantity": "181.0500",
-            "unit": "kWh",
-            "usageCost": 0,
-            "supplyCharge": 0
-            },
-            "isExport": true,
-            "__typename": "Charge"
-        }
-        },
-        {
-        "node": {
-            "id": "-1871044025",
-            "postedDate": "2024-08-20",
-            "createdAt": "2024-08-21T21:32:01.991119+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 2854,
-            "tax": 143,
-            "gross": 2997
-            },
-            "balanceCarriedForward": 39434,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Electricity",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "consumption": {
-            "startDate": "2024-08-08",
-            "endDate": "2024-08-20",
-            "quantity": "334.7100",
-            "unit": "kWh",
-            "usageCost": 0,
-            "supplyCharge": 0
-            },
-            "isExport": false,
-            "__typename": "Charge"
-        }
-        },
-        {
-        "node": {
-            "id": "-1896251302",
-            "postedDate": "2024-08-14",
-            "createdAt": "2024-08-15T11:55:19.400763+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 478,
-            "tax": 24,
-            "gross": 502
-            },
-            "balanceCarriedForward": 42431,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Powerups Reward",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "__typename": "Credit"
-        }
-        },
-        {
-        "node": {
-            "id": "-1871043620",
-            "postedDate": "2024-08-12",
-            "createdAt": "2024-08-21T21:32:19.073366+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": -2407,
-            "tax": 0,
-            "gross": -2407
-            },
-            "balanceCarriedForward": 41929,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Electricity",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "consumption": {
-            "startDate": "2024-07-21",
-            "endDate": "2024-08-12",
-            "quantity": "300.8200",
-            "unit": "kWh",
-            "usageCost": 0,
-            "supplyCharge": 0
-            },
-            "isExport": true,
-            "__typename": "Charge"
-        }
-        },
-        {
-        "node": {
-            "id": "-1871044052",
-            "postedDate": "2024-08-07",
-            "createdAt": "2024-08-21T21:32:01.008991+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 4104,
-            "tax": 205,
-            "gross": 4309
-            },
-            "balanceCarriedForward": 39522,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Electricity",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "consumption": {
-            "startDate": "2024-07-21",
-            "endDate": "2024-08-07",
-            "quantity": "322.5100",
-            "unit": "kWh",
-            "usageCost": 0,
-            "supplyCharge": 0
-            },
-            "isExport": false,
-            "__typename": "Charge"
-        }
-        },
-        {
-        "node": {
-            "id": "-1949392858",
-            "postedDate": "2024-07-29",
-            "createdAt": "2024-08-01T03:09:50.202838+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 24790,
-            "tax": 0,
-            "gross": 0
-            },
-            "balanceCarriedForward": 43831,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Direct debit",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": null,
-            "__typename": "Payment"
-        }
-        },
-        {
-        "node": {
-            "id": "-1973989678",
-            "postedDate": "2024-07-24",
-            "createdAt": "2024-07-25T10:53:30.897903+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 543,
-            "tax": 28,
-            "gross": 571
-            },
-            "balanceCarriedForward": 19041,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Powerups Reward",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "__typename": "Credit"
-        }
-        },
-        {
-        "node": {
-            "id": "-1974036696",
-            "postedDate": "2024-07-24",
-            "createdAt": "2024-07-25T10:43:02.339290+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 177,
-            "tax": 9,
-            "gross": 186
-            },
-            "balanceCarriedForward": 18470,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Powerups Reward",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "__typename": "Credit"
-        }
-        },
-        {
-        "node": {
-            "id": "-1974103763",
-            "postedDate": "2024-07-24",
-            "createdAt": "2024-07-25T10:17:07.255688+00:00",
-            "accountNumber": "A-B1D2C34D",
-            "amounts": {
-            "net": 469,
-            "tax": 24,
-            "gross": 493
-            },
-            "balanceCarriedForward": 18284,
-            "isHeld": false,
-            "isIssued": true,
-            "title": "Powerups Reward",
-            "billingDocumentIdentifier": "236646425",
-            "isReversed": false,
-            "hasStatement": true,
-            "note": "",
-            "__typename": "Credit"
-        }
-        }
-    ]
-    },
-    "userId": 3235447,
-    "toAddress": "dan@archer.org",
-    "paymentDueDate": "2024-09-06",
-    "consumptionStartDate": null,
-    "consumptionEndDate": null,
-    "reversalsAfterClose": "NONE",
-    "status": "CLOSED",
-    "heldStatus": {
-    "isHeld": false,
-    "reason": null
-    },
-    "totalCharges": {
-    "netTotal": 4546,
-    "taxTotal": 484,
-    "grossTotal": 5030
-    },
-    "totalCredits": {
-    "netTotal": 1667,
-    "taxTotal": 85,
-    "grossTotal": 1752
+
     }
 }
-"#;
 
-        // let bill = Bill::from_json(json).unwrap();
-        let bill: Bill = serde_json::from_str(json).unwrap();
+pub struct BillList {
+    pub account_number: String,
+    pub start_cursor: Option<String>,
+    pub has_previous_page: bool,
+    pub bills: Vec<(String, BillInterface)>,
+    hash_key: String,
+}
+
+impl BillList {
+    pub fn print_summary_lines(&self) {
+        BillInterface::print_summary_line_headers();
+
+        for (_key, bill) in &self.bills {
+            bill.print_summary_line();
+        }
+    }
+
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+        let mut has_previous_page = self.has_previous_page;
+
+        //println!("fetch_all bills {} in buffer", self.bills.len());
+
+        while has_previous_page 
+        {
+            let mut builder = super::graphql::bill::get_bills::Query::builder()
+            .with_account_number(self.account_number.clone())
+            .with_last(20);
+
+            if let Some(start_cursor) = &self.start_cursor {
+                builder = builder.with_before(start_cursor.clone())
+            }
+
+            let query = builder.build()?;
+            // let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
+            let response = request_manager.call(&query).await?;
+
+            //println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
+
+            if let Some(start_cursor) = response.account_.bills_.page_info.start_cursor {
+                self.start_cursor = Some(start_cursor.clone());
+                has_previous_page = response.account_.bills_.page_info.has_previous_page.clone();
+            }
+            else {
+                has_previous_page = false;
+            }
+
+            for edge in response.account_.bills_.edges.into_iter().rev() {
+                let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
+                self.bills.push((sort_key, edge.node));
+            }
+        }
+        self.has_previous_page = has_previous_page;
+        Ok(())
+    }
+    
+   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool) -> Result<Self, Error> {
+    let hash_key = format!("{}#Bills", account_number);
+
+        let mut bills = Vec::new();
+
+        cache_manager.read(&hash_key, &mut bills)?;
+
+        let cached_cnt = bills.len();
+
+        let mut result = if bills.is_empty() {
         
-        if let Bill::Statement(statement) = bill {
-            assert_eq!(statement.total_credits.net_total, Int::new(1667));
-            assert_eq!(statement.total_credits.tax_total, Int::new(85));
-            assert_eq!(statement.total_credits.gross_total, Int::new(1752));
+            let query = super::graphql::bill::get_bills::Query::builder()
+                .with_account_number(account_number.clone())
+                .with_last(1)
+                .build()?;
+            let response = request_manager.call(&query).await?;
+
+            for edge in response.account_.bills_.edges {
+                let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
+                bills.push((sort_key, edge.node));
+            }
+
+            BillList {
+                account_number,
+                start_cursor: response.account_.bills_.page_info.start_cursor,
+                has_previous_page: response.account_.bills_.page_info.has_previous_page,
+                bills,
+                hash_key,
+            }
         }
         else {
-            panic!("Expected Statement not {:?}", bill);
+            let (start_cursor, _) = bills.get(bills.len() - 1).unwrap();
+            BillList {
+                account_number,
+                start_cursor: Some(start_cursor.clone()),
+                has_previous_page: true,
+                bills,
+                hash_key,
+            }
+        };
+
+        if check_for_updates {
+            result.fetch_all(request_manager).await?;
+        }
+
+        if result.bills.len() > cached_cnt {
+            cache_manager.write(&result.hash_key, &result.bills, cached_cnt)?;
         }
         
+        Ok(result)
     }
-
-    // #[test]
-    // fn test_parse_bill_result() {
-    //     let json = r#"
-    //     {
-    //         "status": "ACTIVE",
-    //         "number": "A-B1D2C34D",
-    //         "balance": 39303,
-    //         "bills": {
-    //             "pageInfo": {
-    //             "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
-    //             "hasNextPage": true
-    //             },
-    //             "edges": [
-    //             {
-    //                 "node": {
-    //                 "id": "236646425",
-    //                 "billType": "STATEMENT",
-    //                 "fromDate": "2024-07-22",
-    //                 "toDate": "2024-08-21",
-    //                 "issuedDate": "2024-08-22",
-    //                 "__typename": "StatementType",
-    //                 "closingBalance": 39303,
-    //                 "openingBalance": 17791,
-    //                 "isExternalBill": false,
-    //                 "transactions": {
-    //                     "pageInfo": {
-    //                     "startCursor": "YXJyYXljb25uZWN0aW9uOjA=",
-    //                     "hasNextPage": false
-    //                     },
-    //                     "edges": [
-    //                     {
-    //                         "node": {
-    //                         "id": "-1871040199",
-    //                         "postedDate": "2024-08-20",
-    //                         "createdAt": "2024-08-21T21:36:10.492186+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 2711,
-    //                             "tax": 136,
-    //                             "gross": 2847
-    //                         },
-    //                         "balanceCarriedForward": 39303,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Gas",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "consumption": {
-    //                             "startDate": "2024-07-21",
-    //                             "endDate": "2024-08-20",
-    //                             "quantity": "360.7100",
-    //                             "unit": "kWh",
-    //                             "usageCost": 0,
-    //                             "supplyCharge": 0
-    //                         },
-    //                         "isExport": false,
-    //                         "__typename": "Charge"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1871043601",
-    //                         "postedDate": "2024-08-20",
-    //                         "createdAt": "2024-08-21T21:32:19.902722+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": -2716,
-    //                             "tax": 0,
-    //                             "gross": -2716
-    //                         },
-    //                         "balanceCarriedForward": 42150,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Electricity",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "consumption": {
-    //                             "startDate": "2024-08-13",
-    //                             "endDate": "2024-08-20",
-    //                             "quantity": "181.0500",
-    //                             "unit": "kWh",
-    //                             "usageCost": 0,
-    //                             "supplyCharge": 0
-    //                         },
-    //                         "isExport": true,
-    //                         "__typename": "Charge"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1871044025",
-    //                         "postedDate": "2024-08-20",
-    //                         "createdAt": "2024-08-21T21:32:01.991119+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 2854,
-    //                             "tax": 143,
-    //                             "gross": 2997
-    //                         },
-    //                         "balanceCarriedForward": 39434,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Electricity",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "consumption": {
-    //                             "startDate": "2024-08-08",
-    //                             "endDate": "2024-08-20",
-    //                             "quantity": "334.7100",
-    //                             "unit": "kWh",
-    //                             "usageCost": 0,
-    //                             "supplyCharge": 0
-    //                         },
-    //                         "isExport": false,
-    //                         "__typename": "Charge"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1896251302",
-    //                         "postedDate": "2024-08-14",
-    //                         "createdAt": "2024-08-15T11:55:19.400763+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 478,
-    //                             "tax": 24,
-    //                             "gross": 502
-    //                         },
-    //                         "balanceCarriedForward": 42431,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Powerups Reward",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "__typename": "Credit"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1871043620",
-    //                         "postedDate": "2024-08-12",
-    //                         "createdAt": "2024-08-21T21:32:19.073366+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": -2407,
-    //                             "tax": 0,
-    //                             "gross": -2407
-    //                         },
-    //                         "balanceCarriedForward": 41929,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Electricity",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "consumption": {
-    //                             "startDate": "2024-07-21",
-    //                             "endDate": "2024-08-12",
-    //                             "quantity": "300.8200",
-    //                             "unit": "kWh",
-    //                             "usageCost": 0,
-    //                             "supplyCharge": 0
-    //                         },
-    //                         "isExport": true,
-    //                         "__typename": "Charge"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1871044052",
-    //                         "postedDate": "2024-08-07",
-    //                         "createdAt": "2024-08-21T21:32:01.008991+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 4104,
-    //                             "tax": 205,
-    //                             "gross": 4309
-    //                         },
-    //                         "balanceCarriedForward": 39522,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Electricity",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "consumption": {
-    //                             "startDate": "2024-07-21",
-    //                             "endDate": "2024-08-07",
-    //                             "quantity": "322.5100",
-    //                             "unit": "kWh",
-    //                             "usageCost": 0,
-    //                             "supplyCharge": 0
-    //                         },
-    //                         "isExport": false,
-    //                         "__typename": "Charge"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1949392858",
-    //                         "postedDate": "2024-07-29",
-    //                         "createdAt": "2024-08-01T03:09:50.202838+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 24790,
-    //                             "tax": 0,
-    //                             "gross": 0
-    //                         },
-    //                         "balanceCarriedForward": 43831,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Direct debit",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": null,
-    //                         "__typename": "Payment"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1973989678",
-    //                         "postedDate": "2024-07-24",
-    //                         "createdAt": "2024-07-25T10:53:30.897903+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 543,
-    //                             "tax": 28,
-    //                             "gross": 571
-    //                         },
-    //                         "balanceCarriedForward": 19041,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Powerups Reward",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "__typename": "Credit"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1974036696",
-    //                         "postedDate": "2024-07-24",
-    //                         "createdAt": "2024-07-25T10:43:02.339290+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 177,
-    //                             "tax": 9,
-    //                             "gross": 186
-    //                         },
-    //                         "balanceCarriedForward": 18470,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Powerups Reward",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "__typename": "Credit"
-    //                         }
-    //                     },
-    //                     {
-    //                         "node": {
-    //                         "id": "-1974103763",
-    //                         "postedDate": "2024-07-24",
-    //                         "createdAt": "2024-07-25T10:17:07.255688+00:00",
-    //                         "accountNumber": "A-B1D2C34D",
-    //                         "amounts": {
-    //                             "net": 469,
-    //                             "tax": 24,
-    //                             "gross": 493
-    //                         },
-    //                         "balanceCarriedForward": 18284,
-    //                         "isHeld": false,
-    //                         "isIssued": true,
-    //                         "title": "Powerups Reward",
-    //                         "billingDocumentIdentifier": "236646425",
-    //                         "isReversed": false,
-    //                         "hasStatement": true,
-    //                         "note": "",
-    //                         "__typename": "Credit"
-    //                         }
-    //                     }
-    //                     ]
-    //                 },
-    //                 "userId": 3235447,
-    //                 "toAddress": "bruce@skingle.org",
-    //                 "paymentDueDate": "2024-09-06",
-    //                 "consumptionStartDate": null,
-    //                 "consumptionEndDate": null,
-    //                 "reversalsAfterClose": "NONE",
-    //                 "status": "CLOSED",
-    //                 "heldStatus": {
-    //                     "isHeld": false,
-    //                     "reason": null
-    //                 },
-    //                 "totalCharges": {
-    //                     "netTotal": 4546,
-    //                     "taxTotal": 484,
-    //                     "grossTotal": 5030
-    //                 },
-    //                 "totalCredits": {
-    //                     "netTotal": 1667,
-    //                     "taxTotal": 85,
-    //                     "grossTotal": 1752
-    //                 }
-    //                 }
-    //             }
-    //             ]
-    //         }
-    //     }
-    //     "#;
-
-    //     let bill_results: AccountBillsView = serde_json::from_str(json).unwrap();
-
-    //     assert_eq!(bill_results.number, "A-B1D2C34D");
-
-    // }
 }
+
+
+pub struct BillTransactionList {
+    pub account_number: String,
+    pub statement_id: String,
+    pub start_cursor: Option<String>,
+    pub has_previous_page: bool,
+    pub transactions: Vec<(String, TransactionType)>,
+    hash_key: String,
+}
+
+impl BillTransactionList {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> Result<Self, Error> {
+        let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
+    
+            let mut transactions = Vec::new();
+    
+            cache_manager.read(&hash_key, &mut transactions)?;
+    
+            let cached_cnt = transactions.len();
+    
+            let mut result = if transactions.is_empty() {
+                
+                let query = super::graphql::bill::get_statement_transactions::Query::builder()
+                        .with_account_number(account_number.clone())
+                        .with_statement_id(statement_id.clone())
+                        .with_transactions_last(1)
+                        .build()?;
+                let response = request_manager.call(&query).await?;
+                let bill = response.account_.bill_;
+
+                if let bill::get_statement_transactions::BillInterface::StatementType(statement) = bill {
+
+                    for edge in statement.transactions_.edges {
+                        let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
+                        transactions.push((sort_key, edge.node));
+                    }
+        
+                    let mut result = BillTransactionList {
+                        account_number,
+                        statement_id,
+                        start_cursor: statement.transactions_.page_info.start_cursor,
+                        has_previous_page: statement.transactions_.page_info.has_previous_page,
+                        transactions,
+                        hash_key,
+                    };
+
+                    result.fetch_all(request_manager).await?;
+
+                    result
+                }
+                else {
+                    return Err(Error::StringError(format!("Bill {} is not a statement", statement_id)))
+                }
+            }
+            else {
+                let (start_cursor, _) = transactions.get(transactions.len() - 1).unwrap();
+                BillTransactionList {
+                    account_number,
+                    statement_id,
+                    start_cursor: Some(start_cursor.clone()),
+                    has_previous_page: true,
+                    transactions,
+                    hash_key,
+                }
+            };
+    
+            // don't think this will ever be necessary but could be gated on check_for_updates
+            // result.fetch_all(request_manager).await?;
+    
+            if result.transactions.len() > cached_cnt {
+                cache_manager.write(&result.hash_key, &result.transactions, cached_cnt)?;
+            }
+            
+            Ok(result)
+        }
+
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+        let mut has_previous_page = self.has_previous_page;
+
+        //println!("fetch_all statement transactions {} in buffer", self.transactions.len());
+
+        
+
+        while has_previous_page {
+            let mut builder = super::graphql::bill::get_statement_transactions::Query::builder()
+                .with_account_number(self.account_number.clone())
+                .with_statement_id(self.statement_id.clone())
+                .with_transactions_first(100);
+
+            if let Some(end_cursor) = &self.start_cursor {
+                builder = builder.with_transactions_before(end_cursor.clone());
+            }
+            let query = //super::graphql::bill::get_statement_transactions::Query::from(
+                builder.build()?;
+            let response = request_manager.call(&query).await?;
+
+            
+            if let super::graphql::bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
+                //println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
+
+                self.start_cursor = statement.transactions_.page_info.start_cursor.clone();
+                has_previous_page = statement.transactions_.page_info.has_previous_page.clone();
+
+                for edge in statement.transactions_.edges.into_iter().rev() {
+                    let sort_key = edge.cursor;
+                    self.transactions.push((sort_key, edge.node));
+                }
+                
+                //println!("has_previous_page = {:?}", has_previous_page);
+            }
+        }
+        self.has_previous_page = has_previous_page;
+        Ok(())
+    }
+}
+
+
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn test_bill_deserialize() {
+//         let all_json = r#"{
+//   "account": {
+//     "bills": {
+//       "edges": [
+//         {
+//           "node": {
+//             "__typename": "StatementType",
+//             "billType": "STATEMENT",
+//             "closingBalance": 30711,
+//             "fromDate": "2025-01-10",
+//             "heldStatus": {
+//               "isHeld": false,
+//               "reason": null
+//             },
+//         "pageInfo": {
+//           "endCursor": "YXJyYXljb25uZWN0aW9uOjE5",
+//           "hasNextPage": true
+//         }
+//       }
+//     }
+//   }"#;
+//         let response: super::super::graphql::bill::get_bills_and_transactions::Response = serde_json::from_str(all_json).unwrap();
+
+//         serde_json::to_string_pretty(&response);
+//     }
+// }

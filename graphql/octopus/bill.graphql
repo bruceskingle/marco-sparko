@@ -1,0 +1,214 @@
+query getBills($accountNumber: String!, 
+    $includeBillsWithoutPDF: Boolean, 
+    $includeOpenStatements: Boolean, 
+    $includeHeldStatements: Boolean, 
+    $includeHistoricStatements: Boolean, 
+    $onlyCurrentEmail: Boolean, 
+    $fromDate: Date, 
+    $toDate: Date, 
+    $issuedFromDate: Date, 
+    $issuedToDate: Date, 
+    $offset: Int, 
+    $before: String, 
+    $after: String, 
+    $first: Int, 
+    $last: Int) @ms_required_by_default {
+        account(accountNumber: $accountNumber) {
+            bills(
+                includeBillsWithoutPDF: $includeBillsWithoutPDF, 
+                includeOpenStatements: $includeOpenStatements, 
+                includeHeldStatements: $includeHeldStatements, 
+                includeHistoricStatements: $includeHistoricStatements, 
+                onlyCurrentEmail: $onlyCurrentEmail, 
+                fromDate: $fromDate, 
+                toDate: $toDate, 
+                issuedFromDate: $issuedFromDate, 
+                issuedToDate: $issuedToDate, 
+                offset: $offset, 
+                before: $before, 
+                after: $after, 
+                first: $first, 
+                last: $last) {
+                pageInfo {
+                    startCursor
+                    hasPreviousPage
+                }
+                edges {
+                    cursor
+                    node {
+                        id
+                        billType
+                        fromDate
+                        toDate
+                        issuedDate
+                        ...Statement
+                        ...PeriodBasedDocument
+                        ...Invoice
+                }
+            }
+        }
+    }
+}
+
+query getStatementTransactions(
+    $accountNumber: String!,
+    $statementId: ID!, 
+    $transactions_before: String, 
+    $transactions_after: String, 
+    $transactions_first: Int, 
+    $transactions_last: Int) @ms_required_by_default {
+        account(accountNumber: $accountNumber) {
+            bill(id: $statementId, billType: STATEMENT) {
+            ...StatementTransactions
+        }
+    }
+}
+
+fragment StatementTransactions on StatementType @ms_required_by_default {
+    transactions(before: $transactions_before, after: $transactions_after, first: $transactions_first, last: $transactions_last) {
+        pageInfo {
+                    startCursor
+                    hasPreviousPage
+        }
+        edges {
+            cursor
+            node {
+                id
+                postedDate
+                createdAt
+                accountNumber
+                amounts {
+                    net
+                    tax
+                    gross
+                }
+                balanceCarriedForward
+                isHeld
+                isIssued
+                title
+                billingDocumentIdentifier
+                isReversed
+                hasStatement
+                note @ms_optional
+                ...Charge
+            }
+        }
+    }
+}
+
+query getBillsAndTransactions($accountNumber: String!, 
+    $includeBillsWithoutPDF: Boolean, 
+    $includeOpenStatements: Boolean, 
+    $includeHeldStatements: Boolean, 
+    $includeHistoricStatements: Boolean, 
+    $onlyCurrentEmail: Boolean, 
+    $fromDate: Date, 
+    $toDate: Date, 
+    $issuedFromDate: Date, 
+    $issuedToDate: Date, 
+    $offset: Int, 
+    $before: String, 
+    $after: String, 
+    $first: Int, 
+    $last: Int, 
+    $transactions_before: String, 
+    $transactions_after: String, 
+    $transactions_first: Int, 
+    $transactions_last: Int) @ms_required_by_default {
+        account(accountNumber: $accountNumber) {
+            bills(
+                includeBillsWithoutPDF: $includeBillsWithoutPDF, 
+                includeOpenStatements: $includeOpenStatements, 
+                includeHeldStatements: $includeHeldStatements, 
+                includeHistoricStatements: $includeHistoricStatements, 
+                onlyCurrentEmail: $onlyCurrentEmail, 
+                fromDate: $fromDate, 
+                toDate: $toDate, 
+                issuedFromDate: $issuedFromDate, 
+                issuedToDate: $issuedToDate, 
+                offset: $offset, 
+                before: $before, 
+                after: $after, 
+                first: $first, 
+                last: $last) {
+                pageInfo {
+                    endCursor
+                    hasNextPage
+                }
+                edges {
+                    cursor
+                    node {
+                        id
+                        billType
+                        fromDate
+                        toDate
+                        issuedDate
+                        ...Statement
+                        ...StatementTransactions
+                        ...PeriodBasedDocument
+                        ...Invoice
+                    }
+                }
+            }
+        }
+    }
+
+fragment Statement on StatementType @ms_required_by_default {
+    closingBalance
+    openingBalance
+    isExternalBill
+    userId
+    toAddress
+    paymentDueDate
+    #consumptionStartDate @ms_optional
+    #consumptionEndDate @ms_optional
+    reversalsAfterClose
+    status
+    heldStatus {
+        isHeld
+        reason @ms_optional
+    }
+    totalCharges {
+        netTotal
+        taxTotal
+        grossTotal
+    }
+    totalCredits {
+        netTotal
+        taxTotal
+        grossTotal
+    }
+}
+
+fragment PeriodBasedDocument on PeriodBasedDocumentType @ms_required_by_default {
+    identifier @ms_optional
+    totalCharges {
+        netTotal
+        taxTotal
+        grossTotal
+    }
+    totalCredits {
+        netTotal
+        taxTotal
+        grossTotal
+    }
+}
+
+fragment Charge on Charge @ms_required_by_default {
+    consumption @ms_optional {
+        startDate
+        endDate
+        quantity
+        unit
+        usageCost
+        supplyCharge
+    }
+    isExport
+}
+
+fragment Invoice on InvoiceType @ms_required_by_default {
+    grossAmount
+}
+
+
+

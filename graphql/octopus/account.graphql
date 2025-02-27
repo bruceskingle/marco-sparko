@@ -1,4 +1,4 @@
-query GetAccountSummary {
+query viewer @ms_required_by_default{
     viewer {
         id
         accounts {
@@ -6,8 +6,8 @@ query GetAccountSummary {
             brand
             overdueBalance
             billingName
-            billingSubName?
-            billingEmail?
+            billingSubName @ms_optional
+            billingEmail @ms_optional
         }
         givenName
         familyName
@@ -15,10 +15,10 @@ query GetAccountSummary {
         mobile
         landline
         title
-        pronouns?
+        pronouns @ms_optional
         isDeceased
-        liveSecretKey?
-        dateOfBirth?
+        liveSecretKey @ms_optional
+        dateOfBirth @ms_optional
         fullName
         preferredName
         alternativePhoneNumbers
@@ -26,17 +26,4 @@ query GetAccountSummary {
         isInHardship
         isOptedInToWof
     } 
-}
-
-query GetViewerAccounts {
-    viewer {
-        accounts {
-            number
-            brand
-            overdueBalance
-            billingName
-            billingSubName?
-            billingEmail?
-        }
-    }
 }

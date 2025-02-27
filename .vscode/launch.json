@@ -109,6 +109,24 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug executable 'marco-sparko'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in executable 'marco-sparko'",
             "cargo": {
                 "args": [

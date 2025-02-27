@@ -1,59 +1,29 @@
-/*****************************************************************************
-MIT License
-
-Copyright (c) 2024 Bruce Skingle
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-******************************************************************************/
-
 pub mod error;
 pub mod token;
-pub mod account;
-pub mod tariff;
 pub mod decimal;
-pub mod consumption;
-pub mod consumption_type;
-pub mod transaction;
-pub mod bill;
-pub mod meter;
-pub mod meter_property_view;
-pub mod meter_point;
-pub mod meter_point_property_view;
-pub mod account_property_meters;
+mod account;
+mod bill;
+mod meter;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
+use account::AccountManager;
 use async_trait::async_trait;
-use decimal::Decimal;
-use display_json::DisplayAsJsonPretty;
-use graphql::{latest_bill::get_account_latest_bill::{BillInterface, TransactionType}, summary::get_account_summary::AccountUserType};
+
+use bill::BillManager;
+use meter::MeterManager;
 use serde::{Deserialize, Serialize};
 
-use account::AccountManager;
+
 pub use error::Error;
-use sparko_graphql::types::{Date, DateTime};
+use time_tz::timezones;
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use crate::{Context, Module, ModuleBuilder, ModuleConstructor};
+use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 
+pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
 
 #[derive(Parser, Debug)]
 pub struct OctopusArgs {
@@ -66,6 +36,7 @@ pub struct OctopusArgs {
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub api_key:  Option<String>,
+    pub billing_timezone: Option<String>,
     #[serde(skip)]
     // #[serde(default = false)]
     pub init: bool,
@@ -75,53 +46,111 @@ impl Profile {
     pub fn new() -> Profile {
         Profile {
             api_key: None,
+            billing_timezone: Some("Europe/London".to_string()),
             init: false,
         }
     }
 }
 
-
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct Location {
-line: i32,
-column: i32,
-}
-
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct ValidationError {
-    message: String,
-    input_path: Vec<String>
-}
-
-#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-#[serde(rename_all = "camelCase")]
-struct Extensions {
-error_type: String,
-error_code: String,
-error_description: String,
-error_class: String,
-validation_errors: Vec<ValidationError>
-}
-
-
-
-//  self.config.get_active_profile()?.modules.octopus.clone()
-// #[derive(Debug)]
 pub struct Client{
-    context: Context, 
+    context: Arc<MarcoSparkoContext>, 
     profile: Option<Profile>,
-    gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
-    DEPRECATED_authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
-    gql_client: Arc<sparko_graphql::Client>,
-    pub(crate) token_manager:  OctopusTokenManager,
-    default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>
+    request_manager: Arc<RequestManager>,
+    // default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
+    account_id: String,
+    cache_manager: Arc<CacheManager>,
+    bill_manager: BillManager,
+    meter_manager: MeterManager,
+    account_manager: AccountManager,
+    billing_timezone: &'static time_tz::Tz,
 }
 
 const MODULE_ID: &str = "octopus";
 
+#[async_trait(?Send)]
+impl CommandProvider for Client {
+
+    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), super::Error> {
+        let account_id = self.account_id.clone();
+        match command {
+            "bills" => {
+                Ok(self.bill_manager
+                .bills_handler(args, &account_id)
+                .await?)
+            },
+            "bill" => {
+                Ok(self.bill_manager.bill_handler(args, &account_id, &mut self.meter_manager, self.billing_timezone).await?)
+            },
+            _ => Err(super::Error::UserError(format!("Invalid command '{}'", command)))
+        }
+    }
+
+    fn get_repl_commands(&self) -> Vec<ReplCommand> {
+        vec!(
+            ReplCommand {
+                command:"bills",
+                description: "Print a summary of all bills",
+                help:
+r#"
+usage: bills
+
+Print a one line summary of all bills in the account.
+"#,
+            },
+
+            ReplCommand {
+                command:"bill",
+                description: "Print details of a bill",
+                help:
+r#"
+usage: bill [bill_id]
+
+Print the contents of the bill whose id is given, or the most recent bill, if none.
+"#,
+            }
+        )
+    }
+}
+
 impl Client {
+    async fn new(context: Arc<MarcoSparkoContext>, profile: Option<Profile>, 
+        request_manager: Arc<RequestManager>, verbose: bool) -> Result<Client, Error> {   
+
+        let billing_timezone = Self::get_billing_timezone(&profile);
+        let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
+        let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
+        let bill_manager = BillManager::new(&cache_manager, &request_manager);
+        let meter_manager = MeterManager::new(&cache_manager, &request_manager, &billing_timezone);
+
+        Ok(Client {
+            context,
+            profile,
+            request_manager,
+            account_id: account_manager.get_default_account_id().to_string(),
+            cache_manager,
+            account_manager,
+            bill_manager,
+            meter_manager,
+            billing_timezone,
+        })
+    }
+
+    fn get_billing_timezone(profile: &Option<Profile>) -> &'static time_tz::Tz {
+        if let Some(profile) = profile {
+            if let Some(name) = &profile.billing_timezone {
+                if let Some(tz) =  timezones::get_by_name(&name) {
+                    return tz;
+                }
+                panic!("Unable to load billing_timezone '{}'", name);
+            }
+        }
+        return timezones::db::europe::LONDON;
+    }
+
+    fn get_api_key(&self) -> &Option<String> {
+        &self.account_manager.viewer.viewer.viewer_.live_secret_key_
+    }
+
     pub fn registration() -> (String, Box<ModuleConstructor>) {
 
         // Client::foo(Client::constructor);
@@ -129,276 +158,19 @@ impl Client {
         (MODULE_ID.to_string(), Box::new(Client::constructor))
     }
     
-    pub fn constructor(context: Box<&Context>, 
+    pub fn constructor(context: Arc<MarcoSparkoContext>, 
         json_profile: Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder>, crate::Error> {
-            Ok(Client::builder(&context, json_profile)?)
+            Ok(Client::builder(context, json_profile)?)
     }
 
-    pub fn builder(context: &Context, 
+    pub fn builder(context: Arc<MarcoSparkoContext>, 
         json_profile: Option<serde_json::Value>
     ) -> Result<Box<dyn ModuleBuilder>, Error> {
 
         ClientBuilder::new(context, json_profile)
     }
 
-    fn new(context: Context, profile: Option<Profile>, 
-        gql_authenticated_request_manager: sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>,
-        DEPRECATED_authenticated_request_manager: crate::AuthenticatedRequestManager<OctopusTokenManager>,
-        gql_client: Arc<sparko_graphql::Client>, token_manager: OctopusTokenManager) -> Client {        
-
-        Client {
-            context,
-            profile,
-            gql_authenticated_request_manager,
-            DEPRECATED_authenticated_request_manager,
-            gql_client,
-            token_manager,
-            default_account: None
-        }
-    }
-
-    pub async fn get_default_account(&mut self)  -> Result<Arc<graphql::summary::get_viewer_accounts::AccountInterface>, Error> {
-        if let Some(default_account) = &self.default_account {
-            Ok(default_account.clone())
-        }
-        else {
-            let query = graphql::summary::get_viewer_accounts::Query::new();
-            let mut response = self.gql_authenticated_request_manager.call(&query).await?;
-
-
-            let default_account = Arc::new(response.viewer_.accounts_.remove(0));
-            let return_value = default_account.clone();
-            self.default_account = Some(default_account);
-            Ok(return_value)
-        }
-    }
-
-    pub async fn get_account_user(&mut self)  -> Result<AccountUserType, Error> {
-        let query = graphql::summary::get_account_summary::Query::new();
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
-
-        Ok(response.viewer_)
-    }
-
-    pub async fn get_latest_bill(&mut self)  -> Result<graphql::latest_bill::get_account_latest_bill::BillConnectionTypeConnection, Error> {
-        // let account_number = self.get_default_account().await?.number_;
-        let query = graphql::latest_bill::get_account_latest_bill::Query::from(graphql::latest_bill::get_account_latest_bill::Variables::builder()
-            .with_account_number(self.get_default_account().await?.number_.clone())
-            .with_bills_first(1)
-            .with_bills_transactions_first(100)
-            .build()?
-        );
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
-
-        Ok(response.account_.bills_)
-    }
-
-    // Rename this to say what it actually does, after we delete the function of the same name in account.rs
-    pub async fn get_account_properties_meters(&mut self,
-        from: &Date,
-        to: &Option<Date>)  -> Result<(), Error> {
-        // let account_number = self.get_default_account().await?.number_;
-        let query = graphql::meters::get_account_properties_meters::Query::from(graphql::meters::get_account_properties_meters::Variables::builder()
-            .with_account_number(self.get_default_account().await?.number_.clone())
-            .build()?
-        );
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
-
-        for property in response.account_.properties_ {
-            for electricity_meter_point in property.electricity_meter_points_ {
-                for electricity_meter in &electricity_meter_point.meters_ {
-                    if let Some(_import_meter) = &electricity_meter.import_meter_ {
-                        // println!("Export electricity meter {}", &electricity_meter.node_id_);
-                        // export_meters.push(electricity_meter.node_id);
-
-                        self.get_meter_agreements(
-                            &electricity_meter.node_id_,
-                            from,
-                            to).await?;
-                    }
-                    else {
-                        // println!("Import electricity meter {}", &electricity_meter.node_id_);
-                        // import_meters.push(electricity_meter.node_id);
-                        self.get_meter_agreements(
-                            &electricity_meter.node_id_,
-                            from,
-                            to).await?;
-                    }
-                }
-            }
-
-            for gas_meter_point in property.gas_meter_points_ {
-                for gas_meter in &gas_meter_point.meters_ {
-                    // println!("Gas meter {}", &gas_meter.node_id_);
-                    // gas_meters.push(gas_meter.node_id);
-                    self.get_meter_agreements(
-                        &gas_meter.node_id_,
-                        from,
-                        to).await?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-
-
-    fn in_scope(from: &Date, to: &Option<Date>, valid_from: &DateTime, valid_to: &Option<DateTime>) -> bool {
-        let end_in_scope = if let Some(to) = to {
-            // if let Some(valid_from) = valid_from {
-                valid_from.to_date() <= *to
-            // }
-            // else {
-            //     false
-            // }
-        }
-        else {
-            true
-        };
-
-        let start_in_scope = if let Some(valid_to) = valid_to {
-                valid_to.to_date() >= *from
-
-        }
-        else {
-            true
-        };
-        
-        // println!("in_scope({:?},{:?},{:?},{:?}) = {}",
-        //     from,
-        //     to,
-        //     valid_from,
-        //     valid_to,
-        //     end_in_scope && start_in_scope
-        // );
-        end_in_scope && start_in_scope
-    }
- 
-    pub async fn get_meter_agreements (
-        &mut self,
-        meter_node_id: &String,
-        from: &Date,
-        to: &Option<Date>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-
-        let query = graphql::meters::meter_agreements::Query::from(graphql::meters::meter_agreements::Variables::builder()
-            .with_meter_node_id(meter_node_id.clone())
-            .with_valid_after(from.at_midnight())
-            .build()?
-        );
-        let response = self.gql_authenticated_request_manager.call(&query).await?;
-
-
-            match response.node_ {
-
-                graphql::meters::meter_agreements::Node::ElectricityMeterType(electricity_meter_type) => {
-                    for agreement in electricity_meter_type.meter_point_.agreements_
-                    {
-                        // println!("Agreement {:?}", &agreement);
-                        if Self::in_scope(&from, &to, &agreement.valid_from_, &agreement.valid_to_) {
-                            // let agreement_id = Self::unexpected_none()?.to_string();
-                            // println!("Electricity agreement {}", &agreement.id_);
-
-                            self.get_electric_line_items(format!("{}", &agreement.id_), from, to).await?;
-
-                        }
-                    } 
-                },
-                graphql::meters::meter_agreements::Node::GasMeterType(gas_meter_type) => {
-                    for agreement in gas_meter_type.meter_point_.agreements_
-                    {
-                        if Self::in_scope(&from, &to, &agreement.valid_from_, &agreement.valid_to_) {
-                            // let agreement_id = unexpected_none(agreement.id)?;
-                            println!("Gas agreement {}", &agreement.id_);
-                        }
-                    } 
-                },
-
-                
-                _ => return Err(Box::new(Error::InternalError("Unexpected node type found in agreements query")))
-             };
-
-
-
-        Ok(())
-    }
-
-
- 
-    pub async fn get_electric_line_items (
-        &mut self,
-        agreement_id: String,
-        from: &Date,
-        to: &Option<Date>,
-    ) -> Result<(), Error> {
-        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-
-        fn handle(agreement: &graphql::meters::electricity_agreement_line_items::AgreementInterface, format: &[time::format_description::FormatItem<'_>]) -> Option<String> {
-
-            match agreement {
-                graphql::meters::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
-                    for edge in &electricity_agreement_type.line_items_.edges_ {
-                        let item = &edge.node_;
-
-                        println!("{:20} {:20} {:8.2} {:7.3} {:7.3}", item.start_at_.format(format).unwrap(), item.end_at_.format(format).unwrap(), item.net_amount_, item.number_of_units_, 
-                        
-                        if item.number_of_units_.is_non_zero() {(item.net_amount_ / item.number_of_units_)} else { item.number_of_units_ }  );
-                        // println!("Start {} End {}", item.start_at_, item.end_at_, item.number_of_units_)
-                    }
-
-
-                    if electricity_agreement_type.line_items_.page_info_.has_next_page_ {
-                        Some(electricity_agreement_type.line_items_.page_info_.end_cursor_.clone())
-                    }
-                    else {
-                        None
-                    }
-
-                },
-                graphql::meters::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_) => unreachable!(),
-            }
-        }
-
-        let from = Date::from_calendar_date(2024, time::Month::January, 1)?;
-
-        let query = graphql::meters::electricity_agreement_line_items::Query::from(graphql::meters::electricity_agreement_line_items::Variables::builder()
-            .with_agreement_id(agreement_id.clone())
-            .with_start_at(from.at_midnight())
-            .with_first(5)
-            .with_timezone(String::from("Europe/London"))
-            .with_item_type(graphql::LineItemTypeOptions::ConsumptionCharge)
-            .with_line_item_grouping(graphql::LineItemGroupingOptions::None)
-            .build()?
-        );
-        let mut response = self.gql_authenticated_request_manager.call(&query).await?;
-
-        loop {
-
-            if let Some(cursor) = handle(&response.electricity_agreement_, &format) {
-                let query = graphql::meters::electricity_agreement_line_items::Query::from(graphql::meters::electricity_agreement_line_items::Variables::builder()
-                .with_agreement_id(agreement_id.clone())
-                .with_start_at(from.at_midnight())
-                .with_first(5)
-                .with_last_cursor(cursor)
-                .with_timezone(String::from("Europe/London"))
-                .with_item_type(graphql::LineItemTypeOptions::ConsumptionCharge)
-                .with_line_item_grouping(graphql::LineItemGroupingOptions::None)
-                .build()?
-                );
-                response = self.gql_authenticated_request_manager.call(&query).await?;
-            }
-            else {
-                break;
-            }
-            
-
-        }
-        // println!("{}", &response.electricity_agreement_);
-
-        Ok(())
-    }
-
-    async fn update_profile(&mut self, account_user: &AccountUserType)  -> Result<(), Error> {
+    async fn update_profile(&mut self)  -> Result<(), Error> {
 
         let api_key = if let Some(profile) = &self.profile {
             profile.api_key.clone()
@@ -407,7 +179,7 @@ impl Client {
             None
         };
 
-        if let Some(new_api_key) = &account_user.live_secret_key_ {
+        if let Some(new_api_key) = self.get_api_key() {
             if let Some(old_profile) = &self.profile {
             
                 if 
@@ -424,7 +196,7 @@ impl Client {
                         ..old_profile.clone()
                     };
 
-                    println!("UPDATE profile <{:?}>", &new_profile);
+                    //println!("UPDATE profile <{:?}>", &new_profile);
 
                     self.context.update_profile(MODULE_ID, new_profile)?;
                 }
@@ -433,184 +205,51 @@ impl Client {
                 let mut new_profile  = Profile::new();
                 new_profile.api_key = Some(new_api_key.clone());
 
-                println!("CREATE profile <{:?}>", &new_profile);
+                //println!("CREATE profile <{:?}>", &new_profile);
                 self.context.update_profile(MODULE_ID, new_profile)?;
             }
         }
         Ok(())
     }
-
-    async fn handle_statement(&mut self, statement: &graphql::latest_bill::get_account_latest_bill::StatementSummary)-> Result<(), Error> {
-        self.get_account_properties_meters(&statement.bill_interface_.from_date_, &Some(statement.bill_interface_.to_date_.clone())).await?;
-
-        
-        Ok(())
-    }
-
-    pub async fn handle_bill(&mut self, bill: &BillInterface) -> Result<(), crate::Error> {
-        //println!("\n===========================\n{}\n===========================\n", result);
-        
-        
-        let abstract_bill = bill.as_bill_interface();
-                // statement.print();
-
-        println!("Energy Account Statement");
-        println!("========================");
-        println!("Date                 {}", abstract_bill.issued_date_);
-        println!("Ref                  {}", abstract_bill.id_);
-        println!("From                 {}", abstract_bill.from_date_);
-        println!("To                   {}", abstract_bill.to_date_);
-
-        if let BillInterface::StatementType(statement) = bill {
-            let mut map = BTreeMap::new();
-            for edge in &statement.transactions_.edges_ {
-                map.insert(&edge.node_.as_transaction_type().posted_date_, &edge.node_);
-            }
-
-
-            println!();
-            print!("{:20} {:10} ", 
-                "Title",
-                "Date"
-            );
-            print!("{:10} {:10} {:10} {:10}", 
-                "Net", "Tax", "Gross", "Balance c/f"
-            );
-
-            println!();
-
-            for txn in &mut map.values() {
-                // let txn = transaction.as_transaction_type();
-
-                let title = if let TransactionType::Charge(charge) = txn {
-                    if charge.is_export_ {
-                        format!("{} Export", txn.as_transaction_type().title_)
-                    }
-                    else {
-                        txn.as_transaction_type().title_.clone()
-                    }
-                }
-                else {
-                    txn.as_transaction_type().title_.clone()
-                };
-
-                print!("{:20} {:10} ", 
-                    title,
-                    txn.as_transaction_type().posted_date_
-                );
-                print!("{:8.2} {:8.2} {:8.2} {:8.2}", 
-                    txn.as_transaction_type().amounts_.net_,
-                    txn.as_transaction_type().amounts_.tax_, 
-                    txn.as_transaction_type().amounts_.gross_,
-                    txn.as_transaction_type().balance_carried_forward_
-                    );
-                print!(" {:10} {:10} {:10} ", "from", "to", "Charge Amount");
-
-                    if let TransactionType::Charge(charge) = txn {
-                        if let Some(consumption) = &charge.consumption_ {
-                            print!(" {:10} {:10} {:8.2} ", 
-                                consumption.start_date_,
-                                consumption.end_date_,
-                                consumption.quantity_
-                            );
-
-                            println!();
-                            self.get_account_properties_meters(&consumption.start_date_, &Some(consumption.end_date_.clone())).await?;
-                        }
-
-                    }
-                println!();
-            } 
-        }
-
-        Ok(())
-    }
-
-    // pub fn get_latest_bill(&self) -> Result<Bill, Error> {
-    //     let query = graphql::latest_bill::get_account_summary::Query::new();
-    //     let response = self.gql_authenticated_request_manager.call(&query).await?;
-
-    //     Ok(response.viewer_)
-    // }
 }
 
-// unsafe impl Send for Client {
-
-// }
 
 #[async_trait]
 impl Module for Client {
-    async fn test(&mut self) -> Result<(), crate::Error>{
-        let user = self.get_account_user().await?;
-        println!("get_account_user {} {} {}", user.given_name_, user.family_name_, user.email_);
-        let account = self.get_default_account().await?;
-        println!("get_default_account {}", account.number_);
-        Ok(())
-    }
 
-    async fn summary(&mut self) -> Result<(), crate::Error>{
-        let user = self.get_account_user().await?;
-        println!("{}", user);
-        Ok(())
-    }
+    // async fn test(&mut self) -> Result<(), crate::Error>{
+    //     let user = self.get_account_user().await?;
+    //     println!("get_account_user {} {} {}", user.given_name_, user.family_name_, user.email_);
+    //     let account = self.get_default_account().await?;
+    //     println!("get_default_account {}", account.number_);
+    //     Ok(())
+    // }
 
-    async fn bill(&mut self) -> Result<(), crate::Error>{
-        let account = self.get_default_account().await?;
-        let account_number =  &account.number_; {
-            println!("{}", account_number);
+    // async fn summary(&mut self) -> Result<(), crate::Error>{
+    //     let user = self.get_account_user().await?;
+    //     println!("{}", user);
+    //     Ok(())
+    // }
 
-            let account_manager = AccountManager::new(account_number);
+    // async fn bill(&mut self) -> Result<(), crate::Error>{
+    //     println!("DEPRECATED");
+    //     // let account = self.get_default_account().await?;
+    //     // // let account_number =  &account.number_;
 
-            let result = self.get_latest_bill().await?;
-            // account_manager.get_latest_bill(&self.gql_client, &mut self.token_manager).await?;
+    //     // let mut bills = bill::get_bills(&self.cache_manager, &self.request_manager, account.number_.clone()).await?;
 
-            let bill =  &result.edges_[0].node_;
-            self.handle_bill(bill).await?;
+    //     // // bills.fetch_all(&self.request_manager).await?;
 
-            // if let BillInterface::StatementType(statement) = bill {
-                
-            //     self.handle_statement(statement).await?;
-            // }
-            // let statement =  &result.edges_[0].node_;
+    //     // bills.print_summary_lines();
 
-
-            
-
-            // // if let  bill::Bill::Statement(statement) = &result.edges_[0].node_ {
-
-            //     // let with_effect_from = None; // Some(statement.bill.from_date)
-            //     // let meter_result = account_manager.get_account_properties_meters(
-            //     //     &self.gql_client, &mut self.token_manager, with_effect_from).await?;
-
-            //     let foo = &statement.consumption_start_date_;
-
-            //     println!("consumption_start_date={:?}", foo);
-
-            //     let start_date = Date::from_calendar_date(2024, time::Month::October, 30).unwrap();
-
-            //     // if let Some(start_date) = &statement.consumption_start_date 
-            //     {
-            //         let meters = account_manager.get_account_properties_meters(
-            //             &mut self.DEPRECATED_authenticated_request_manager,
-            //             &start_date,
-            //             &statement.consumption_end_date_).await?;
-            //         }
-
-            // // }
-
-            Ok(())
-        }
-        // else {
-        //     Err(crate::Error::InternalError(String::from("Unable to find default account number")))
-        // }
-    }
+    //     Ok(())
+    // }
 }
 
 
 pub struct ClientBuilder {
-    context: Context, 
+    context: Arc<MarcoSparkoContext>, 
     profile: Option<Profile>,
-    gql_client_builder: sparko_graphql::ClientBuilder,
     token_manager_builder: TokenManagerBuilder,
     url: Option<String>,
     verbose: bool,
@@ -630,7 +269,7 @@ impl ClientBuilder {
     }
 
     fn new(
-            context: &Context,
+            context: Arc<MarcoSparkoContext>,
             json_profile: Option<serde_json::Value>
         ) -> Result<Box<dyn ModuleBuilder>, Error> {
 
@@ -641,29 +280,18 @@ impl ClientBuilder {
             None
         };
 
-        let option_api_key= if let Some(args) =  context.args() {
-            if let Some(api_key) = &args.octopus.octopus_api_key {
-                Some(api_key.to_string())
-            }
-            else {
-                Self::get_profile_api_key(&profile)?
-            }
+        let option_api_key = if let Some(api_key) = &context.args.octopus.octopus_api_key {
+            Some(api_key.to_string())
         }
         else {
             Self::get_profile_api_key(&profile)?
         };
 
-        let verbose = if let Some(args) =  context.args() {
-            args.verbose
-        }
-        else {
-            false
-        };
+        let verbose = context.args.verbose;
 
         let builder = ClientBuilder {
-            context: context.clone(),
+            context,
             profile,
-            gql_client_builder: sparko_graphql::Client::builder(),
             token_manager_builder: OctopusTokenManager::builder(),
             url: None,
             verbose,
@@ -678,25 +306,12 @@ impl ClientBuilder {
         
     }
 
-    #[cfg(test)]
-    // fn new_test() -> ClientBuilder {
-    //     ClientBuilder {
-    //         context: Context::new_test(),
-    //         profile: None,
-    //         gql_client_builder:     sparko_graphql::Client::builder(),
-    //         token_manager_builder:  TokenManager::builder(),
-    //     }
-    // }
-
     pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
-        self.gql_client_builder = self.gql_client_builder.with_url(url.clone())?;
         self.url = Some(url);
         Ok(self)
     }
 
     pub fn with_url_if_not_set(mut self, url: String) -> Result<ClientBuilder, Error> {
-        self.gql_client_builder = self.gql_client_builder.with_url_if_not_set(url.clone())?;
-
         if let None = self.url {
             self.url = Some(url);
         }
@@ -713,7 +328,7 @@ impl ClientBuilder {
         Ok(self)
     }
 
-    pub fn do_build(self, init: bool) -> Result<Client, Error> {
+    pub async fn do_build(self, init: bool) -> Result<Client, Error> {
         let option_profile = if init {
             if let Some(mut profile) = self.profile {
                 profile.init = true;
@@ -730,11 +345,6 @@ impl ClientBuilder {
             self.profile
         };
 
-        let gql_client = Arc::new(
-            self.gql_client_builder
-                .with_url_if_not_set(String::from("https://api.octopus.energy/v1/graphql/"))?
-                .build()?);
-        
         let url = if let Some(url) = self.url {
             url
         }
@@ -742,35 +352,32 @@ impl ClientBuilder {
             "https://api.octopus.energy/v1/graphql/".to_string()
         };
 
-        let gql_request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose)?);
+        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose)?);
 
         let token_manager = self.token_manager_builder
-            .with_request_manager(gql_request_manager.clone())
+            .with_request_manager(request_manager.clone())
             .with_context(self.context.clone())
             .build(init)?;
 
-        let cloned_token_manager = token_manager.clone_delete_me();
-        let cloned2_token_manager = token_manager.clone_delete_me();
-
-        let gql_authenticated_request_manager = sparko_graphql::AuthenticatedRequestManager::new(gql_request_manager, token_manager)?;
-
-        let request_manager = Arc::new(crate::RequestManager::new(url)?);
+        let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?);
        
-        let DEPRECATED_authenticated_request_manager = crate::AuthenticatedRequestManager::new(request_manager, cloned2_token_manager)?;
+        let mut client = Client::new(self.context, option_profile, 
+            authenticated_request_manager, self.verbose
+        ).await?;
 
-        let client = Client::new(self.context, option_profile, 
-            gql_authenticated_request_manager,
-            DEPRECATED_authenticated_request_manager,
-            gql_client.clone(), 
-            cloned_token_manager
-          );
-
+        if init {
+            // let account_user = client.get_account_user().await?;
+            // let x = client.account_manager.viewer.viewer.viewer_.live_secret_key_
+            client.update_profile().await?;
+        }
+        
         Ok(client)
     }
 }
 
+#[async_trait]
 impl ModuleBuilder for ClientBuilder {
-    fn build(self: Box<Self>, init: bool) -> Result<Box<dyn crate::Module + Send>, crate::Error> {
-        Ok(Box::new(self.do_build(init)?))
+    async fn build(self: Box<Self>, init: bool) -> Result<Box<dyn crate::Module + Send>, crate::Error> {
+        Ok(Box::new(self.do_build(init).await?))
     }
 }
