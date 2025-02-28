@@ -649,9 +649,9 @@ impl AgreementLineItems {
             end_cursor = Some(cursor.clone());
         }
 
-        let path = Path::new("/tmp/response.json");
-        let mut out = File::create(path)?;
-        // let mut input = File::open(path)?;
+        // let path = Path::new("/tmp/response.json");
+        // let mut out = File::create(path)?;
+        // // let mut input = File::open(path)?;
 
 
 
@@ -674,7 +674,7 @@ impl AgreementLineItems {
 
                     let response = request_manager.call(&query).await?;
 
-                    writeln!(out, "{}", serde_json::to_string(&response)?)?;
+                    // writeln!(out, "{}", serde_json::to_string(&response)?)?;
 
                     // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
 
@@ -723,7 +723,7 @@ impl AgreementLineItems {
 
                     let response = request_manager.call(&query).await?;
 
-                    writeln!(out, "{}", serde_json::to_string(&response)?)?;
+                    // writeln!(out, "{}", serde_json::to_string(&response)?)?;
 
                     // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
 
