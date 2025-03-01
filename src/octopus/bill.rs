@@ -667,7 +667,7 @@ impl BillTransactionList {
                     result
                 }
                 else {
-                    return Err(Error::StringError(format!("Bill {} is not a statement", statement_id)))
+                    return Err(Error::from(format!("Bill {} is not a statement", statement_id)))
                 }
             }
             else {

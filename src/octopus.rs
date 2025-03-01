@@ -1,4 +1,3 @@
-pub mod error;
 pub mod token;
 pub mod decimal;
 mod account;
@@ -13,13 +12,11 @@ use bill::BillManager;
 use meter::MeterManager;
 use serde::{Deserialize, Serialize};
 
-
-pub use error::Error;
 use time_tz::timezones;
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
+use crate::{error::Error, CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 
@@ -81,7 +78,7 @@ impl CommandProvider for Client {
             "bill" => {
                 Ok(self.bill_manager.bill_handler(args, &account_id, &mut self.meter_manager, self.billing_timezone).await?)
             },
-            _ => Err(super::Error::UserError(format!("Invalid command '{}'", command)))
+            _ => Err(Error::from(format!("Invalid command '{}'", command)))
         }
     }
 

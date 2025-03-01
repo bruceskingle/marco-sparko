@@ -1,3 +1,4 @@
+pub mod error;
 pub mod octopus;
 pub mod system;
 pub mod util;
@@ -6,11 +7,11 @@ use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Lines, Write};
 use std::io::BufRead;
-use std::error::Error as StdError;
 use std::path::Path;
-use std::{collections::HashMap, fmt::{self, Display}, fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
 use async_trait::async_trait;
 use dirs::home_dir;
+use error::Error;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use clap::{Parser, Subcommand};
@@ -26,82 +27,82 @@ use {
 
 pub const CHECK_FOR_UPDATES: bool = true;
 
-#[derive(Debug)]
-pub enum Error {
-    OctopusError(octopus::error::Error),
-    JsonError(serde_json::Error),
-    IOError(std::io::Error),
-    InternalError(String),
-    UserError(String),
-    WrappedError(Box<dyn StdError>),
-}
+// #[derive(Debug)]
+// pub enum Error {
+//     OctopusError(octopus::error::Error),
+//     JsonError(serde_json::Error),
+//     IOError(std::io::Error),
+//     InternalError(String),
+//     UserError(String),
+//     WrappedError(Box<dyn StdError>),
+// }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::OctopusError(err) => f.write_fmt(format_args!("OctopusError({})", err)),
-            Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
-            Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
-            Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
-            Error::UserError(err) => f.write_fmt(format_args!("{}", err)),
-            Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err)),
-        }
-    }
-}
+// impl Display for Error {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Error::OctopusError(err) => f.write_fmt(format_args!("OctopusError({})", err)),
+//             Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
+//             Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
+//             Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
+//             Error::UserError(err) => f.write_fmt(format_args!("{}", err)),
+//             Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err)),
+//         }
+//     }
+// }
 
-impl StdError for Error {
+// impl StdError for Error {
 
-}
+// }
 
-// impl Send for Error {}
+// // impl Send for Error {}
 
-// impl From<time::error::ComponentRange> for Error {
-//     fn from(err: time::error::ComponentRange) -> Error {
+// // impl From<time::error::ComponentRange> for Error {
+// //     fn from(err: time::error::ComponentRange) -> Error {
+// //         Error::WrappedError(Box::new(err))
+// //     }
+// // }
+
+// impl From<sparko_graphql::Error> for Error {
+//     fn from(err: sparko_graphql::Error) -> Error {
 //         Error::WrappedError(Box::new(err))
 //     }
 // }
 
-impl From<sparko_graphql::Error> for Error {
-    fn from(err: sparko_graphql::Error) -> Error {
-        Error::WrappedError(Box::new(err))
-    }
-}
+// impl From<Box<dyn StdError>> for Error {
+//     fn from(err: Box<dyn StdError>) -> Error {
+//         Error::WrappedError(err)
+//     }
+// }
 
-impl From<Box<dyn StdError>> for Error {
-    fn from(err: Box<dyn StdError>) -> Error {
-        Error::WrappedError(err)
-    }
-}
+// impl From<reqwest::Error> for Error {
+//         fn from(err: reqwest::Error) -> Error {
+//             Error::WrappedError(Box::new(err))
+//         }
+// }
 
-impl From<reqwest::Error> for Error {
-        fn from(err: reqwest::Error) -> Error {
-            Error::WrappedError(Box::new(err))
-        }
-}
+// impl From<crate::octopus::error::Error> for Error {
+//     fn from(err: crate::octopus::error::Error) -> Error {
+//         Error::OctopusError(err)
+//     }
+// }
 
-impl From<crate::octopus::error::Error> for Error {
-    fn from(err: crate::octopus::error::Error) -> Error {
-        Error::OctopusError(err)
-    }
-}
+// impl From<serde_json::Error> for Error {
+//     fn from(err: serde_json::Error) -> Error {
+//         Error::JsonError(err)
+//     }
+// }
 
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Error {
-        Error::JsonError(err)
-    }
-}
+// impl From<std::io::Error> for Error {
+//     fn from(err: std::io::Error) -> Error {
+//         Error::IOError(err)
+//     }
+// }
 
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Error {
-        Error::IOError(err)
-    }
-}
-
-impl<T> From<std::sync::PoisonError<T>> for Error {
-    fn from(err: std::sync::PoisonError<T>) -> Error {
-        Error::InternalError(format!("Mutex poison error {:?}", err))
-    }
-}
+// impl<T> From<std::sync::PoisonError<T>> for Error {
+//     fn from(err: std::sync::PoisonError<T>) -> Error {
+//         Error::InternalError(format!("Mutex poison error {:?}", err))
+//     }
+// }
 
 pub struct ReplCommand {
     pub command: &'static str,
@@ -302,7 +303,7 @@ impl MarcoSparkoContext {
     }
 
     fn get_file_path() -> Result<PathBuf, Error> {
-        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
 
         path.push(".marco-sparko");
         Ok(path)
@@ -310,7 +311,7 @@ impl MarcoSparkoContext {
 
     fn get_cache_file_path(&self, module_id: &str) -> Result<PathBuf, Error> {
         let profile_name = &self.active_profile.name;
-        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}.json", profile_name, module_id));
                 Ok(path)
@@ -318,7 +319,7 @@ impl MarcoSparkoContext {
 
     fn get_history_file_path(&self, module_id: &Option<String>) -> Result<PathBuf, Error> {
         let profile_name = &self.active_profile.name;
-        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         if let Some(module_id) = module_id {
             path.push(format!("{}-{}-history.txt", profile_name, module_id));
@@ -332,7 +333,7 @@ impl MarcoSparkoContext {
     fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
         let profile_name = &self.active_profile.name;
 
-        let mut path = home_dir().ok_or(Error::InternalError("Unable to locate home directory".to_string()))?;
+        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}", profile_name, module_id));
         Ok(path)
@@ -399,7 +400,7 @@ impl MarcoSparko {
         match command {
             "list" => self.list_handler(args).await,
             "init" => self.init_handler(args).await,
-            _ => Err(Error::UserError(format!("Invalid command '{}'", command)))
+            _ => Err(Error::from(format!("Invalid command '{}'", command)))
         }
     }
 
@@ -857,7 +858,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
             Ok(())
         }
         else {
-            return Err(Error::UserError(format!("Unknown module \"{}\"", module_id)))
+            return Err(Error::from(format!("Unknown module \"{}\"", module_id)))
         }
     }
 }
@@ -968,7 +969,7 @@ impl CacheManager {
 
                     match line.split_once('\t') {
                         Some((key, value)) => vec.push((key.to_string(), serde_json::from_str(value)?)),
-                        None => return Err(Error::InternalError(format!("Invalid cached object <{}>", line))),
+                        None => return Err(Error::from(format!("Invalid cached object <{}>", line))),
                     }
                 }
             },
@@ -976,7 +977,7 @@ impl CacheManager {
             Err(error) => {
                 if error.kind() != std::io::ErrorKind::NotFound {
                     println!("ERROR {:?}", error);
-                    return Err(Error::IOError(error))
+                    return Err(Error::from(error))
                 }
                 
             },
@@ -1008,7 +1009,7 @@ impl CacheManager {
             Err(error) => {
                 if error.kind() != std::io::ErrorKind::NotFound {
                     println!("ERROR {:?}", error);
-                    return Err(Error::IOError(error))
+                    return Err(Error::from(error))
                 }
                 None
             },

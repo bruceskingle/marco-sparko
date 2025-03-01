@@ -3,9 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use crate::error::Error;
 use crate::MarcoSparkoContext;
 
-use super::error::Error;
 use super::graphql::ObtainJsonWebTokenInput;
 
 use sparko_graphql::{RequestManager, TokenManager};
@@ -272,14 +272,14 @@ impl TokenManagerBuilder{
                 self = self.with_password(email.trim_end().to_string(), password);
             }
             else {
-                return Err(Error::StringError("No Octopus authentication credentials given, did you mean to specify --init?".to_string()))
+                return Err(Error::from("No Octopus authentication credentials given, did you mean to specify --init?"))
             }
         }
 
         Ok(OctopusTokenManager::new(
-            self.context.ok_or(Error::CallerError("Context must be provided"))?, 
-            self.request_manager.ok_or(Error::CallerError("RequestManager must be provided"))?, 
-            self.authenticator.ok_or(Error::CallerError("Credentials must be specified"))?
+            self.context.ok_or(Error::from("Context must be provided"))?, 
+            self.request_manager.ok_or(Error::from("RequestManager must be provided"))?, 
+            self.authenticator.ok_or(Error::from("Credentials must be specified"))?
         ))
     }
 }
