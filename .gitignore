@@ -2,3 +2,6 @@
 unredacted_docs
 docs/scratch.md
 **/.DS_Store
+build/marko-sparko-0.3.0-aarch64-apple-darwin
+build/marko-sparko-0.3.0-x86_64-apple-darwin
+build/marko-sparko-0.3.0-x86_64-pc-windows-msvc
