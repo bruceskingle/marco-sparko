@@ -1,4 +1,5 @@
 /target
+/build
 unredacted_docs
 docs/scratch.md
 **/.DS_Store
