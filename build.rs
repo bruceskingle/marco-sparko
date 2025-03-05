@@ -1,4 +1,5 @@
-use std::{error::Error, process};
+use std::{env, error::Error, fs::File, path::Path, process};
+use std::io::Write;
 
 // fn get_current_working_dir() -> String {
 //     let res = std::env::current_dir();
@@ -17,6 +18,21 @@ fn main() {
 // Example custom build script.
 fn build()  -> Result<(), Box<dyn Error>> {
     // panic!("Panic cwd={}", get_current_working_dir()); 
+    
+    if let Some(dir) = env::var_os("OUT_DIR") {
+        let dest_path = Path::new(&dir).join("crate_info.rs");
+        // let dest_path_string = format!("{}", dest_path.to_string_lossy());
+
+        let mut file = File::create(dest_path)?;
+
+        writeln!(file, r#"
+mod CrateInfo {{
+    pub const PACKAGE_NAME: &'static str = "{}";
+    pub const PACKAGE_VERSION: &'static str = "{}";
+    pub const USER_AGENT: &'static str = "{}-{}";
+}}
+"#, env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))?;
+    }
 
     println!("cargo::rerun-if-changed=build.rs");
     sparko_graphql_builder::builder("graphql")

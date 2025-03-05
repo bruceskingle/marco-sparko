@@ -20,6 +20,7 @@ use sparko_graphql::TokenManager;
 use crate::{error::Error, CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
+include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 
 pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
 
@@ -350,7 +351,7 @@ impl ClientBuilder {
             "https://api.octopus.energy/v1/graphql/".to_string()
         };
 
-        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose)?);
+        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose, CrateInfo::USER_AGENT)?);
 
         let token_manager = self.token_manager_builder
             .with_request_manager(request_manager.clone())
