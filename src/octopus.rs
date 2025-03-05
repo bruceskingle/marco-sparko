@@ -16,6 +16,7 @@ use time_tz::timezones;
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
+use sparko_graphql::TokenManager;
 use crate::{error::Error, CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -355,6 +356,31 @@ impl ClientBuilder {
             .with_request_manager(request_manager.clone())
             .with_context(self.context.clone())
             .build(init)?;
+
+        if init {
+            let x = token_manager.get_authenticator(true).await;
+            // println!("HERE {:?}", x);
+            match x {
+                Ok(token) => {
+                    println!("Logged in OK");
+                },
+                Err(error) => {
+                    if let sparko_graphql::Error::GraphQLError(graphql_errors) = &error {
+                        for graphql_error in graphql_errors {
+                            if let Some(error_code) = graphql_error.extensions.get("errorCode") {
+                                if error_code == "KT-CT-1138" {
+                                    println!("Username or password is incorrect.");
+                                    return Err(Error::from(error));
+                                }
+                            }
+                        }
+                 
+                    }
+                    println!("Login failed {}", error);
+                    return Err(Error::from(error));
+                },
+            }
+        }
 
         let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?);
        

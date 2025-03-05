@@ -3,6 +3,7 @@
 
 These are the steps to create  release
 ## Create Tagged Source
+Ensure that all feature branches have been merged to main and that Cargo.toml shows the correct version number for the new release.
 
 Go to GitHub, on both the sparko_graphql and marco-sparko repos, create a release from ```main``` creating the tag ```releaseX.X.X``` where X.X.X is the version number.
 
@@ -44,11 +45,10 @@ cd ~/git/marco-sparko
 You should see newly created binaries like this:
 
 ```
-total 64632
--rwxr-xr-x  1 bruce  staff  8680016  1 Mar 15:56 marco-sparko-0.3.0-aarch64-apple-darwin
--rwxr-xr-x  1 bruce  staff  7428096  1 Mar 15:56 marco-sparko-0.3.0-aarch64-pc-windows-msvc.exe
--rwxr-xr-x  1 bruce  staff  8777260  1 Mar 15:56 marco-sparko-0.3.0-x86_64-apple-darwin
--rwxr-xr-x  1 bruce  staff  8200192  1 Mar 15:56 marco-sparko-0.3.0-x86_64-pc-windows-msvc.exe
+-rw-r--r--@ 1 bruce  staff  3331675  3 Mar 16:46 marco-sparko-0.3.0-aarch64-apple-darwin.dmg
+-rwxr-xr-x  1 bruce  staff  7417856  3 Mar 16:46 marco-sparko-0.3.0-aarch64-pc-windows-msvc.exe
+-rw-r--r--@ 1 bruce  staff  3415115  3 Mar 16:46 marco-sparko-0.3.0-x86_64-apple-darwin.dmg
+-rwxr-xr-x  1 bruce  staff  8187904  3 Mar 16:46 marco-sparko-0.3.0-x86_64-pc-windows-msvc.exe
 ```
 
 ## Upload Binaries to GitHub

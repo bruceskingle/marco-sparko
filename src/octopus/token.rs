@@ -172,7 +172,7 @@ impl OctopusTokenManager {
 
 impl TokenManager for OctopusTokenManager {
 
-    async fn get_authenticator(&self, refresh: bool)  -> Result<Arc<String>, Box<dyn std::error::Error>> {
+    async fn get_authenticator(&self, refresh: bool)  -> Result<Arc<String>, sparko_graphql::Error> {
         let mut locked_token = self.token.lock().await;
 
         let current_token = if refresh {
@@ -207,7 +207,9 @@ impl TokenManager for OctopusTokenManager {
     
             let token = OctopusToken::from(response.obtain_kraken_token_);
     
-            self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token))?;
+            if let Err(error) = self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token)) {
+                return Err(sparko_graphql::Error::InternalError(format!("Failed to update cache {}", error)))
+            }
     
             let result = token.token.clone();
     
@@ -268,6 +270,8 @@ impl TokenManagerBuilder{
                 std::io::stdin().read_line(&mut email)?;
 
                 let password = rpassword::prompt_password("password: ").expect("Failed to read password");
+                // let mut password = String::new();
+                // std::io::stdin().read_line(&mut password)?;
 
                 self = self.with_password(email.trim_end().to_string(), password);
             }

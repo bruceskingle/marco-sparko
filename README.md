@@ -32,6 +32,40 @@ The ```bill``` command displays a details report of the latest bill, or any sing
 ![Bill Summary](docs/gettingStarted/bill.png)
 The detail lines at the bottom of this screenshot show the individual line items which make up the consumption charges shown on the bill. In this case Intelligent Octopus Go smart charging sessions occur between 11:30 am and 4pm and then again starting at 10:30pm. The unit costs shown here are back calculated from the charge and the number of units, showing that the individual line items are charged at the traiff rates, (whereas the totals shown on the statement are a combination of charges at these different rates and the per unit cost shown there is the average rate).
 
+# Installation
+Navigate to [https://github.com/bruceskingle/marco-sparko/releases/](https://github.com/bruceskingle/marco-sparko/releases/) to find the
+latest release: 
+
+![Download Page](docs/gettingStarted/download.png)
+
+Look for the one with the <img src="docs/gettingStarted/latest.png" width="60"> label, and then select the correct version for your computer. 
+
+The ```apple-darwin``` files are for Mac OSX and the ```windows-msvc``` ones are for Microsoft Windows.
+
+The ```x86_64``` files are for Intel based computers and the ```aarch64``` ones are for ARM CPUs, including "Apple Silicone" or Apple M1, M2 etc processors.
+
+## Mac Installation
+Marco Sparko for Mac is released as a disk image (.dmg) file. Click on the file name to download the image, then click on ```Downloads``` in the dock and click on the disk image file to mount it. A window like this will open:
+![Disk Image Window](docs/gettingStarted/osx/dmg.png)
+Drag and drop the app into the Applications folder in this window. If you have a previous version installed you will see the following dialog:
+![Copy Replace Dialog](docs/gettingStarted/osx/copyReplace.png)
+Click on ```Replace``` and the app will be installed.
+
+Since this app is not signed you will need to open a ```Terminal``` window and execute the following command to remove the file from quarantine:
+
+```
+xattr -d com.apple.quarantine /Applications/Marco\ Sparko.app
+```
+
+If you wish to execute the app from the command line directly or from a shell script, the full path to the executable is
+```
+/Applications/Marco\ Sparko.app/Contents/MacOS/marco-sparko 
+```
+## Windows Installation
+Download the executable and place it in ny convenient folder.
+
+
+
 # The Final Vision
 I intend Marco Sparko to become a platform supporting plugins to access various APIs including:
 
@@ -52,8 +86,9 @@ I would like to make the plugins entirely independent of the core code base so t
 # Documentation
 The [Documentation Home](docs/index.md) is the starting point for access to all of the documentation.
 
-Plugins provide access to various utilities and services, the following sections provide more detailed information about them:
+If you have just downloaded the app check out the [Getting Started](docs/gettingStarted/index.md) page.
 
+Plugins provide access to various utilities and services, the following sections provide more detailed information about them:
 
 [Octopus Energy](https://github.com/bruceskingle/marco-sparko/blob/main/docs/octopus/index.md)
 
