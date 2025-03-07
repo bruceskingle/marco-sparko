@@ -80,6 +80,9 @@ impl CommandProvider for Client {
             "bill" => {
                 Ok(self.bill_manager.bill_handler(args, &account_id, &mut self.meter_manager, self.billing_timezone).await?)
             },
+            "demand" => {
+                Ok(self.meter_manager.demand_handler(args, &account_id, self.billing_timezone).await?)
+            },
             _ => Err(Error::from(format!("Invalid command '{}'", command)))
         }
     }
@@ -105,6 +108,17 @@ r#"
 usage: bill [bill_id]
 
 Print the contents of the bill whose id is given, or the most recent bill, if none.
+"#,
+            },
+
+            ReplCommand {
+                command:"demand",
+                description: "Print electricity demand",
+                help:
+r#"
+usage: demand
+
+Print the current electricity demand (power imported from or exported to the grid)
 "#,
             }
         )

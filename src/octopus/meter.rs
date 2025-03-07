@@ -4,10 +4,12 @@ use std::io::Write;
 use std::fs::{self, File};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use indexmap::IndexMap;
 use sparko_graphql::types::{Date, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
+use tokio::time::sleep;
 
 use crate::octopus::decimal::Decimal;
 use crate::util::as_decimal;
@@ -52,6 +54,67 @@ impl MeterManager {
             properties: HashMap::new(),
             agreements: IndexMap::new(),
         }
+    }
+
+    pub async fn demand_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
+        // let properties = self.get_properties(account_number).await?;
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+            entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+        }
+        
+        let properties =self.properties.get(account_number).unwrap();
+
+        for property in &properties.properties.account_.properties_ {
+            for network in &property.smart_device_networks_ {
+                for device in &network.smart_devices_ {
+                    if let super::graphql::DeviceType::Esme =  device.type_ {
+                        println!("devide_id {}", device.device_id_);
+                        let mut cnt=5;
+                        let ten_seconds = Duration::new(10, 0);
+
+
+                        let now = DateTime::now_utc();
+                        let now_mod_ten = now.replace_second(now.second()%10).unwrap();
+                        let mut end_timestamp = now_mod_ten.unix_timestamp() + 10;
+
+                        while cnt>0 {
+                            cnt -= 1;
+
+                            let start = DateTime::from_unix_timestamp(end_timestamp - 60)?;
+                            let end = DateTime::from_unix_timestamp(end_timestamp)?;
+
+                            let query = meter::get_current_demand::Query::builder()
+                                .with_meter_device_id(device.device_id_.clone())
+                                .with_start(start)
+                                .with_end(end)
+                                .with_grouping(crate::octopus::graphql::TelemetryGrouping::TenSeconds)
+                                .build()?;
+                            let demand = &self.request_manager.call(&query).await?;
+                
+                            if demand.smart_meter_telemetry_.is_empty() {
+                                println!("NO RESULT");
+                            }
+                            else {
+                                let result = demand.smart_meter_telemetry_.get(demand.smart_meter_telemetry_.len() - 1).unwrap();
+                                println!("{} at {}", result.demand_, result.read_at_);
+                            }
+                            end_timestamp += 10;
+                            sleep(ten_seconds).await;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_properties(&mut self, account_number: &String) -> Result<&PropertyList, Error>{
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+            entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+        }
+        
+        Ok(self.properties.get(account_number).unwrap())
     }
 
     pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>, Error>{

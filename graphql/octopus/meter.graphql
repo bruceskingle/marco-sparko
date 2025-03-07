@@ -201,3 +201,19 @@ query gasAgreementLineItems($agreementId: ID!, $startAt: DateTime!, $first: Int,
     }
   }
 }
+
+query getCurrentDemand(
+  $meterDeviceId: String!, 
+  $start: DateTime, 
+  $end: DateTime, 
+  $grouping: TelemetryGrouping
+) @ms_required_by_default {
+  	smartMeterTelemetry(deviceId: $meterDeviceId
+      start: $start
+      end: $end
+      grouping: $grouping
+    ) {
+    	readAt
+    	demand
+    }
+  }
