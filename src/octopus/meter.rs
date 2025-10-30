@@ -4,11 +4,14 @@ use std::io::Write;
 use std::fs::{self, File};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use indexmap::IndexMap;
-use sparko_graphql::types::{Date, DateTime, EdgeOf, PageInfo};
+use sparko_graphql::types::{Date, DateRange, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
+use tokio::time::sleep;
 
+use crate::error::Cause;
 use crate::octopus::decimal::Decimal;
 use crate::util::as_decimal;
 use crate::CacheManager;
@@ -35,7 +38,7 @@ pub struct MeterManager {
     // pub account_number: String,
     pub cache_manager: Arc<CacheManager>,
     pub request_manager: Arc<RequestManager>,
-    pub properties: HashMap<String, PropertyList>,
+    pub properties: HashMap<String, Arc<PropertyList>>,
     pub agreements: IndexMap<String,MeterAgreementList>,
 }
 
@@ -54,12 +57,100 @@ impl MeterManager {
         }
     }
 
-    pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>, Error>{
+    fn get_date_range(args: std::str::SplitWhitespace<'_>) -> Result<DateRange, Error> {
+        // default - current month
+        Ok(DateRange::get_current_month_inclusive()?)
+    }
+
+    pub async fn consumption_handler(&mut self, args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
+        let properties = self.get_properties(account_number).await?;
+        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+        // }
+        
+        // let properties =self.properties.get(account_number).unwrap();
+
+        let date_range = Self::get_date_range(args)?;
+
+        for meter_node_id in &properties.meter_node_ids {
+            //println!("meter_node_id {}",meter_node_id);
+
+            let consumption = self.get_consumption(account_number, meter_node_id, &date_range, billing_timezone).await?;
+
+            //println!("print {} items",consumption.len());
+            ConsumptionList::print_consumption(&consumption)?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn demand_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
+        let properties = self.get_properties(account_number).await?;
+        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+        // }
+        
+        // let properties =self.properties.get(account_number).unwrap();
+
+        for property in &properties.properties.account_.properties_ {
+            for network in &property.smart_device_networks_ {
+                for device in &network.smart_devices_ {
+                    if let super::graphql::DeviceType::Esme =  device.type_ {
+                        let mut cnt=5;
+                        let ten_seconds = Duration::new(10, 0);
+
+
+                        let now = DateTime::now_utc();
+                        let now_mod_ten = now.replace_second(now.second()%10).unwrap();
+                        let mut end_timestamp = now_mod_ten.unix_timestamp() + 10;
+
+                        while cnt>0 {
+                            cnt -= 1;
+
+                            let start = DateTime::from_unix_timestamp(end_timestamp - 60)?;
+                            let end = DateTime::from_unix_timestamp(end_timestamp)?;
+
+                            let query = meter::get_current_demand::Query::builder()
+                                .with_meter_device_id(device.device_id_.clone())
+                                .with_start(start)
+                                .with_end(end)
+                                .with_grouping(crate::octopus::graphql::TelemetryGrouping::TenSeconds)
+                                .build()?;
+                            let demand = &self.request_manager.call(&query).await?;
+                
+                            if demand.smart_meter_telemetry_.is_empty() {
+                                println!("NO RESULT");
+                            }
+                            else {
+                                let result = demand.smart_meter_telemetry_.get(demand.smart_meter_telemetry_.len() - 1).unwrap();
+                                println!("{} at {}", result.demand_, result.read_at_);
+                            }
+                            end_timestamp += 10;
+                            sleep(ten_seconds).await;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_properties(&mut self, account_number: &String) -> Result<Arc<PropertyList>, Error>{
         if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
-            entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+            entry.insert(Arc::new(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?));
         }
         
-        let properties = self.properties.get(account_number).unwrap();
+        Ok(self.properties.get(account_number).unwrap().clone())
+    }
+
+    pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>, Error>{
+        let properties = self.get_properties(account_number).await?;
+        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+        // }
+        
+        // let properties = self.properties.get(account_number).unwrap();
         let meter_agreements = MeterAgreementList::new(&self.cache_manager, &self.request_manager, account_number.clone(), &properties.meter_node_ids).await?;
 
         // println!("Meter Agreements");
@@ -133,6 +224,57 @@ impl MeterManager {
         }
 
         Ok(item_map)
+    }
+
+
+
+    pub async fn get_consumption(&mut self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> Result<Vec<meter::meter_consumption::ConsumptionType>, Error>{
+        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+        // }
+        
+        // let properties = self.properties.get(account_number).unwrap();
+        
+        let start_date_time = date_range.start.at_midnight(billing_timezone);
+        let end_date_time = date_range.end.at_next_midnight(billing_timezone);
+
+        //println!("get_consumption {:?} - {:?}", start_date_time, end_date_time);
+
+        
+        async fn get_line_items2(
+            cache_manager: &CacheManager, request_manager: &RequestManager,
+            account_number: &String, meter_node_id: &String, start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> Result<Vec<meter::meter_consumption::ConsumptionType>, Error> {
+                let mut in_scope_items = Vec::new();
+                let mut bucket_date = start_date_time.to_date();
+                loop {
+                    //println!("Get bucket {:?}", bucket_date);
+                    let line_items = ConsumptionList::new(cache_manager, request_manager, account_number.clone(), meter_node_id.clone(), &bucket_date, billing_timezone).await?;
+
+                    for (_cursor, item) in line_items.consumption{
+                        //println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
+                        if &item.start_at_ >= end_date_time {
+                            // thats it
+                            //println!("Line item has date {:?} so we are done", item.start_at_);
+                            return Ok(in_scope_items)
+                        }
+                        if &item.end_at_ >= start_date_time {
+                            //println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
+                            in_scope_items.push(item);
+                        }
+                    }
+
+                    bucket_date = line_items.end_date;
+
+                    //println!("New bucket date {:?}", bucket_date);
+
+                    if *bucket_date > end_date_time.date() {
+                        //println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
+                        return Ok(in_scope_items)
+                    }
+                }
+        }
+        
+        get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_node_id, &start_date_time, &end_date_time, billing_timezone).await
     }
 }
 
@@ -1082,6 +1224,204 @@ impl AgreementLineItems {
         Ok(())
     }
 }
+
+pub struct ConsumptionList {
+    pub account_number: String,
+    pub meter_node_id: String,
+    pub end_cursor: Option<String>,
+    pub has_next_page: bool,
+    pub consumption: Vec<(String, meter::meter_consumption::ConsumptionType)>,
+    hash_key: String,
+    start_date: Date,
+    end_date: Date,
+    start_date_time: DateTime,
+    end_date_time: DateTime,
+}
+
+impl ConsumptionList {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> Result<Self, Error> {
+        let hash_key = format!("{}#{}#ConsumptionRecords", account_number, meter_node_id);
+        let mut has_next_page = true;
+        let mut end_cursor: Option<String> = None;
+        let mut transactions: Vec<(String, meter::meter_consumption::ConsumptionType)> = Vec::new();
+
+
+        let (bucket_start_date, bucket_end_date) = cache_manager.read_for_date(date, &hash_key, &mut transactions)?;
+        let bucket_start_date_time = bucket_start_date.at_midnight(billing_timezone);
+        let bucket_end_date_time = bucket_end_date.at_midnight(billing_timezone);
+
+        let cached_cnt = transactions.len();
+
+        //println!("Loaded {} rows for ConsumptionList[{}..{}]", cached_cnt, bucket_start_date, bucket_end_date);
+
+        if !transactions.is_empty() {
+            let (cursor, final_txn) = transactions.get(transactions.len()-1).unwrap();
+            if final_txn.end_at_ >= bucket_end_date_time {
+                // this bucket is full
+                has_next_page = false;
+            }
+            end_cursor = Some(cursor.clone());
+        }
+
+        while has_next_page {
+            
+                    let mut builder = meter::meter_consumption::Query::builder()
+                        .with_meter_id(meter_node_id.clone())
+                        .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
+                        .with_start_at(bucket_start_date_time.clone())
+                        .with_timezone(String::from("Europe/London"))
+                        .with_first(50)
+                        ;
+                    if let Some(end_cursor) = &end_cursor {
+                        builder = builder.with_after(end_cursor.clone());
+                    }
+                    
+                    let query = builder.build()?;
+
+                    let response = request_manager.call(&query).await?;
+
+                    // writeln!(out, "{}", serde_json::to_string(&response)?)?;
+
+                    // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
+
+                    let page = match response.node_ {
+                        meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
+                            electricity_meter.consumption_
+                        },
+                        meter::meter_consumption::Node::GasMeterType(gas_meter) => {
+                            gas_meter.consumption_
+                        },
+                        _ => {
+                            return Err(Error::from(Cause::InternalError("Unexpected response type")))
+                        },
+                    };
+
+                    let response_has_next_page = page.page_info.has_next_page;
+
+                    for edge in page.edges {
+                        //println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
+
+                        if has_next_page {
+                            // we are still filling the bucket we need to return
+                            if edge.node.start_at_ >= bucket_end_date_time {
+                                //println!("Beyond the end of this bucket, break");
+                                // this bucket is full
+                                has_next_page = false;
+                                break; // TODO: save this in the next bucket
+                            }
+                            transactions.push((edge.cursor.clone(), edge.node));
+                            end_cursor = Some(edge.cursor);
+                        }
+                    }
+
+                    // perhaps there were no additional rows for the next bucket but no more rows for this one either
+                    if has_next_page {
+                        if response_has_next_page {
+                            //println!("No more data available so we are done");
+                        }
+                        has_next_page = response_has_next_page;
+                    }
+        }
+
+        let mut result = ConsumptionList {
+            account_number,
+            meter_node_id,
+            end_cursor,
+            has_next_page,
+            consumption: transactions,
+            hash_key,
+            start_date: bucket_start_date,
+            end_date: bucket_end_date,
+            start_date_time: bucket_start_date_time.clone(),
+            end_date_time: bucket_end_date_time,
+        };
+
+        if has_next_page {
+            // bucket is not yet full
+            result.fetch_all(request_manager, &bucket_start_date_time).await?;
+        }       
+
+        if result.consumption.len() > cached_cnt {
+            cache_manager.write_for_date(&result.start_date, &result.hash_key, &result.consumption, cached_cnt)?;
+        }
+        
+        Ok(result)
+    }
+
+    pub fn print_consumption(consumption: &Vec<meter::meter_consumption::ConsumptionType>) -> Result<(), Error> {
+        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+
+        println!();
+        println!("{:-^20} {:-^20} {:-^10} ", "From", "To", "Amount");
+        for item in consumption {
+            println!("{:20} {:20} {:10.3}", item.start_at_.format(&format).unwrap(), item.end_at_.format(&format).unwrap(), item.value_);
+        }
+        Ok(())
+    }
+
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> Result<(), Error> {
+        let mut has_next_page = self.has_next_page;
+
+        //println!("fetch_all statement transactions {} in buffer", self.line_items.len());
+
+        
+
+        while has_next_page {
+            let mut builder = meter::meter_consumption::Query::builder()
+                .with_meter_id(self.meter_node_id.clone())
+                .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
+                .with_start_at(start_date_time.clone())
+                .with_timezone(String::from("Europe/London"))
+                .with_first(50)
+                ;
+            if let Some(end_cursor) = &self.end_cursor {
+                builder = builder.with_after(end_cursor.clone());
+            }
+            
+            let query = builder.build()?;
+
+            let response = request_manager.call(&query).await?;
+
+            let page = match response.node_ {
+                meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
+                    electricity_meter.consumption_
+                },
+                meter::meter_consumption::Node::GasMeterType(gas_meter) => {
+                    gas_meter.consumption_
+                },
+                _ => {
+                    return Err(Error::from(Cause::InternalError("Unexpected response type")))
+                },
+            };
+
+            let response_has_next_page = page.page_info.has_next_page;
+            
+            for edge in page.edges {
+                if edge.node.end_at_ >= self.end_date_time { // have to test here before we move edge.node and break later
+                    // this bucket is full
+                    has_next_page = false;
+                }
+                self.consumption.push((edge.cursor.clone(), edge.node));
+                self.end_cursor = Some(edge.cursor);
+
+
+                if !has_next_page {
+                    // this bucket is full
+                    break; // TODO: save this in the next bucket
+                }
+            }
+
+            // perhaps there were no additional rows for the next bucket but no more rows for this one either
+            if has_next_page {
+                has_next_page = response_has_next_page;
+            }
+        }
+        self.has_next_page = has_next_page;
+        Ok(())
+    }
+}
+
+
 
 // #[cfg(test)]
 // mod tests {

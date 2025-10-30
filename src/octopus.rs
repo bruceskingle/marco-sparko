@@ -80,6 +80,12 @@ impl CommandProvider for Client {
             "bill" => {
                 Ok(self.bill_manager.bill_handler(args, &account_id, &mut self.meter_manager, self.billing_timezone).await?)
             },
+            "demand" => {
+                Ok(self.meter_manager.demand_handler(args, &account_id, self.billing_timezone).await?)
+            },
+            "consumption" => {
+                Ok(self.meter_manager.consumption_handler(args, &account_id, self.billing_timezone).await?)
+            },
             _ => Err(Error::from(format!("Invalid command '{}'", command)))
         }
     }
@@ -105,6 +111,28 @@ r#"
 usage: bill [bill_id]
 
 Print the contents of the bill whose id is given, or the most recent bill, if none.
+"#,
+            },
+
+            ReplCommand {
+                command:"demand",
+                description: "Print electricity demand",
+                help:
+r#"
+usage: demand
+
+Print the current electricity demand (power imported from or exported to the grid)
+"#,
+            },
+
+            ReplCommand {
+                command:"consumption",
+                description: "Print electricity consumption",
+                help:
+r#"
+usage: demand
+
+Print the current electricity consumption
 "#,
             }
         )
@@ -351,7 +379,7 @@ impl ClientBuilder {
             "https://api.octopus.energy/v1/graphql/".to_string()
         };
 
-        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose, CrateInfo::USER_AGENT)?);
+        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose, create_info::USER_AGENT)?);
 
         let token_manager = self.token_manager_builder
             .with_request_manager(request_manager.clone())

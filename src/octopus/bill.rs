@@ -91,7 +91,7 @@ impl BillManager {
     pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
         // let one_hundred = Decimal::new(100, 0);
         // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-        let cache_manager = self.cache_manager.clone();
+        let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
         let request_manager = self.request_manager.clone();
         let bills = self.get_bills(account_number).await?;
 

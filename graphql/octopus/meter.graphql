@@ -201,3 +201,56 @@ query gasAgreementLineItems($agreementId: ID!, $startAt: DateTime!, $first: Int,
     }
   }
 }
+
+query getCurrentDemand(
+  $meterDeviceId: String!, 
+  $start: DateTime, 
+  $end: DateTime, 
+  $grouping: TelemetryGrouping
+) @ms_required_by_default {
+  	smartMeterTelemetry(deviceId: $meterDeviceId
+      start: $start
+      end: $end
+      grouping: $grouping
+    ) {
+    	readAt
+    	demand
+    }
+  }
+
+query meterConsumption($meterId: ID!, $grouping: ConsumptionGroupings!, $startAt: DateTime!, $first: Int, $timezone: String!, $after: String) @ms_required_by_default {
+  node(id: $meterId) @ms_required_by_default {
+    ... on ElectricityMeterType {
+      ...meterFields
+      importMeter: importMeter {
+        id
+      }
+    }
+    ... on GasMeterType {
+      ...meterFields
+    }
+  }
+}
+
+fragment meterFields on Meter @ms_required_by_default {
+  consumptionUnits
+  consumption(first: $first, grouping: $grouping, startAt: $startAt, timezone: $timezone, after: $after) {
+    ...consumptionFields
+  }
+  serialNumber
+}
+
+fragment consumptionFields on ConsumptionConnection @ms_required_by_default {
+  edges {
+    node {
+      value
+      startAt
+      endAt
+    }
+    cursor
+  }
+  pageInfo {
+    endCursor
+    hasNextPage
+  }
+}

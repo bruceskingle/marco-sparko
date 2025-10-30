@@ -26,7 +26,7 @@ fn build()  -> Result<(), Box<dyn Error>> {
         let mut file = File::create(dest_path)?;
 
         writeln!(file, r#"
-mod CrateInfo {{
+mod create_info {{
     pub const PACKAGE_NAME: &'static str = "{}";
     pub const PACKAGE_VERSION: &'static str = "{}";
     pub const USER_AGENT: &'static str = "{}-{}";
