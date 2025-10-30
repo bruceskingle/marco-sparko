@@ -47,6 +47,17 @@ impl Display for Cause {
 
 
 
+impl From<Cause> for Error {
+    #[track_caller]
+    #[inline]
+    fn from(cause: Cause) -> Error {
+        Error {
+            location: Location::caller(),
+            cause
+        }
+    }
+}
+
 impl From<Box<dyn StdError>> for Error {
     #[track_caller]
     #[inline]
@@ -57,6 +68,7 @@ impl From<Box<dyn StdError>> for Error {
         }
     }
 }
+
 impl From<reqwest::Error> for Error {
     #[track_caller]
     #[inline]
