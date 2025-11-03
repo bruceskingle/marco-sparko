@@ -395,6 +395,7 @@ impl ClientBuilder {
                 },
                 Err(error) => {
                     if let sparko_graphql::Error::GraphQLError(graphql_errors) = &error {
+                        let graphql_errors = &**graphql_errors;
                         for graphql_error in graphql_errors {
                             if let Some(error_code) = graphql_error.extensions.get("errorCode") {
                                 if error_code == "KT-CT-1138" {

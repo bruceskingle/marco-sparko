@@ -2,6 +2,9 @@ pub mod error;
 pub mod octopus;
 pub mod system;
 pub mod util;
+pub mod views;
+pub mod components;
+pub mod profile;
 
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
@@ -24,6 +27,8 @@ use {
     nu_ansi_term::{Color, Style},
     reedline::{DefaultValidator, DefaultHinter},
   };
+
+use profile::ProfileManager;
 
 pub const CHECK_FOR_UPDATES: bool = true;
 
@@ -138,25 +143,7 @@ enum Commands {
     Test,
 }
 
-const DEFAULT_PROFILE: &str = "default";
 
-type ModuleProfiles = HashMap<String, serde_json::Value>;
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Profile {
-    name: String,
-    modules: ModuleProfiles
-}
-
-impl Profile {
-    pub fn new() -> Profile {
-        Profile {
-            name: DEFAULT_PROFILE.to_string(),
-            modules: ModuleProfiles::new()
-        }
-    }
-}
 
 #[async_trait]
 pub trait Module: CommandProvider {
@@ -184,133 +171,40 @@ type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Valu
  */
 pub struct MarcoSparkoContext {
     pub args: Args,
-    before_profiles: Vec<Profile>,
-    active_profile: Profile,
-    after_profiles: Vec<Profile>,
-    updated_profile: Mutex<Profile>,
+    pub profile_manager: ProfileManager,
 }
 
 impl MarcoSparkoContext {
     fn new() -> Result<Arc<MarcoSparkoContext>, Error> {
 
         let args = Args::parse();
-        let before_profiles;
-        let opt_active_profile;
-        let active_profile;
-        let profile_name;
-        let after_profiles;
-        let updated_profile;
-
-        if let Ok(file)= fs::File::open(Self::get_file_path()?) {
-            let profiles: Vec<Profile> = serde_json::from_reader(file)?;
-            
-            (before_profiles, opt_active_profile, after_profiles) = Self::remove_active_profile(&args, profiles)?;
-
-        }
-        else {
-            before_profiles = Vec::new();
-            opt_active_profile = None;
-            after_profiles = Vec::new();
-        }
-
-
-        if let Some(existing_profile) = opt_active_profile {
-            profile_name = existing_profile.name.clone();
-            active_profile = existing_profile;
-        }
-        else {
-            profile_name = DEFAULT_PROFILE.to_string();
-            active_profile = Profile {
-                name: profile_name.clone(),
-                modules: ModuleProfiles::new()
-            }
-        };
-
-        updated_profile = Mutex::new(Profile {
-            name: profile_name,
-            modules: ModuleProfiles::new()
-        });
+        let profile_manager = Self::create_profile_manager(&args.profile)?;
+        
 
         Ok(Arc::new(MarcoSparkoContext {
             args,
-            before_profiles,
-            active_profile,
-            after_profiles,
-            updated_profile,
+            profile_manager,
        }))
     }
 
-    fn remove_active_profile(args: &Args, mut profiles: Vec<Profile>) -> 
-        Result<(Vec<Profile>, Option<Profile>, Vec<Profile>), Error> {
-        if let Some(profile_name) = &args.profile {
-            let mut active_profile = None;
-            let mut before_profiles = Vec::new();
-            let mut after_profiles = Vec::new();
-            let mut after = false;
-            
-            
-            for profile in profiles {
-                if profile.name.eq(profile_name) {
-                    active_profile = Some(profile);
-                    after = true;
-                }
-                else {
-                    if after {
-                        after_profiles.push(profile);
-                    }
-                    else {
-                        before_profiles.push(profile);
-                    }
-                }
-            }
-
-            if let None = active_profile {
-                active_profile = Some(Profile {
-                    name: profile_name.clone(),
-                    modules: ModuleProfiles::new()
-                });
-                // return Result::Err(Error::UserError(format!("No profile called {}", profile_name)))
-            }
-            return Ok((before_profiles, active_profile, after_profiles))
-        }
-
-        if profiles.is_empty() {
-            Ok((Vec::new(), None, profiles))
-        }
-        else {
-            Ok((Vec::new(), Some(profiles.remove(0)), profiles))
+    fn create_profile_manager(active_profile: &Option<String>) -> Result<ProfileManager, Error>  {
+        match ProfileManager::new(active_profile) {
+            Ok(p) => Ok(p),
+            Err(_) => Err(Error::from("FAILED")),
         }
     }
 
     fn save_updated_profile(&self) -> Result<(), Error> {
-        let updated_profile = self.updated_profile.lock()?;
-
-        if updated_profile.modules.is_empty() {
-            Ok(())
-        }
-        else {
-
-            let mut profiles = Vec::new();
-            
-            profiles.extend(&self.before_profiles);
-            profiles.push(&updated_profile);
-            profiles.extend(&self.after_profiles);
-            
-            serde_json::to_writer_pretty(fs::File::create(Self::get_file_path()?)?, &profiles)?;
-            
-            return Ok(())
+        match self.profile_manager.save_updated_profile() {
+            Ok(p) => Ok(p),
+            Err(_) => Err(Error::from("FAILED")),
         }
     }
 
-    fn get_file_path() -> Result<PathBuf, Error> {
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
-
-        path.push(".marco-sparko");
-        Ok(path)
-    }
+    
 
     fn get_cache_file_path(&self, module_id: &str) -> Result<PathBuf, Error> {
-        let profile_name = &self.active_profile.name;
+        let profile_name = &self.profile_manager.active_profile.name;
         let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}.json", profile_name, module_id));
@@ -318,7 +212,7 @@ impl MarcoSparkoContext {
     }
 
     fn get_history_file_path(&self, module_id: &Option<String>) -> Result<PathBuf, Error> {
-        let profile_name = &self.active_profile.name;
+        let profile_name =&self.profile_manager.active_profile.name;
         let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         if let Some(module_id) = module_id {
@@ -331,7 +225,7 @@ impl MarcoSparkoContext {
     }
 
     fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
-        let profile_name = &self.active_profile.name;
+        let profile_name =&self.profile_manager.active_profile.name;
 
         let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
@@ -353,11 +247,10 @@ impl MarcoSparkoContext {
     where
         T: Serialize
     {
-        let mutex = self.updated_profile.lock()?;
-        let mut updated_profile = mutex;
-
-        updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
-        Ok(())
+        match self.profile_manager.update_profile(module_id, profile) {
+            Ok(p) => Ok(p),
+            Err(_) => Err(Error::from("FAILED")),
+        }
     }
 
     pub fn read_cache<T>(&self, module_id: &str) -> Option<T>
@@ -394,7 +287,15 @@ pub struct MarcoSparko {
     current_module: Option<String>,
 }
 
+
 impl MarcoSparko {
+
+    pub fn get_file_path() -> Result<PathBuf, Error> {
+        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+
+        path.push(".marco-sparko");
+        Ok(path)
+    }
 
     async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
         match command {
@@ -481,7 +382,7 @@ prints more detailed help on that specific command.
                 }
                 else {
                     let constructor = module_registration.as_ref();
-                    let profile = if let Some(value) = self.context.active_profile.modules.get(module_id) {
+                    let profile = if let Some(value) = self.context.profile_manager.active_profile.modules.get(module_id) {
                         Some(value.clone())
                     }
                     else {
@@ -519,12 +420,12 @@ prints more detailed help on that specific command.
                     }
                 },
                 "profiles" => {
-                    for profile in &self.context.before_profiles {
+                    for profile in &self.context.profile_manager.before_profiles {
                         println!("{}", profile.name);
                     }
-                    println!("{} [Active]", &self.context.active_profile.name);
+                    println!("{} [Active]", &self.context.profile_manager.active_profile.name);
 
-                    for profile in &self.context.after_profiles {
+                    for profile in &self.context.profile_manager.after_profiles {
                         println!("{}", profile.name);
                     }
                 },
@@ -559,7 +460,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
 
     if list.is_empty() {
         let mut keys = Vec::new();
-        for module_id in marco_sparko_manager.context.active_profile.modules.keys() {
+        for module_id in marco_sparko_manager.context.profile_manager.active_profile.modules.keys() {
             keys.push(module_id.to_string());
         }
         for module_id in &keys {
@@ -627,7 +528,13 @@ pub async fn new() -> Result<MarcoSparko, Error> {
 
         //     self.repl().await?;
         // }
+
+
         self.repl().await?;
+        // LaunchBuilder::desktop().launch(App);
+        // dioxus::launch(App);
+
+
         self.context.save_updated_profile()?;
 
         return Ok(())
@@ -847,7 +754,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
     async fn initialize(&mut self, module_id: &String, init: bool) -> Result<(), Error> {
         if let Some(module_registration) = self.module_registrations.get(module_id) {
             let constructor = module_registration.as_ref();
-            let profile = if let Some(value) = self.context.active_profile.modules.get(module_id) {
+            let profile = if let Some(value) = self.context.profile_manager.active_profile.modules.get(module_id) {
                 Some(value.clone())
             }
             else {
