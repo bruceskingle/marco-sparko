@@ -6,7 +6,7 @@ use crate::CacheManager;
 
 use super::graphql::account;
 use super::RequestManager;
-use super::{token::OctopusTokenManager, Error};
+use super::{token::OctopusTokenManager};
 
 pub struct AccountManager {
     pub cache_manager: Arc<CacheManager>,
@@ -15,7 +15,7 @@ pub struct AccountManager {
 }
 
 impl AccountManager {
-    pub async fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> Result<Self, Error> {
+    pub async fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> anyhow::Result<Self> {
         let viewer = Viewer::new(cache_manager, request_manager).await?;
 
         Ok(Self {
@@ -37,7 +37,7 @@ pub struct Viewer {
 }
 
 impl Viewer {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>) -> Result<Self, Error> {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>) -> anyhow::Result<Self> {
         let hash_key = format!("#Viewer");
 
         let opt_viewer: Option<account::viewer::Response> = cache_manager.read_one(&hash_key)?;

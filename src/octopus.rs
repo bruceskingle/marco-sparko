@@ -5,6 +5,8 @@ mod bill;
 mod meter;
 
 use std::sync::Arc;
+
+use anyhow::anyhow;
 use account::AccountManager;
 use async_trait::async_trait;
 
@@ -17,7 +19,7 @@ use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{error::Error, CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
+use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
@@ -69,7 +71,7 @@ const MODULE_ID: &str = "octopus";
 #[async_trait(?Send)]
 impl CommandProvider for Client {
 
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), super::Error> {
+    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()> {
         let account_id = self.account_id.clone();
         match command {
             "bills" => {
@@ -86,7 +88,7 @@ impl CommandProvider for Client {
             "consumption" => {
                 Ok(self.meter_manager.consumption_handler(args, &account_id, self.billing_timezone).await?)
             },
-            _ => Err(Error::from(format!("Invalid command '{}'", command)))
+            _ => Err(anyhow!(format!("Invalid command '{}'", command)))
         }
     }
 
@@ -141,7 +143,7 @@ Print the current electricity consumption
 
 impl Client {
     async fn new(context: Arc<MarcoSparkoContext>, profile: Option<Profile>, 
-        request_manager: Arc<RequestManager>, verbose: bool) -> Result<Client, Error> {   
+        request_manager: Arc<RequestManager>, verbose: bool) -> anyhow::Result<Client> {   
 
         let billing_timezone = Self::get_billing_timezone(&profile);
         let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
@@ -186,18 +188,18 @@ impl Client {
     }
     
     pub fn constructor(context: Arc<MarcoSparkoContext>, 
-        json_profile: Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder>, crate::Error> {
+        json_profile: Option<serde_json::Value>) -> anyhow::Result<Box<dyn ModuleBuilder>> {
             Ok(Client::builder(context, json_profile)?)
     }
 
     pub fn builder(context: Arc<MarcoSparkoContext>, 
         json_profile: Option<serde_json::Value>
-    ) -> Result<Box<dyn ModuleBuilder>, Error> {
+    ) -> anyhow::Result<Box<dyn ModuleBuilder>> {
 
         ClientBuilder::new(context, json_profile)
     }
 
-    async fn update_profile(&mut self)  -> Result<(), Error> {
+    async fn update_profile(&mut self)  -> anyhow::Result<()> {
 
         let api_key = if let Some(profile) = &self.profile {
             profile.api_key.clone()
@@ -284,7 +286,7 @@ pub struct ClientBuilder {
 
 impl ClientBuilder {
 
-    fn get_profile_api_key(option_profile: &Option<Profile>) -> Result<Option<String>, Error> {
+    fn get_profile_api_key(option_profile: &Option<Profile>) -> anyhow::Result<Option<String>> {
 
         if let Some(profile) =  option_profile {
             if let Some(api_key) = &profile.api_key {
@@ -298,7 +300,7 @@ impl ClientBuilder {
     fn new(
             context: Arc<MarcoSparkoContext>,
             json_profile: Option<serde_json::Value>
-        ) -> Result<Box<dyn ModuleBuilder>, Error> {
+        ) -> anyhow::Result<Box<dyn ModuleBuilder>> {
 
         let profile: Option<Profile> = if let Some(json) = json_profile {
             serde_json::from_value(json)?
@@ -333,29 +335,29 @@ impl ClientBuilder {
         
     }
 
-    pub fn with_url(mut self, url: String) -> Result<ClientBuilder, Error> {
+    pub fn with_url(mut self, url: String) -> anyhow::Result<ClientBuilder> {
         self.url = Some(url);
         Ok(self)
     }
 
-    pub fn with_url_if_not_set(mut self, url: String) -> Result<ClientBuilder, Error> {
+    pub fn with_url_if_not_set(mut self, url: String) -> anyhow::Result<ClientBuilder> {
         if let None = self.url {
             self.url = Some(url);
         }
         Ok(self)
     }
 
-    pub fn with_api_key(mut self, api_key: String) -> Result<ClientBuilder, Error> {
+    pub fn with_api_key(mut self, api_key: String) -> anyhow::Result<ClientBuilder> {
         self.token_manager_builder = self.token_manager_builder.with_api_key(api_key);
         Ok(self)
     }
 
-    pub fn with_password(mut self, email: String, password: String) -> Result<ClientBuilder, Error> {
+    pub fn with_password(mut self, email: String, password: String) -> anyhow::Result<ClientBuilder> {
         self.token_manager_builder = self.token_manager_builder.with_password(email, password);
         Ok(self)
     }
 
-    pub async fn do_build(self, init: bool) -> Result<Client, Error> {
+    pub async fn do_build(self, init: bool) -> anyhow::Result<Client> {
         let option_profile = if init {
             if let Some(mut profile) = self.profile {
                 profile.init = true;
@@ -400,14 +402,14 @@ impl ClientBuilder {
                             if let Some(error_code) = graphql_error.extensions.get("errorCode") {
                                 if error_code == "KT-CT-1138" {
                                     println!("Username or password is incorrect.");
-                                    return Err(Error::from(error));
+                                    return Err(anyhow!(error));
                                 }
                             }
                         }
                  
                     }
                     println!("Login failed {}", error);
-                    return Err(Error::from(error));
+                    return Err(anyhow!(error));
                 },
             }
         }
@@ -430,7 +432,7 @@ impl ClientBuilder {
 
 #[async_trait]
 impl ModuleBuilder for ClientBuilder {
-    async fn build(self: Box<Self>, init: bool) -> Result<Box<dyn crate::Module + Send>, crate::Error> {
+    async fn build(self: Box<Self>, init: bool) -> anyhow::Result<Box<dyn crate::Module + Send>> {
         Ok(Box::new(self.do_build(init).await?))
     }
 }

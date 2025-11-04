@@ -1,24 +1,23 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::Write;
-use std::fs::{self, File};
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+
+use anyhow::anyhow;
 
 use indexmap::IndexMap;
 use sparko_graphql::types::{Date, DateRange, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
 use tokio::time::sleep;
 
-use crate::error::Cause;
+
 use crate::octopus::decimal::Decimal;
 use crate::util::as_decimal;
 use crate::CacheManager;
 
 use super::graphql::meter;
 use super::RequestManager;
-use super::{token::OctopusTokenManager, Error};
+use super::{token::OctopusTokenManager};
 
 pub enum MeterType {
     Gas,
@@ -57,12 +56,12 @@ impl MeterManager {
         }
     }
 
-    fn get_date_range(args: std::str::SplitWhitespace<'_>) -> Result<DateRange, Error> {
+    fn get_date_range(args: std::str::SplitWhitespace<'_>) -> anyhow::Result<DateRange> {
         // default - current month
         Ok(DateRange::get_current_month_inclusive()?)
     }
 
-    pub async fn consumption_handler(&mut self, args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
+    pub async fn consumption_handler(&mut self, args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         let properties = self.get_properties(account_number).await?;
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
@@ -84,7 +83,7 @@ impl MeterManager {
         Ok(())
     }
 
-    pub async fn demand_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
+    pub async fn demand_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         let properties = self.get_properties(account_number).await?;
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
@@ -136,7 +135,7 @@ impl MeterManager {
         Ok(())
     }
 
-    pub async fn get_properties(&mut self, account_number: &String) -> Result<Arc<PropertyList>, Error>{
+    pub async fn get_properties(&mut self, account_number: &String) -> anyhow::Result<Arc<PropertyList>>{
         if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
             entry.insert(Arc::new(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?));
         }
@@ -144,7 +143,7 @@ impl MeterManager {
         Ok(self.properties.get(account_number).unwrap().clone())
     }
 
-    pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>, Error>{
+    pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
         let properties = self.get_properties(account_number).await?;
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
@@ -171,7 +170,7 @@ impl MeterManager {
         async fn get_line_items2(
             cache_manager: &CacheManager, request_manager: &RequestManager,
             account_number: &String, meter_type: &MeterType, agreement_id: &String, start_date: &Date,
-            start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> Result<Vec<meter::electricity_agreement_line_items::LineItemType>, Error> {
+            start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::electricity_agreement_line_items::LineItemType>> {
                 let mut in_scope_items = Vec::new();
                 let mut bucket_date = start_date_time.to_date();
                 loop {
@@ -228,7 +227,7 @@ impl MeterManager {
 
 
 
-    pub async fn get_consumption(&mut self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> Result<Vec<meter::meter_consumption::ConsumptionType>, Error>{
+    pub async fn get_consumption(&mut self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>>{
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
         // }
@@ -243,7 +242,7 @@ impl MeterManager {
         
         async fn get_line_items2(
             cache_manager: &CacheManager, request_manager: &RequestManager,
-            account_number: &String, meter_node_id: &String, start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> Result<Vec<meter::meter_consumption::ConsumptionType>, Error> {
+            account_number: &String, meter_node_id: &String, start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>> {
                 let mut in_scope_items = Vec::new();
                 let mut bucket_date = start_date_time.to_date();
                 loop {
@@ -293,7 +292,7 @@ impl PropertyList {
     //     }
     // }
 
-    // pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+    // pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
     //     let mut has_previous_page = self.has_previous_page;
 
     //     println!("fetch_all bills {} in buffer", self.bills.len());
@@ -331,7 +330,7 @@ impl PropertyList {
     //     Ok(())
     // }
     
-   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String) -> Result<Self, Error> {
+   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String) -> anyhow::Result<Self> {
     let hash_key = format!("{}#Properties", account_number);
 
         let opt_properties: Option<meter::account_properties_meters::Response> = cache_manager.read_one(&hash_key)?;
@@ -448,7 +447,7 @@ pub struct MeterAgreementList {
 }
 
 impl MeterAgreementList {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_ids: &Vec<String>) -> Result<Self, Error> {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
         let hash_key = format!("{}#MeterAgreements", account_number);
             let the_beginning: DateTime = DateTime::from_calendar_date(2000, time::Month::January, 1)?;
             let mut agreements = Vec::new();
@@ -656,7 +655,7 @@ impl MeterAgreementList {
     //     }
     // }
 
-    // pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+    // pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
     //     let mut has_previous_page = self.has_previous_page;
 
     //     println!("fetch_all statement transactions {} in buffer", self.agreements.len());
@@ -767,7 +766,7 @@ pub struct AgreementLineItems {
 }
 
 impl AgreementLineItems {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_type: &MeterType, agreement_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> Result<Self, Error> {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_type: &MeterType, agreement_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#{}AgreementTransactions", account_number, agreement_id, meter_type);
         let mut has_next_page = true;
         let mut end_cursor: Option<String> = None;
@@ -1176,7 +1175,7 @@ impl AgreementLineItems {
     //     }
     }
 
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> Result<(), Error> {
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> anyhow::Result<()> {
         let mut has_next_page = self.has_next_page;
 
         //println!("fetch_all statement transactions {} in buffer", self.line_items.len());
@@ -1239,7 +1238,7 @@ pub struct ConsumptionList {
 }
 
 impl ConsumptionList {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> Result<Self, Error> {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#ConsumptionRecords", account_number, meter_node_id);
         let mut has_next_page = true;
         let mut end_cursor: Option<String> = None;
@@ -1292,7 +1291,7 @@ impl ConsumptionList {
                             gas_meter.consumption_
                         },
                         _ => {
-                            return Err(Error::from(Cause::InternalError("Unexpected response type")))
+                            return Err(anyhow!("Unexpected response type"))
                         },
                     };
 
@@ -1348,7 +1347,7 @@ impl ConsumptionList {
         Ok(result)
     }
 
-    pub fn print_consumption(consumption: &Vec<meter::meter_consumption::ConsumptionType>) -> Result<(), Error> {
+    pub fn print_consumption(consumption: &Vec<meter::meter_consumption::ConsumptionType>) -> anyhow::Result<()> {
         let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
 
         println!();
@@ -1359,7 +1358,7 @@ impl ConsumptionList {
         Ok(())
     }
 
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> Result<(), Error> {
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> anyhow::Result<()> {
         let mut has_next_page = self.has_next_page;
 
         //println!("fetch_all statement transactions {} in buffer", self.line_items.len());
@@ -1390,7 +1389,7 @@ impl ConsumptionList {
                     gas_meter.consumption_
                 },
                 _ => {
-                    return Err(Error::from(Cause::InternalError("Unexpected response type")))
+                    return Err(anyhow!("Unexpected response type"))
                 },
             };
 

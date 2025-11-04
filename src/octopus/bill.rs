@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use std::sync::Arc;
 
+use anyhow::anyhow;
+
 use sparko_graphql::AuthenticatedRequestManager;
 
 use crate::octopus::decimal::Decimal;
@@ -15,7 +17,7 @@ use bill::get_bills::BillInterface;
 use bill::get_statement_transactions::TransactionType;
 use super::graphql::BillTypeEnum;
 use super::RequestManager;
-use super::{token::OctopusTokenManager, Error};
+use super::{token::OctopusTokenManager};
 
 // const one_hundred: Decimal = Decimal::new(100, 0);
 // const format: time::format_description = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
@@ -37,15 +39,15 @@ impl BillManager {
         }
     }
 
-    pub async fn get_bills(&mut self, account_number: &String) -> Result<&BillList, Error> {
+    pub async fn get_bills(&mut self, account_number: &String) -> anyhow::Result<&BillList> {
         Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, account_number.clone(), crate::CHECK_FOR_UPDATES).await?))
     }
 
-    // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
+    // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> anyhow::Result<BillTransactionList> {
     //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
     // }
 
-    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz)  -> Result<Vec<BillTransactionBreakDown>, Error> {
+    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
 
 
         let mut result = Vec::new();
@@ -82,13 +84,13 @@ impl BillManager {
         Ok(result)
     }
 
-    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  Result<(), Error> {
+    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
         self.get_bills(account_number).await?.print_summary_lines();
         Ok(())
     }
 
 
-    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
+    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         // let one_hundred = Decimal::new(100, 0);
         // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
@@ -525,7 +527,7 @@ impl BillList {
         }
     }
 
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
         let mut has_previous_page = self.has_previous_page;
 
         //println!("fetch_all bills {} in buffer", self.bills.len());
@@ -563,7 +565,7 @@ impl BillList {
         Ok(())
     }
     
-   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool) -> Result<Self, Error> {
+   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool) -> anyhow::Result<Self> {
     let hash_key = format!("{}#Bills", account_number);
 
         let mut bills = Vec::new();
@@ -627,7 +629,7 @@ pub struct BillTransactionList {
 }
 
 impl BillTransactionList {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> Result<Self, Error> {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
     
             let mut transactions = Vec::new();
@@ -667,7 +669,7 @@ impl BillTransactionList {
                     result
                 }
                 else {
-                    return Err(Error::from(format!("Bill {} is not a statement", statement_id)))
+                    return Err(anyhow!(format!("Bill {} is not a statement", statement_id)))
                 }
             }
             else {
@@ -692,7 +694,7 @@ impl BillTransactionList {
             Ok(result)
         }
 
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
         let mut has_previous_page = self.has_previous_page;
 
         //println!("fetch_all statement transactions {} in buffer", self.transactions.len());

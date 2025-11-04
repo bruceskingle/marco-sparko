@@ -1,4 +1,3 @@
-pub mod error;
 pub mod octopus;
 pub mod system;
 pub mod util;
@@ -12,9 +11,9 @@ use std::io::{BufReader, Lines, Write};
 use std::io::BufRead;
 use std::path::Path;
 use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use dirs::home_dir;
-use error::Error;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use clap::{Parser, Subcommand};
@@ -31,84 +30,6 @@ use {
 use profile::ProfileManager;
 
 pub const CHECK_FOR_UPDATES: bool = true;
-
-// #[derive(Debug)]
-// pub enum Error {
-//     OctopusError(octopus::error::Error),
-//     JsonError(serde_json::Error),
-//     IOError(std::io::Error),
-//     InternalError(String),
-//     UserError(String),
-//     WrappedError(Box<dyn StdError>),
-// }
-
-// impl Display for Error {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Error::OctopusError(err) => f.write_fmt(format_args!("OctopusError({})", err)),
-//             Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
-//             Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
-//             Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
-//             Error::UserError(err) => f.write_fmt(format_args!("{}", err)),
-//             Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err)),
-//         }
-//     }
-// }
-
-// impl StdError for Error {
-
-// }
-
-// // impl Send for Error {}
-
-// // impl From<time::error::ComponentRange> for Error {
-// //     fn from(err: time::error::ComponentRange) -> Error {
-// //         Error::WrappedError(Box::new(err))
-// //     }
-// // }
-
-// impl From<sparko_graphql::Error> for Error {
-//     fn from(err: sparko_graphql::Error) -> Error {
-//         Error::WrappedError(Box::new(err))
-//     }
-// }
-
-// impl From<Box<dyn StdError>> for Error {
-//     fn from(err: Box<dyn StdError>) -> Error {
-//         Error::WrappedError(err)
-//     }
-// }
-
-// impl From<reqwest::Error> for Error {
-//         fn from(err: reqwest::Error) -> Error {
-//             Error::WrappedError(Box::new(err))
-//         }
-// }
-
-// impl From<crate::octopus::error::Error> for Error {
-//     fn from(err: crate::octopus::error::Error) -> Error {
-//         Error::OctopusError(err)
-//     }
-// }
-
-// impl From<serde_json::Error> for Error {
-//     fn from(err: serde_json::Error) -> Error {
-//         Error::JsonError(err)
-//     }
-// }
-
-// impl From<std::io::Error> for Error {
-//     fn from(err: std::io::Error) -> Error {
-//         Error::IOError(err)
-//     }
-// }
-
-// impl<T> From<std::sync::PoisonError<T>> for Error {
-//     fn from(err: std::sync::PoisonError<T>) -> Error {
-//         Error::InternalError(format!("Mutex poison error {:?}", err))
-//     }
-// }
-
 pub struct ReplCommand {
     pub command: &'static str,
     pub description: &'static str,
@@ -147,24 +68,24 @@ enum Commands {
 
 #[async_trait]
 pub trait Module: CommandProvider {
-    // async fn summary(&mut self) -> Result<(), Error>;
-    // async fn bill(&mut self) -> Result<(), Error>;
-    // async fn test(&mut self) -> Result<(), Error>;
+    // async fn summary(&mut self) -> anyhow::Result<()>;
+    // async fn bill(&mut self) -> anyhow::Result<()>;
+    // async fn test(&mut self) -> anyhow::Result<()>;
 }
 
 #[async_trait(?Send)]
 pub trait CommandProvider {
     fn get_repl_commands(&self) -> Vec<ReplCommand>;
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error>;
+    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()>;
 }
 
 #[async_trait]
 pub trait ModuleBuilder {
-     // fn with_init(&mut self, init: bool) -> Result<&mut Self, Error>;
-     async fn build(self: Box<Self>, init: bool) -> Result<Box<dyn Module + Send>, Error>;
+     // fn with_init(&mut self, init: bool) -> anyhow::Result<&mut Self>;
+     async fn build(self: Box<Self>, init: bool) -> anyhow::Result<Box<dyn Module + Send>>;
 }
 
-type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder>, Error>;
+type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> anyhow::Result<Box<dyn ModuleBuilder>>;
 
 /*
  * This context is shared with all modules and needs to be separate from MarcoSparko because that struct holds the list of modules.
@@ -175,7 +96,7 @@ pub struct MarcoSparkoContext {
 }
 
 impl MarcoSparkoContext {
-    fn new() -> Result<Arc<MarcoSparkoContext>, Error> {
+    fn new() -> anyhow::Result<Arc<MarcoSparkoContext>> {
 
         let args = Args::parse();
         let profile_manager = Self::create_profile_manager(&args.profile)?;
@@ -187,33 +108,33 @@ impl MarcoSparkoContext {
        }))
     }
 
-    fn create_profile_manager(active_profile: &Option<String>) -> Result<ProfileManager, Error>  {
+    fn create_profile_manager(active_profile: &Option<String>) -> anyhow::Result<ProfileManager>  {
         match ProfileManager::new(active_profile) {
             Ok(p) => Ok(p),
-            Err(_) => Err(Error::from("FAILED")),
+            Err(_) => Err(anyhow!("FAILED")),
         }
     }
 
-    fn save_updated_profile(&self) -> Result<(), Error> {
+    fn save_updated_profile(&self) -> anyhow::Result<()> {
         match self.profile_manager.save_updated_profile() {
             Ok(p) => Ok(p),
-            Err(_) => Err(Error::from("FAILED")),
+            Err(_) => Err(anyhow!("FAILED")),
         }
     }
 
     
 
-    fn get_cache_file_path(&self, module_id: &str) -> Result<PathBuf, Error> {
+    fn get_cache_file_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
         let profile_name = &self.profile_manager.active_profile.name;
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}.json", profile_name, module_id));
                 Ok(path)
     }
 
-    fn get_history_file_path(&self, module_id: &Option<String>) -> Result<PathBuf, Error> {
+    fn get_history_file_path(&self, module_id: &Option<String>) -> anyhow::Result<PathBuf> {
         let profile_name =&self.profile_manager.active_profile.name;
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         if let Some(module_id) = module_id {
             path.push(format!("{}-{}-history.txt", profile_name, module_id));
@@ -224,16 +145,16 @@ impl MarcoSparkoContext {
                 Ok(path)
     }
 
-    fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
+    fn get_cache_data_dir_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
         let profile_name =&self.profile_manager.active_profile.name;
 
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}", profile_name, module_id));
         Ok(path)
     }
       
-    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> Result<Arc<CacheManager>, Error> {
+    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheManager>> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         fs::create_dir_all(&dir_path)?;
 
@@ -243,13 +164,13 @@ impl MarcoSparkoContext {
         }))
     }
     
-    pub fn update_profile<T>(&self, module_id: &str, profile: T) -> Result<(), Error>
+    pub fn update_profile<T>(&self, module_id: &str, profile: T) -> anyhow::Result<()>
     where
         T: Serialize
     {
         match self.profile_manager.update_profile(module_id, profile) {
             Ok(p) => Ok(p),
-            Err(_) => Err(Error::from("FAILED")),
+            Err(_) => Err(anyhow!("FAILED")),
         }
     }
 
@@ -267,7 +188,7 @@ impl MarcoSparkoContext {
         return None
     }
 
-    pub fn update_cache<T>(&self, module_id: &str, profile: &T) -> Result<(), Error>
+    pub fn update_cache<T>(&self, module_id: &str, profile: &T) -> anyhow::Result<()>
     where
         T: Serialize
     {
@@ -290,18 +211,18 @@ pub struct MarcoSparko {
 
 impl MarcoSparko {
 
-    pub fn get_file_path() -> Result<PathBuf, Error> {
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+    pub fn get_file_path() -> anyhow::Result<PathBuf> {
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
 
         path.push(".marco-sparko");
         Ok(path)
     }
 
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
+    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()> {
         match command {
             "list" => self.list_handler(args).await,
             "init" => self.init_handler(args).await,
-            _ => Err(Error::from(format!("Invalid command '{}'", command)))
+            _ => Err(anyhow!(format!("Invalid command '{}'", command)))
         }
     }
 
@@ -374,7 +295,7 @@ prints more detailed help on that specific command.
         )
     }
 
-    pub async fn init_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) -> Result<(), Error> {
+    pub async fn init_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) -> anyhow::Result<()> {
         if let Some(module_id) = args.next() {
             if let Some(module_registration) = self.module_registrations.get(module_id) {
                 if self.modules.contains_key(module_id) {
@@ -404,7 +325,7 @@ prints more detailed help on that specific command.
         Ok(())
     }
 
-    pub async fn list_handler(&self, mut args: std::str::SplitWhitespace<'_>) -> Result<(), Error> {
+    pub async fn list_handler(&self, mut args: std::str::SplitWhitespace<'_>) -> anyhow::Result<()> {
         if let Some(target) = args.next() {
 
             match target.as_ref() {
@@ -441,7 +362,7 @@ prints more detailed help on that specific command.
         Ok(())
     }
 
-pub async fn new() -> Result<MarcoSparko, Error> {
+pub async fn new() -> anyhow::Result<MarcoSparko> {
 
     let mut marco_sparko_manager = MarcoSparko {
         context: MarcoSparkoContext::new()?,
@@ -492,7 +413,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
         self.module_registrations.insert(registration.0, registration.1);
     }
 
-    pub async fn run(&mut self) -> Result<(), Error> {
+    pub async fn run(&mut self) -> anyhow::Result<()> {
         // if let Some(command) =  &self.args().command {
         //     match command {
         //         Commands::Summary => {
@@ -541,7 +462,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
         // Err(Error::UserError(String::from("No command given - try 'Summary'")))
     }
 
-    async fn repl(&mut self) -> Result<(), crate::Error> {
+    async fn repl(&mut self) -> anyhow::Result<()> {
         let marco_sparko_prompt = "Marco Sparko".to_string();
 
         
@@ -703,7 +624,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
                                                 self.init_handler(arg_iterator).await?;
                                                 break;
                                             },
-                                            _ => Err(Error::from(format!("Invalid command '{}'", command)))
+                                            _ => Err(anyhow!(format!("Invalid command '{}'", command)))
                                         }
                                     };
                                     // if let Err(error) = result {
@@ -724,7 +645,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
         }
     }
 
-    // async fn summary(&mut self) -> Result<(), Error> {
+    // async fn summary(&mut self) -> anyhow::Result<()> {
     //     for (_module_id, module) in self.modules.iter_mut() {
     //         println!("Summary {}", _module_id);
     //         module.summary().await?;
@@ -733,7 +654,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
     //     Ok(())
     // }
 
-    // async fn bill(&mut self) -> Result<(), Error> {
+    // async fn bill(&mut self) -> anyhow::Result<()> {
     //     for (_module_id, module) in self.modules.iter_mut() {
     //         println!("Bill {}", _module_id);
     //         module.bill().await?;
@@ -742,7 +663,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
     //     Ok(())
     // }
 
-    // async fn test(&mut self) -> Result<(), Error> {
+    // async fn test(&mut self) -> anyhow::Result<()> {
     //     for (_module_id, module) in self.modules.iter_mut() {
     //         println!("Test {}", _module_id);
     //         module.test().await?;
@@ -751,7 +672,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
     //     Ok(())
     // }
     
-    async fn initialize(&mut self, module_id: &String, init: bool) -> Result<(), Error> {
+    async fn initialize(&mut self, module_id: &String, init: bool) -> anyhow::Result<()> {
         if let Some(module_registration) = self.module_registrations.get(module_id) {
             let constructor = module_registration.as_ref();
             let profile = if let Some(value) = self.context.profile_manager.active_profile.modules.get(module_id) {
@@ -773,7 +694,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
             Ok(())
         }
         else {
-            return Err(Error::from(format!("Unknown module \"{}\"", module_id)))
+            return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
         }
     }
 }
@@ -794,14 +715,14 @@ impl CacheManager {
         path.push(format!("{}#{}", date.month(), hash_key));
     }
 
-    pub fn write<T: Serialize>(&self, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
+    pub fn write<T: Serialize>(&self, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> anyhow::Result<()> {
         let mut path = self.dir_path.clone();
         path.push(hash_key);
 
         self.do_write(path, vec, cached_cnt)
     }
 
-    pub fn write_for_date<T: Serialize>(&self, date: &Date, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
+    pub fn write_for_date<T: Serialize>(&self, date: &Date, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> anyhow::Result<()> {
         let mut path = self.dir_path.clone();
 
         Self::path_for_date(&mut path, date);
@@ -813,7 +734,7 @@ impl CacheManager {
         self.do_write(path, vec, cached_cnt)
     }
 
-    fn do_write<T: Serialize>(&self, path: PathBuf, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
+    fn do_write<T: Serialize>(&self, path: PathBuf, vec: &Vec<(String, T)>, cached_cnt: usize) -> anyhow::Result<()> {
 
         if cached_cnt == 0 {
             let mut out = fs::File::create(path)?;
@@ -847,14 +768,14 @@ impl CacheManager {
         Ok(BufReader::new(file).lines())
     }
 
-    pub fn read<T: DeserializeOwned>(&self, hash_key: &str, vec: &mut Vec<(String, T)>) -> Result<(), Error> {
+    pub fn read<T: DeserializeOwned>(&self, hash_key: &str, vec: &mut Vec<(String, T)>) -> anyhow::Result<()> {
         let mut path = self.dir_path.clone();
         path.push(hash_key);
 
         self.do_read(path, vec)
     }
 
-    pub fn read_for_date<T: DeserializeOwned>(&self, date: &Date, hash_key: &str, vec: &mut Vec<(String, T)>) -> Result<(Date, Date), Error> {
+    pub fn read_for_date<T: DeserializeOwned>(&self, date: &Date, hash_key: &str, vec: &mut Vec<(String, T)>) -> anyhow::Result<(Date, Date)> {
         let start_date = Date::from_calendar_date(date.year(), date.month(), 1)?;
         let end_date = if date.month() == Month::December {
             Date::from_calendar_date(date.year() + 1, Month::January, 1)?
@@ -872,7 +793,7 @@ impl CacheManager {
         Ok((start_date, end_date))
     }
 
-    fn do_read<T: DeserializeOwned>(&self, path: PathBuf, vec: &mut Vec<(String, T)>) -> Result<(), Error> {
+    fn do_read<T: DeserializeOwned>(&self, path: PathBuf, vec: &mut Vec<(String, T)>) -> anyhow::Result<()> {
         match Self::read_lines(path) {
             Ok(lines) => {
                 // Consumes the iterator, returns an (Optional) String
@@ -884,7 +805,7 @@ impl CacheManager {
 
                     match line.split_once('\t') {
                         Some((key, value)) => vec.push((key.to_string(), serde_json::from_str(value)?)),
-                        None => return Err(Error::from(format!("Invalid cached object <{}>", line))),
+                        None => return Err(anyhow!(format!("Invalid cached object <{}>", line))),
                     }
                 }
             },
@@ -892,7 +813,7 @@ impl CacheManager {
             Err(error) => {
                 if error.kind() != std::io::ErrorKind::NotFound {
                     println!("ERROR {:?}", error);
-                    return Err(Error::from(error))
+                    return Err(anyhow!(error))
                 }
                 
             },
@@ -902,7 +823,7 @@ impl CacheManager {
     }
 
 
-    pub fn write_one<T: Serialize>(&self, hash_key: &str, value: &T) -> Result<(), Error> {
+    pub fn write_one<T: Serialize>(&self, hash_key: &str, value: &T) -> anyhow::Result<()> {
         let mut path = self.dir_path.clone();
         path.push(hash_key);
 
@@ -912,7 +833,7 @@ impl CacheManager {
         Ok(())
     }
 
-    pub fn read_one<T: DeserializeOwned>(&self, hash_key: &str) -> Result<Option<T>, Error> {
+    pub fn read_one<T: DeserializeOwned>(&self, hash_key: &str) -> anyhow::Result<Option<T>> {
         let mut path = self.dir_path.clone();
         path.push(hash_key);
 
@@ -924,7 +845,7 @@ impl CacheManager {
             Err(error) => {
                 if error.kind() != std::io::ErrorKind::NotFound {
                     println!("ERROR {:?}", error);
-                    return Err(Error::from(error))
+                    return Err(anyhow!(error))
                 }
                 None
             },

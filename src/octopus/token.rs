@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use crate::error::Error;
 use crate::MarcoSparkoContext;
 
 use super::graphql::ObtainJsonWebTokenInput;
@@ -256,7 +256,7 @@ impl TokenManagerBuilder{
         self
     }
 
-    pub fn build(mut self, init: bool) -> Result<OctopusTokenManager, Error> {
+    pub fn build(mut self, init: bool) -> anyhow::Result<OctopusTokenManager> {
 
         if let None = self.authenticator {
             if init {
@@ -276,14 +276,14 @@ impl TokenManagerBuilder{
                 self = self.with_password(email.trim_end().to_string(), password);
             }
             else {
-                return Err(Error::from("No Octopus authentication credentials given, did you mean to specify --init?"))
+                return Err(anyhow!("No Octopus authentication credentials given, did you mean to specify --init?"))
             }
         }
 
         Ok(OctopusTokenManager::new(
-            self.context.ok_or(Error::from("Context must be provided"))?, 
-            self.request_manager.ok_or(Error::from("RequestManager must be provided"))?, 
-            self.authenticator.ok_or(Error::from("Credentials must be specified"))?
+            self.context.ok_or(anyhow!("Context must be provided"))?, 
+            self.request_manager.ok_or(anyhow!("RequestManager must be provided"))?, 
+            self.authenticator.ok_or(anyhow!("Credentials must be specified"))?
         ))
     }
 }
@@ -327,7 +327,7 @@ impl TokenManagerBuilder{
         
 //     }
 
-//     fn test_api_key(api_key: String)  -> Result<Arc<std::string::String>, Error> {
+//     fn test_api_key(api_key: String)  -> anyhow::Result<Arc<std::string::String>> {
 //         let mut octopus_client = crate::octopus::ClientBuilder::new_test()
 //             .with_api_key(api_key)?
 //             .do_build(false)?;
@@ -429,7 +429,7 @@ impl TokenManagerBuilder{
         
 //     }
 
-//     fn test_refresh_token(refresh_token: String)  -> Result<Arc<std::string::String>, Error> {
+//     fn test_refresh_token(refresh_token: String)  -> anyhow::Result<Arc<std::string::String>> {
 //         let mut octopus_client = crate::octopus::ClientBuilder::new_test()
 //             .with_api_key("dummy_api_key_to_prevent_password_prompt".to_string())?
 //             .do_build(false)?;
