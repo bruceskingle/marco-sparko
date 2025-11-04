@@ -75,7 +75,3 @@ pub fn App() -> Element {
     }
 }
 
-
-fn main() {
-    dioxus::launch(App);
-}
