@@ -1,9 +1,9 @@
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use dioxus::prelude::*;
 
-use crate::{DioxusContext, MarcoSparko, ModuleRegistrations, components::app::Route};
+use crate::{MarcoSparko, MarcoSparkoContext, ModuleRegistrations, components::app::Route};
 
 const BLOG_CSS: Asset = asset!("/assets/styling/blog.css");
 
@@ -15,14 +15,17 @@ const BLOG_CSS: Asset = asset!("/assets/styling/blog.css");
 pub fn Blog(module_id: String) -> Element {
     println!("ZZ2 Blog start i={}", module_id);
 
-    let context = use_context::<DioxusContext>();
+    let context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
+    let opt_context = (&*context_signal.read());
+    let context = opt_context.as_ref().unwrap();
+    let module_registrations = use_context::<ModuleRegistrations>();
 
     let mut call_signal = use_signal::<bool>(|| true);
     let mut action = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize(&module_id, false, &module_registrations, &marco_sparko_context).await});
 
     if *call_signal.read() {
         call_signal.set(false);
-        let t = action.call(context.module_registrations.clone(), context.marco_sparko_context.clone(), module_id.clone());
+        let t = action.call(module_registrations.clone(), context.clone(), module_id.clone());
     }
     
     if let Some(result) = action.value() {

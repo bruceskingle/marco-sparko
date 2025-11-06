@@ -154,32 +154,32 @@ impl ModuleRegistrations {
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub struct DioxusContext {
-    marco_sparko_context: Arc<MarcoSparkoContext>,
-    module_registrations:   ModuleRegistrations,
-}
+// #[derive(Clone, PartialEq)]
+// pub struct DioxusContext {
+//     marco_sparko_context: Arc<MarcoSparkoContext>,
+//     module_registrations:   ModuleRegistrations,
+// }
 
-impl Default for DioxusContext {
-    fn default() -> Self {
-        let marco_sparko_context = MarcoSparkoContext::new().unwrap();
-        Self { 
-            marco_sparko_context,
-            module_registrations: Default::default() }
-    }
-}
+// impl Default for DioxusContext {
+//     fn default() -> Self {
+//         let marco_sparko_context = MarcoSparkoContext::new().unwrap();
+//         Self { 
+//             marco_sparko_context,
+//             module_registrations: Default::default() }
+//     }
+// }
 
-impl DioxusContext {
-    pub fn new() -> anyhow::Result<DioxusContext> {
-        let marco_sparko_context = MarcoSparkoContext::new()?;
-        let module_registrations = ModuleRegistrations::new();
+// impl DioxusContext {
+//     pub fn new() -> anyhow::Result<DioxusContext> {
+//         let marco_sparko_context = MarcoSparkoContext::new()?;
+//         let module_registrations = ModuleRegistrations::new();
 
-        Ok(DioxusContext {
-            marco_sparko_context,
-            module_registrations,
-        })
-    }
-}
+//         Ok(DioxusContext {
+//             marco_sparko_context,
+//             module_registrations,
+//         })
+//     }
+// }
 
 /*
  * This context is shared with all modules and needs to be separate from MarcoSparko because that struct holds the list of modules.
@@ -205,6 +205,13 @@ impl MarcoSparkoContext {
         Ok(Arc::new(MarcoSparkoContext {
             args,
             profile,
+       }))
+    }
+
+    pub fn with_profile(&self, profile_name: &String) -> anyhow::Result<Arc<MarcoSparkoContext>> {
+        Ok(Arc::new(MarcoSparkoContext {
+            args: self.args.clone(),
+            profile: crate::profile::set_active_profile(profile_name)?,
        }))
     }
 

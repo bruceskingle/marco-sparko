@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 
-use crate::{DioxusContext, MarcoSparko, MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, profile::ProfileManager, views::*};
+use crate::{MarcoSparko, MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, profile::ProfileManager, views::*};
 
 
 // use crate::views::{Blog, Home, Navbar};
@@ -52,26 +52,28 @@ pub fn App() -> Element {
     // let context_provider = use_context::<Option<DioxusContext>>();
     // let context_provider = use_context_provider::<Option<DioxusContext>>(|| None);
 
+    let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);
+
     println!("Trace A2");
     if init {
     // if context_provider.is_none() {
     println!("Trace A3");
-        let context = DioxusContext::new()?;
-        use_context_provider::<DioxusContext>(move || context);
-        init_signal.set(false);
-        // provide_context(context);
-        // consume_context::<Option<DioxusContext>>().set;
-        // let context_provider = use_context_provider::<Option<DioxusContext>>(|| Some(context));
+        // let context = DioxusContext::new()?;
+        // use_context_provider::<DioxusContext>(move || context);
 
+        let marco_sparko_context = MarcoSparkoContext::new()?;
+        context_signal.set(Some(marco_sparko_context));
+        // let x: Signal<Arc<MarcoSparkoContext>>;
+        use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
+
+        let module_registrations = ModuleRegistrations::new();
+        use_context_provider::<ModuleRegistrations>(move || module_registrations);
+
+        init_signal.set(false);
+        
         return rsx!{ "Loading..."};
     }
     println!("Trace A4");
-    // let mut marco_sparko= use_resource(move || async move {
-    //     MarcoSparko::new().await
-    // });
-
-    // let modules_signal: Signal<ModuleRegistrations> = use_signal(|| MarcoSparko::load_modules());
-    // let app_modules: ModuleRegistrations = (*modules_signal.read()).clone();
 
     // The `rsx!` macro lets us define HTML inside of rust. It expands to an Element with all of our HTML inside.
     rsx! {

@@ -1,8 +1,4 @@
-
-use std::{collections::HashMap, sync::Arc};
-
-use dioxus::prelude::*;
-use marco_sparko::{DioxusContext, MarcoSparko, MarcoSparkoContext, ModuleRegistrations, components::app::App};
+use marco_sparko::{ components::app::App};
 // use marco_sparko::PROFILE_MANAGER;
 
 

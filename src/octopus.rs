@@ -22,7 +22,7 @@ use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CacheManager, CommandProvider, DioxusContext, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
+use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{DioxusContext,MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, components::Hero};
+use crate::{MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, components::Hero};
 use dioxus::prelude::*;
 
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
@@ -10,14 +10,20 @@ pub fn Home(
     // xid: i32,
     // modules_signal: ModuleRegistrations
 ) -> Element {
-    let context = use_context::<DioxusContext>();
+    println!("TRace Home 1");
+    let context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
+    let opt_context = (&*context_signal.read());
+    let context = opt_context.as_ref().unwrap();
+    let module_registrations = use_context::<ModuleRegistrations>();
     let mut modules = HashMap::new();
+
+    println!("TRace Home 2");
 
     // println!("ZZ2 start id={} ", xid);
     // println!("ZZ2 start i={} {:?}", xid, modules_signal);
-    for module_id in context.module_registrations.0.keys() {
+    for module_id in module_registrations.0.keys() {
         println!("ZZ2 module {}", module_id);
-        let active = if context.marco_sparko_context.profile.active_profile.modules.contains_key(module_id) {
+        let active = if context.profile.active_profile.modules.contains_key(module_id) {
             "Active"
         }
         else {

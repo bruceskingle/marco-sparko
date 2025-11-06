@@ -2,8 +2,9 @@
 
 
 use std::sync::Arc;
+use clap::Parser;
 
-use crate::{DioxusContext, MarcoSparko, MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, components::app::Route, profile::ProfileManager, views::profile::Profile};
+use crate::{ MarcoSparko, MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, components::app::Route, profile::ProfileManager, views::profile::Profile};
 use dioxus::{CapturedError, prelude::*};
 
 // use crate::PROFILE_MANAGER;
@@ -21,7 +22,10 @@ const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
 pub fn Navbar() -> Element {
     println!("Trace 1");
 
-    let context = use_context::<DioxusContext>();
+    let mut context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
+    let opt_context = (&*context_signal.read());
+    let context = opt_context.as_ref().unwrap();
+    let module_registrations = use_context::<ModuleRegistrations>();
 
     // let modules_signal: Signal<ModuleRegistrations> = use_signal(|| MarcoSparkoC::load_modules());
 
@@ -161,7 +165,11 @@ pub fn Navbar() -> Element {
         //  for module_id in (m.0.keys()) {
         // println!("ZZz module {}", module_id);
         //  }
-
+// let new_profile = crate::profile::set_active_profile(&String::from("default"))?;
+    let mut all = Vec::new();
+    for name in &context.profile.all_profiles {
+        all.push(name.clone());
+    }
     
     rsx! {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
@@ -184,7 +192,7 @@ pub fn Navbar() -> Element {
                         }
                         
             //             for name in &context.marco_sparko_context.profile.active_profile.modules.keys() {
-                            for module_id in (context.marco_sparko_context.profile.active_profile.modules.clone().keys()) {
+                            for module_id in (context.profile.active_profile.modules.clone().keys()) {
                         //     "ZZz module {module_id}"
                         // }
                             Link {
@@ -206,7 +214,7 @@ pub fn Navbar() -> Element {
                         // aria_has_popup: "true",
                         aria_expanded: "{menu_open}" ,
                         
-                        "Profile {context.marco_sparko_context.profile.active_profile.name} "
+                        "Profile {context.profile.active_profile.name} "
                         svg {
                             width: "14", height: "14", view_box: "0 0 24 24",
                             path {
@@ -233,9 +241,70 @@ pub fn Navbar() -> Element {
                     div {
                         class: if *menu_open.read() { "menu open" } else { "menu" },
 
-                        for name in &context.marco_sparko_context.profile.all_profiles {
+                        for name in all {
                             div { class: "menu-item", onclick:  move |_| {
+
+                                // let new_profile = crate::profile::set_active_profile(&name);
+
+                                // pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile>
+
+//                                 let n =  {
+
+//     let mut all_profiles = Vec::new();
+//     let mut map = indexmap::IndexMap::new();
+    
+
+//     if let Ok(file)= std::fs::File::open(&MarcoSparko::get_file_path()?) {
+//         let profile_file: crate::profile::ProfileFile = serde_json::from_reader(file)?;
+
+//         for profile in profile_file {
+//             // if map.contains_key(&profile.name) {
+//             //     return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
+//             // }
+//             all_profiles.push(profile.name.clone());
+//             map.insert(profile.name.clone(), profile);
+//         }
+//         let active_profile = if let Some(p) = map.shift_remove(&name) {
+//             p
+//         }
+//         else {
+//             panic!("Cant happen");
+//             // return Err(anyhow!("No such profile \"{}\"", profile_name)); 
+//         };
+
+//         let mut profiles = Vec::new();
+
+//         profiles.push(&active_profile);
+//         profiles.extend(map.values());
+
+//         serde_json::to_writer_pretty(std::fs::File::create(&MarcoSparko::get_file_path()?)?, &profiles)?;
+
+//         crate::profile::ActiveProfile {
+//             all_profiles,
+//             active_profile,
+//         }
+//     }
+//     else {
+//         panic!("Cant happen");
+//         // Err(anyhow!("No such profile \"{}\" (no profiles at all, in fact)", profile_name))
+//     }
+// };
+                                
                                 menu_open.set(false);
+                                // let new_context = context.with_profile(&name)?;
+
+                                // let new_profile = crate::profile::set_active_profile(&name)?;
+                                let new_context = Arc::new(MarcoSparkoContext {
+                                        args: crate::Args::parse(),
+                                        profile: crate::profile::set_active_profile(&name)?,
+                                });
+
+                                context_signal.set(Some(new_context));
+                                // use_context_provider::<Arc<MarcoSparkoContext>>(move || new_context);
+
+
+
+                                
                                 // let args = ((&*context_signal.read()).as_ref().unwrap()).args.clone();
                                 // let new_profile = crate::profile::set_active_profile(&name)?;
                                 // let new_context = Some(Arc::new(MarcoSparkoContext {

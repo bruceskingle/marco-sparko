@@ -151,8 +151,8 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
     }
 }
 
-type ModuleProfiles = HashMap<String, serde_json::Value>;
-type ProfileFile = Vec<Profile>;
+pub type ModuleProfiles = HashMap<String, serde_json::Value>;
+pub type ProfileFile = Vec<Profile>;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
