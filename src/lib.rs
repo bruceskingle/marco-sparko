@@ -5,11 +5,13 @@ pub mod views;
 pub mod components;
 pub mod profile;
 
+
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Lines, Write};
 use std::io::BufRead;
 use std::path::Path;
+use std::sync::OnceLock;
 use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -22,12 +24,19 @@ use reedline::{Emacs, ExampleHighlighter, FileBackedHistory, MenuBuilder, Reedli
 use reedline::{default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, KeyCode, KeyModifiers, Reedline, ReedlineEvent, Signal};
 use sparko_graphql::types::Date;
 use time::Month;
+use crate::profile::ActiveProfile;
+
 use {
     nu_ansi_term::{Color, Style},
     reedline::{DefaultValidator, DefaultHinter},
   };
 
 use profile::ProfileManager;
+
+// pub static PROFILE_MANAGER: OnceLock<Arc<ProfileManager>> = OnceLock::new();
+
+// type Component = Box<dyn Fn() -> dioxus::core::Element>;
+//fn() -> std::result::Result<dioxus::core::VNode, dioxus::core::RenderError>;
 
 pub const CHECK_FOR_UPDATES: bool = true;
 pub struct ReplCommand {
@@ -36,7 +45,7 @@ pub struct ReplCommand {
     pub help: &'static str,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, PartialEq)]
 #[command(version, about, long_about = None)] // Read from `Cargo.toml`
 pub struct Args {
     /// Name of the config profile to use
@@ -52,11 +61,11 @@ pub struct Args {
     #[clap(flatten)]
     pub octopus: octopus::OctopusArgs,
 
-    #[command(subcommand)]
-    command: Option<Commands>,
+    // #[command(subcommand)]
+    // command: Option<Commands>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum Commands {
     Summary,
     Bill,
@@ -68,6 +77,12 @@ enum Commands {
 
 #[async_trait]
 pub trait Module: CommandProvider {
+    fn as_component<'a>(&'a self) -> Box<dyn Fn() -> dioxus::core::Element + 'a>;
+    // fn get_component(&self) -> Component;
+
+
+
+
     // async fn summary(&mut self) -> anyhow::Result<()>;
     // async fn bill(&mut self) -> anyhow::Result<()>;
     // async fn test(&mut self) -> anyhow::Result<()>;
@@ -85,47 +100,137 @@ pub trait ModuleBuilder {
      async fn build(self: Box<Self>, init: bool) -> anyhow::Result<Box<dyn Module + Send>>;
 }
 
-type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> anyhow::Result<Box<dyn ModuleBuilder>>;
+pub type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> anyhow::Result<Box<dyn ModuleBuilder>>;
+
+#[derive(Clone, Default)]
+pub struct ModuleRegistrations(Arc<HashMap<String, Box<ModuleConstructor>>>);
+
+impl std::fmt::Debug for ModuleRegistrations {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for k in self.0.keys() {
+             write!(f, "{}, ", k)?;
+        }
+         write!(f, "]")?;
+         Ok(())
+    }
+}
+
+impl PartialEq for ModuleRegistrations {
+    fn eq(&self, other: &Self) -> bool {
+        let s = self.0.keys();
+        let o = other.0.keys();
+        let mut it = o.into_iter();
+
+        for k in s {
+            if let Some(other_key) = it.next() {
+                if k != other_key {
+                    return false;
+                }
+            }
+        }
+
+        it.next().is_none()
+    }
+}
+
+impl ModuleRegistrations {
+    fn new() -> ModuleRegistrations {
+        let mut module_registrations = HashMap::new();
+
+        Self::load_module(&mut module_registrations, octopus::Client::registration());
+
+        println!("Loaded {} modules", module_registrations.len());
+
+        for (k,v) in &module_registrations {
+            println!(" Module {}", k);
+        }
+        ModuleRegistrations(Arc::new(module_registrations))
+    }
+
+    fn load_module(module_registrations: &mut HashMap<String, Box<ModuleConstructor>> , registration: (String, Box<ModuleConstructor>)) {
+        println!("Load module {}", registration.0);
+        module_registrations.insert(registration.0, registration.1);
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct DioxusContext {
+    marco_sparko_context: Arc<MarcoSparkoContext>,
+    module_registrations:   ModuleRegistrations,
+}
+
+impl Default for DioxusContext {
+    fn default() -> Self {
+        let marco_sparko_context = MarcoSparkoContext::new().unwrap();
+        Self { 
+            marco_sparko_context,
+            module_registrations: Default::default() }
+    }
+}
+
+impl DioxusContext {
+    pub fn new() -> anyhow::Result<DioxusContext> {
+        let marco_sparko_context = MarcoSparkoContext::new()?;
+        let module_registrations = ModuleRegistrations::new();
+
+        Ok(DioxusContext {
+            marco_sparko_context,
+            module_registrations,
+        })
+    }
+}
 
 /*
  * This context is shared with all modules and needs to be separate from MarcoSparko because that struct holds the list of modules.
  */
-pub struct MarcoSparkoContext {
+ pub struct MarcoSparkoContext {
     pub args: Args,
-    pub profile_manager: ProfileManager,
+    pub profile: ActiveProfile,
+}
+
+impl PartialEq for MarcoSparkoContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.args == other.args && self.profile == other.profile
+    }
 }
 
 impl MarcoSparkoContext {
-    fn new() -> anyhow::Result<Arc<MarcoSparkoContext>> {
+    pub fn new() -> anyhow::Result<Arc<MarcoSparkoContext>> {
 
         let args = Args::parse();
-        let profile_manager = Self::create_profile_manager(&args.profile)?;
+        let profile = crate::profile::fetch_active_profile(&args.profile)?;
         
 
         Ok(Arc::new(MarcoSparkoContext {
             args,
-            profile_manager,
+            profile,
        }))
     }
 
     fn create_profile_manager(active_profile: &Option<String>) -> anyhow::Result<ProfileManager>  {
+        // let selector = if let Some(name) = active_profile {
+        //     profile::ProfileSelector::Named(name.clone())
+        // } else {
+        //     profile::ProfileSelector::Default
+        // };
         match ProfileManager::new(active_profile) {
             Ok(p) => Ok(p),
             Err(_) => Err(anyhow!("FAILED")),
         }
     }
 
-    fn save_updated_profile(&self) -> anyhow::Result<()> {
-        match self.profile_manager.save_updated_profile() {
-            Ok(p) => Ok(p),
-            Err(_) => Err(anyhow!("FAILED")),
-        }
-    }
+    // fn save_updated_profile(&self) -> anyhow::Result<()> {
+    //     match self.profile_manager.save_updated_profile() {
+    //         Ok(p) => Ok(p),
+    //         Err(_) => Err(anyhow!("FAILED")),
+    //     }
+    // }
 
     
 
     fn get_cache_file_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
-        let profile_name = &self.profile_manager.active_profile.name;
+        let profile_name = &self.profile.active_profile.name;
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}.json", profile_name, module_id));
@@ -133,7 +238,7 @@ impl MarcoSparkoContext {
     }
 
     fn get_history_file_path(&self, module_id: &Option<String>) -> anyhow::Result<PathBuf> {
-        let profile_name =&self.profile_manager.active_profile.name;
+        let profile_name =&self.profile.active_profile.name;
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         if let Some(module_id) = module_id {
@@ -146,7 +251,7 @@ impl MarcoSparkoContext {
     }
 
     fn get_cache_data_dir_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
-        let profile_name =&self.profile_manager.active_profile.name;
+        let profile_name =&self.profile.active_profile.name;
 
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
@@ -164,15 +269,15 @@ impl MarcoSparkoContext {
         }))
     }
     
-    pub fn update_profile<T>(&self, module_id: &str, profile: T) -> anyhow::Result<()>
-    where
-        T: Serialize
-    {
-        match self.profile_manager.update_profile(module_id, profile) {
-            Ok(p) => Ok(p),
-            Err(_) => Err(anyhow!("FAILED")),
-        }
-    }
+    // pub fn update_profile<T>(&self, module_id: &str, profile: T) -> anyhow::Result<()>
+    // where
+    //     T: Serialize
+    // {
+    //     match self.profile_manager.update_profile(module_id, profile) {
+    //         Ok(p) => Ok(p),
+    //         Err(_) => Err(anyhow!("FAILED")),
+    //     }
+    // }
 
     pub fn read_cache<T>(&self, module_id: &str) -> Option<T>
     where
@@ -203,7 +308,7 @@ impl MarcoSparkoContext {
 
 pub struct MarcoSparko {
     context: Arc<MarcoSparkoContext>,
-    module_registrations: HashMap<String, Box<ModuleConstructor>>,
+    module_registrations: ModuleRegistrations,
     modules: HashMap<String, Box<dyn Module>>,
     current_module: Option<String>,
 }
@@ -297,13 +402,13 @@ prints more detailed help on that specific command.
 
     pub async fn init_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) -> anyhow::Result<()> {
         if let Some(module_id) = args.next() {
-            if let Some(module_registration) = self.module_registrations.get(module_id) {
+            if let Some(module_registration) = self.module_registrations.0.get(module_id) {
                 if self.modules.contains_key(module_id) {
                     println!("ERROR: module '{}' is already active", module_id); 
                 }
                 else {
                     let constructor = module_registration.as_ref();
-                    let profile = if let Some(value) = self.context.profile_manager.active_profile.modules.get(module_id) {
+                    let profile = if let Some(value) = self.context.profile.active_profile.modules.get(module_id) {
                         Some(value.clone())
                     }
                     else {
@@ -330,7 +435,7 @@ prints more detailed help on that specific command.
 
             match target.as_ref() {
                 "modules" => {
-                    for reg in &self.module_registrations {
+                    for reg in &*self.module_registrations.0 {
                         let status = if let Some(_module) = self.modules.get(reg.0) {
                             "Active"
                         }
@@ -341,13 +446,13 @@ prints more detailed help on that specific command.
                     }
                 },
                 "profiles" => {
-                    for profile in &self.context.profile_manager.before_profiles {
-                        println!("{}", profile.name);
-                    }
-                    println!("{} [Active]", &self.context.profile_manager.active_profile.name);
-
-                    for profile in &self.context.profile_manager.after_profiles {
-                        println!("{}", profile.name);
+                    for profile_name in &self.context.profile.all_profiles {
+                        if profile_name == &self.context.profile.active_profile.name {
+                            println!("{} [Active]", profile_name);
+                        }
+                        else {
+                            println!("{}", profile_name);
+                        }
                     }
                 },
                 _ => {
@@ -362,26 +467,61 @@ prints more detailed help on that specific command.
         Ok(())
     }
 
+    // pub async fn initialize_modules(registrations: ModuleRegistrations, profiles: HashMap<String, serde_json::Value>, init: bool) -> anyhow::Result<()> {
+
+    //     let modules = HashMap::new();
+
+    //     for (module_id, module_profile) in profiles {
+    //         if let Some(module_registration) = registrations.get(&module_id) {
+    //             let constructor = module_registration.as_ref();
+    //             // let profile = if let Some(value) = self.context.profile_manager.active_profile.modules.get(module_id) {
+    //             //     Some(value.clone())
+    //             // }
+    //             // else {
+    //             //     None
+    //             // };
+    //             let builder = constructor(self.context.clone(), profile)?;
+    //             let module = builder.build(init).await?;
+    //             self.modules.insert(module_id.clone(),module);
+
+    //             if self.current_module.is_none() {
+    //                 self.current_module = Some(module_id.clone());
+    //             }
+                
+                
+
+    //             Ok(())
+    //         }
+    //         else {
+    //             return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
+    //         }
+    //     }
+
+    //     Ok(())
+    // }
+
 pub async fn new() -> anyhow::Result<MarcoSparko> {
 
     let mut marco_sparko_manager = MarcoSparko {
         context: MarcoSparkoContext::new()?,
-        module_registrations: HashMap::new(),
+        module_registrations: ModuleRegistrations::new(), //Self::load_modules(),
         modules: HashMap::new(),
         current_module: None,
     };
+
+    let x = &marco_sparko_manager.context.profile.active_profile.modules;
 
     //    let active_profile = marco_sparko_manager.marco_sparko.get_active_profile();
 
     let init = marco_sparko_manager.context.args.init;
 
-    marco_sparko_manager.load_modules();
+    // marco_sparko_manager.load_modules();
 
     let list = marco_sparko_manager.get_module_list();
 
     if list.is_empty() {
         let mut keys = Vec::new();
-        for module_id in marco_sparko_manager.context.profile_manager.active_profile.modules.keys() {
+        for module_id in marco_sparko_manager.context.profile.active_profile.modules.keys() {
             keys.push(module_id.to_string());
         }
         for module_id in &keys {
@@ -405,13 +545,7 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
         &self.context.args
     }
 
-    fn load_modules(&mut self) {
-        self.load_module(octopus::Client::registration());
-    }
 
-    fn load_module(&mut self, registration: (String, Box<ModuleConstructor>)) {
-        self.module_registrations.insert(registration.0, registration.1);
-    }
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
         // if let Some(command) =  &self.args().command {
@@ -456,7 +590,7 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
         // dioxus::launch(App);
 
 
-        self.context.save_updated_profile()?;
+        // self.context.save_updated_profile()?;
 
         return Ok(())
         // Err(Error::UserError(String::from("No command given - try 'Summary'")))
@@ -577,7 +711,7 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
                                                 continue;
                                             }
                                         }
-                                        if self.module_registrations.contains_key(new_module) {
+                                        if self.module_registrations.0.contains_key(new_module) {
                                             if self.modules.contains_key(new_module) {
                                                 self.current_module = Some(new_module.to_string());
                                                 break;
@@ -673,25 +807,36 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
     // }
     
     async fn initialize(&mut self, module_id: &String, init: bool) -> anyhow::Result<()> {
-        if let Some(module_registration) = self.module_registrations.get(module_id) {
+        // let module_registrations: &ModuleRegistrations = &self.module_registrations;
+        // let profile: &profile::Profile = &self.context.profile.active_profile;
+        // let context: Arc<MarcoSparkoContext> = self.context.clone();
+        let module = Self::do_initialize(module_id, init, &self.module_registrations, &self.context).await?;
+
+        self.modules.insert(module_id.clone(),module);
+
+        if self.current_module.is_none() {
+            self.current_module = Some(module_id.clone());
+        }
+
+        Ok(())
+    }
+
+    pub async fn do_initialize(module_id: &str, init: bool, module_registrations: &ModuleRegistrations, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Box<dyn Module + Send>> {
+        if let Some(module_registration) = module_registrations.0.get(module_id) {
             let constructor = module_registration.as_ref();
-            let profile = if let Some(value) = self.context.profile_manager.active_profile.modules.get(module_id) {
+            let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
                 Some(value.clone())
             }
             else {
                 None
             };
-            let builder = constructor(self.context.clone(), profile)?;
+            let builder = constructor(context.clone(), profile)?;
             let module = builder.build(init).await?;
-            self.modules.insert(module_id.clone(),module);
-
-            if self.current_module.is_none() {
-                self.current_module = Some(module_id.clone());
-            }
+            
             
             
 
-            Ok(())
+            Ok(module)
         }
         else {
             return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))

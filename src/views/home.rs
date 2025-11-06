@@ -1,14 +1,68 @@
-use crate::components::Hero;
+use std::{collections::HashMap, sync::Arc};
+
+use crate::{DioxusContext,MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, components::Hero};
 use dioxus::prelude::*;
 
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]
-pub fn Home() -> Element {
-    rsx! {
-        Hero {}
+pub fn Home(
 
+    // xid: i32,
+    // modules_signal: ModuleRegistrations
+) -> Element {
+    let context = use_context::<DioxusContext>();
+    let mut modules = HashMap::new();
+
+    // println!("ZZ2 start id={} ", xid);
+    // println!("ZZ2 start i={} {:?}", xid, modules_signal);
+    for module_id in context.module_registrations.0.keys() {
+        println!("ZZ2 module {}", module_id);
+        let active = if context.marco_sparko_context.profile.active_profile.modules.contains_key(module_id) {
+            "Active"
+        }
+        else {
+            "inactive"
+        };
+
+        modules.insert(module_id.clone(),active);
+    }
+    //  for (module_id, active) in &modules {
+    //         println!("ZZ3 module {}", module_id);
+    //     }
+    rsx! {
+        div {
+            // h1 { "This is Home #{xid}!" }
+            h1 { "Modules"}
+            for (module_id, active) in modules {
+                "{module_id} [{active}]"
+            }
+        }
     }
 }
+
+
+
+// pub fn Home(
+//     modules_signal: Signal<ModuleRegistrations>
+// ) -> Element {
+//     let mut modules = HashMap::new();
+
+//     println!("ZZ2 start");
+//     for module_id in ((*modules_signal.read()).0.keys()) {
+//         println!("ZZ2 module {}", module_id);
+//         modules.insert(module_id.clone(), "Inactive");
+//     }
+//      for (module_id, active) in &modules {
+//             println!("ZZ3 module {}", module_id);
+//         }
+//     rsx! {
+//         "Modules"
+//         for (module_id, active) in modules {
+//             "{module_id} [{active}]"
+//         }
+
+//     }
+// }
 
 
 

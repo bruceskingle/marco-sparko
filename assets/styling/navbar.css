@@ -32,7 +32,7 @@
 
 body{
   margin:0;
-  background:linear-gradient(180deg,#071025 0%, #071827 100%);
+  /* background:linear-gradient(180deg,#071025 0%, #071827 100%); */
   color:#e6eef3;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;

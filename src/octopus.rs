@@ -10,7 +10,10 @@ use anyhow::anyhow;
 use account::AccountManager;
 use async_trait::async_trait;
 
+use dioxus::prelude::*;
+
 use bill::BillManager;
+use dioxus::prelude::*;
 use meter::MeterManager;
 use serde::{Deserialize, Serialize};
 
@@ -19,14 +22,14 @@ use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
+use crate::{CacheManager, CommandProvider, DioxusContext, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
 
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 
 pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, PartialEq)]
 pub struct OctopusArgs {
     /// The Octopus API_KEY to use
     #[arg(short, long, env)]
@@ -226,8 +229,8 @@ impl Client {
                     };
 
                     //println!("UPDATE profile <{:?}>", &new_profile);
-
-                    self.context.update_profile(MODULE_ID, new_profile)?;
+                    crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
+                    // self.context.update_profile(MODULE_ID, new_profile)?;
                 }
             }
             else {
@@ -235,16 +238,74 @@ impl Client {
                 new_profile.api_key = Some(new_api_key.clone());
 
                 //println!("CREATE profile <{:?}>", &new_profile);
-                self.context.update_profile(MODULE_ID, new_profile)?;
+                crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
+                // self.context.update_profile(MODULE_ID, new_profile)?;
             }
         }
         Ok(())
     }
+
+    // fn as_component<'a>(&'a self) -> Box<dyn Fn() -> Element + 'a> {
+    //     // let x = self.account_id;
+
+    //     Box::new(move || {
+    //         rsx! {
+    //             div { "Hello, {self.account_id}" }
+    //         }
+    //     })
+    // }
+
+    // // #[component]
+    // pub fn component(&self) -> Element {
+    //     rsx!{
+    //         "This is the Octopus UI"
+    //     }
+    // }
 }
+
+// //     let context = use_context::<DioxusContext>();
+// //     // let context_ref = context.marco_sparko_context.clone();
+// //     // let reg = context.module_registrations.clone();
+// //     let mut action = use_action( move |module_registrations, marco_sparko_context|  async move { MarcoSparko::do_initialize(MODULE_ID, false, &module_registrations, &marco_sparko_context).await});
+
+// //     let t = action.call(context.module_registrations.clone(), context.marco_sparko_context.clone());
+
+// //    if let Some(result) = action.value() {
+// //         let module = *result?.read();
+// //         let x = module.get_component();
+// //         x()
+// //     }
+// //     else {
+// //          rsx!{
+// //     "This is Octopus"
+
+// //     if let Some(module) = opt_module {
+// //         "Got module {module}"
+// //     }
+// //     else {
+// //         "Loading..."
+// //     }
+// //     }
+
+   
+// }
 
 
 #[async_trait]
 impl Module for Client {
+    fn as_component<'a>(&'a self) -> Box<dyn Fn() -> Element + 'a> {
+        // let x = self.account_id;
+
+        Box::new(move || {
+            rsx! {
+                div { "Hello, {self.account_id}" }
+            }
+        })
+    }
+
+//    fn get_component(&self) -> Component {
+//         self.as_component()
+//    }
 
     // async fn test(&mut self) -> Result<(), crate::Error>{
     //     let user = self.get_account_user().await?;

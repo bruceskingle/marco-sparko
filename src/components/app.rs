@@ -1,7 +1,9 @@
 
+use std::sync::Arc;
+
 use dioxus::prelude::*;
 
-use crate::views::*;
+use crate::{DioxusContext, MarcoSparko, MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, profile::ProfileManager, views::*};
 
 
 // use crate::views::{Blog, Home, Navbar};
@@ -24,10 +26,10 @@ pub enum Route {
         Home {},
         // The route attribute can include dynamic parameters that implement [`std::str::FromStr`] and [`std::fmt::Display`] with the `:` syntax.
         // In this case, id will match any integer like `/blog/123` or `/blog/-456`.
-        #[route("/blog/:id")]
+        #[route("/blog/:module_id")]
         // Fields of the route variant will be passed to the component as props. In this case, the blog component must accept
         // an `id` prop of type `i32`.
-        Blog { id: i32 },
+        Blog { module_id: String },
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.
@@ -41,10 +43,35 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 ///
 /// Components should be annotated with `#[component]` to support props, better error messages, and autocomplete
 #[component]
+// pub fn App(profile_manager: Arc<ProfileManager>) -> Element {
 pub fn App() -> Element {
+
+    println!("Trace A1");
+    let mut init_signal = use_signal::<bool>(|| true);
+    let init = *init_signal.read();
+    // let context_provider = use_context::<Option<DioxusContext>>();
+    // let context_provider = use_context_provider::<Option<DioxusContext>>(|| None);
+
+    println!("Trace A2");
+    if init {
+    // if context_provider.is_none() {
+    println!("Trace A3");
+        let context = DioxusContext::new()?;
+        use_context_provider::<DioxusContext>(move || context);
+        init_signal.set(false);
+        // provide_context(context);
+        // consume_context::<Option<DioxusContext>>().set;
+        // let context_provider = use_context_provider::<Option<DioxusContext>>(|| Some(context));
+
+        return rsx!{ "Loading..."};
+    }
+    println!("Trace A4");
     // let mut marco_sparko= use_resource(move || async move {
     //     MarcoSparko::new().await
     // });
+
+    // let modules_signal: Signal<ModuleRegistrations> = use_signal(|| MarcoSparko::load_modules());
+    // let app_modules: ModuleRegistrations = (*modules_signal.read()).clone();
 
     // The `rsx!` macro lets us define HTML inside of rust. It expands to an Element with all of our HTML inside.
     rsx! {
@@ -66,6 +93,14 @@ pub fn App() -> Element {
             document::Link { rel: "icon", href: FAVICON }
             document::Link { rel: "stylesheet", href: MAIN_CSS }
 
+            // "app_modules["
+            // for module_id in (app_modules.0.keys()) {
+            //     "-{module_id}"
+            // }
+            // "]"
+            // Home { xid: 17
+            //                     , modules_signal: app_modules
+            //                 }
 
             // Home {}
             // The router component renders the route enum we defined above. It will handle synchronization of the URL and render
