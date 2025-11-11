@@ -22,7 +22,7 @@ use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::{AuthenticatedRequestManager, TokenManager};
-use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::bill::BillList, views::page_content::PageContent};
+use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, graphql::bill::get_bills::BillInterface}, views::page_content::PageContent};
 
 include!("octopus/graphql.rs");
 // include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -74,7 +74,6 @@ const MODULE_ID: &str = "octopus";
 
 #[async_trait(?Send)]
 impl CommandProvider for Client {
-
     async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()> {
         let account_id = self.account_id.clone();
         match command {
@@ -433,44 +432,8 @@ impl Module for Client {
                         rsx! {
                             table {
                                 
-                                tr {
-                                    style: "background: #666666;",
-
-                                    th {
-                                        colspan: 5,
-                                        ""
-                                    }
-                                    th {
-                                        "Balance"
-                                    }
-                                    th {
-                                        colspan: 3,
-                                        "Charges"
-                                    }
-                                    th {
-                                        colspan: 3,
-                                        "Credits"
-                                    }
-                                    th {
-                                        "Balance"
-                                    }
-                                }
-                                tr {
-                                    style: "background: #666666;",
-                                    th{"Date"}
-                                    th{"Ref"}
-                                    th{"From"}
-                                    th{"To"}
-                                    th{"Type"}
-                                    th{"b/f"}
-                                    th{"Net"}
-                                    th{"Tax"}
-                                    th{"Gross"}
-                                    th{"Net"}
-                                    th{"Tax"}
-                                    th{"Gross"}
-                                    th{"c/f"}
-                                }
+                                
+                                 {BillInterface::gui_summary_header()?}
                                 for (id, bill) in &bills.bills {
                                     {bill.gui_summary_line()?}
                                 }

@@ -227,6 +227,49 @@ impl BillInterface {
         println!();
     }
 
+     pub fn gui_summary_header() -> Element{
+        rsx!{
+            tr {
+                style: "background: #666666;",
+
+                th {
+                    colspan: 5,
+                    ""
+                }
+                th {
+                    "Balance"
+                }
+                th {
+                    colspan: 3,
+                    "Charges"
+                }
+                th {
+                    colspan: 3,
+                    "Credits"
+                }
+                th {
+                    "Balance"
+                }
+            }
+            tr {
+                style: "background: #666666;",
+                th{"Date"}
+                th{"Ref"}
+                th{"From"}
+                th{"To"}
+                th{"Type"}
+                th{"b/f"}
+                th{"Net"}
+                th{"Tax"}
+                th{"Gross"}
+                th{"Net"}
+                th{"Tax"}
+                th{"Gross"}
+                th{"c/f"}
+            }
+        }
+    }
+
     pub fn gui_summary_line(&self) -> Element{
         let abstract_bill = self.as_bill_interface();
 
