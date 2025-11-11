@@ -48,3 +48,7 @@ body {
 td {
     padding: 6px 6px 6px 6px;
 }
+
+td.numeric {
+    text-align: right;
+}

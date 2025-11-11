@@ -241,26 +241,26 @@ impl BillInterface {
         let detail = match self {
             BillInterface::StatementType(statement) => {
                 rsx!{
-                    td { "{as_decimal(statement.opening_balance_, 2)}" }
-                    td { "{as_decimal(statement.total_charges_.net_total_, 2)}" }
-                    td { "{as_decimal(statement.total_charges_.tax_total_, 2)}" }
-                    td { "{as_decimal(statement.total_charges_.gross_total_, 2)}" }
-                    td { "{as_decimal(statement.total_credits_.net_total_, 2)}" }
-                    td { "{as_decimal(statement.total_credits_.tax_total_, 2)}" }
-                    td { "{as_decimal(statement.total_credits_.gross_total_, 2)}" }
-                    td { "{as_decimal(statement.closing_balance_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.opening_balance_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_charges_.net_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_charges_.tax_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_charges_.gross_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_credits_.net_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_credits_.tax_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_credits_.gross_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.closing_balance_, 2)}" }
                 }
             },
             BillInterface::PreKrakenBillType(_) => rsx!{},
             BillInterface::PeriodBasedDocumentType(period_based_document) => {
                 rsx!{
                     td {  }
-                    td { "{as_decimal(period_based_document.total_charges_.net_total_, 2)}" }
-                    td { "{as_decimal(period_based_document.total_charges_.tax_total_, 2)}" }
-                    td { "{as_decimal(period_based_document.total_charges_.gross_total_, 2)}" }
-                    td { "{as_decimal(period_based_document.total_credits_.net_total_, 2)}" }
-                    td { "{as_decimal(period_based_document.total_credits_.tax_total_, 2)}" }
-                    td { "{as_decimal(period_based_document.total_credits_.gross_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(period_based_document.total_charges_.net_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(period_based_document.total_charges_.tax_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(period_based_document.total_charges_.gross_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(period_based_document.total_credits_.net_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(period_based_document.total_credits_.tax_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(period_based_document.total_credits_.gross_total_, 2)}" }
                     td {}
                 }
             },
@@ -272,7 +272,7 @@ impl BillInterface {
                     td {  }
                     td {  }
                     td {  }
-                    td { "{as_decimal(invoice.gross_amount_, 2)}" }
+                    td { class: "numeric", "{as_decimal(invoice.gross_amount_, 2)}" }
                     td {  }
                 }
             },
