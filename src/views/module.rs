@@ -75,39 +75,93 @@ const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
 
 
 
-fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<&str>, page_list: &'a Vec<PageInfo>) -> (&'a str, Element) {
-    
-    let default_page = if page_list.len() < 1 {
+fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<&str>, page_list: &'a Vec<PageInfo>) -> (&'a str, Box<dyn Fn() -> Element + 'a>) {
+    let mut page_id = "";
+    let mut it = path.into_iter();
+
+    if let Some(p) = it.next() {
+        page_id = p;
+    }
+
+    let mut remaining_path = Vec::new();
+
+    loop {
+        if let Some(s) = it.next() {
+            remaining_path.push(*s);
+        }
+        else {
+            break;
+        }
+    }
+    if page_list.len() < 1 {
         let module_id = module.module_id();
-        return ("", rsx!(
+
+        // let x = || rsx!(
+        //     "Module page list is empty {module_id}"
+        // );
+        // let y: impl Fn() -> Element = x;
+
+        let x1 = Box::new(move || rsx!(
             "Module page list is empty {module_id}"
         ));
-    }
-    else {
-        page_list.get(0).unwrap()
-    };
-
-    let page_id = if path.len()<1 {
-        ""
-    }
-    else {
-         *path.get(0).unwrap()
-    };
-
-    if page_id == "" {
-        return (default_page.path,  module.get_page(default_page.path))
+        return ("", x1);
     }
 
     for page_info in page_list {
-        if page_id == page_info.path {
-            return(page_info.path, module.get_page(page_info.path))
+        if page_id == "" || page_id == page_info.path {
+            return(page_info.path, module.get_component(page_info.path, remaining_path))
         }
     }
 
+
+
     let msg = format!("{:?}", path);
-    ("", rsx!(
+    let x2 = Box::new(move || rsx!(
         "Unknown page in path {msg}"
-    ))
+    ));
+    ("", x2)
+
+
+
+
+
+
+
+
+
+
+
+    // let default_page = if page_list.len() < 1 {
+    //     let module_id = module.module_id();
+    //     return ("", rsx!(
+    //         "Module page list is empty {module_id}"
+    //     ));
+    // }
+    // else {
+    //     page_list.get(0).unwrap()
+    // };
+
+    // let page_id = if path.len()<1 {
+    //     ""
+    // }
+    // else {
+    //      *path.get(0).unwrap()
+    // };
+
+    // if page_id == "" {
+    //     return (default_page.path,  module.get_page(default_page.path))
+    // }
+
+    // for page_info in page_list {
+    //     if page_id == page_info.path {
+    //         return(page_info.path, module.get_page(page_info.path))
+    //     }
+    // }
+
+    // let msg = format!("{:?}", path);
+    // ("", rsx!(
+    //     "Unknown page in path {msg}"
+    // ))
 }
 
 /// The Blog page component that will be rendered when the current route is `[Route::Blog]`
@@ -126,13 +180,26 @@ pub fn Module(module_id: String) -> Element {
     let module_registrations = use_context::<ModuleRegistrations>();
 
     let mut call_signal = use_signal::<bool>(|| true);
-    let mut action = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize(&module_id, false, &module_registrations, &marco_sparko_context).await});
+    let a          = move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize(&module_id, false, &module_registrations, &marco_sparko_context).await};
+    let mut action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Box<dyn crate::Module + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize(&module_id, false, &module_registrations, &marco_sparko_context).await});
 
     if *call_signal.read() {
         call_signal.set(false);
         // let t = 
         action.call(module_registrations.clone(), context.clone(), module_id.clone());
     }
+
+
+    // let xx = move | 
+    //     // cm: Arc<crate::CacheManager>, 
+    //     // rm: Arc<sparko_graphql::AuthenticatedRequestManager<crate::octopus::token::OctopusTokenManager> >, 
+    //     account_id: String, 
+    //     check_for_updates: bool|  
+    //                     //move | cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool |  
+    //                     async move { 
+    //                         Ok("BillList::new(&cm, &rm, &account_id, check_for_updates).await");
+    //                     };
+    // // let mut action2 = use_action(xx);
 
     if let Some(result) = action.value() {
         let module_signal = result?;
@@ -221,7 +288,7 @@ pub fn Module(module_id: String) -> Element {
                     if !*sidebar_open.read() {button { class: "hamburger", onclick: toggle_sidebar, ">>" }} 
                     // button { class: "hamburger", onclick: toggle_sidebar, "☰" }
                     // div { class: "filler", "2Content goes here..." }
-                    div { class: "filler", {content} }
+                    div { class: "filler", {content()} }
                 }
             }
         }

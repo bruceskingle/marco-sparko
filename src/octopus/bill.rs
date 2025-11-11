@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use dioxus::prelude::*;
 use indexmap::IndexMap;
 use std::sync::Arc;
 
@@ -40,7 +41,7 @@ impl BillManager {
     }
 
     pub async fn get_bills(&mut self, account_number: &String) -> anyhow::Result<&BillList> {
-        Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, account_number.clone(), crate::CHECK_FOR_UPDATES).await?))
+        Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?))
     }
 
     // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> anyhow::Result<BillTransactionList> {
@@ -224,6 +225,69 @@ impl BillInterface {
         }
 
         println!();
+    }
+
+    pub fn gui_summary_line(&self) -> Element{
+        let abstract_bill = self.as_bill_interface();
+
+        // print!("{:10} {:>10} {:10} {:10} {:10}", 
+        //     abstract_bill.issued_date_,
+        //     abstract_bill.id_,
+        //     abstract_bill.from_date_,
+        //     abstract_bill.to_date_,
+        //     abstract_bill.bill_type_.as_str(),
+        // );
+
+        let detail = match self {
+            BillInterface::StatementType(statement) => {
+                rsx!{
+                    td { "{as_decimal(statement.opening_balance_, 2)}" }
+                    td { "{as_decimal(statement.total_charges_.net_total_, 2)}" }
+                    td { "{as_decimal(statement.total_charges_.tax_total_, 2)}" }
+                    td { "{as_decimal(statement.total_charges_.gross_total_, 2)}" }
+                    td { "{as_decimal(statement.total_credits_.net_total_, 2)}" }
+                    td { "{as_decimal(statement.total_credits_.tax_total_, 2)}" }
+                    td { "{as_decimal(statement.total_credits_.gross_total_, 2)}" }
+                    td { "{as_decimal(statement.closing_balance_, 2)}" }
+                }
+            },
+            BillInterface::PreKrakenBillType(_) => rsx!{},
+            BillInterface::PeriodBasedDocumentType(period_based_document) => {
+                rsx!{
+                    td {  }
+                    td { "{as_decimal(period_based_document.total_charges_.net_total_, 2)}" }
+                    td { "{as_decimal(period_based_document.total_charges_.tax_total_, 2)}" }
+                    td { "{as_decimal(period_based_document.total_charges_.gross_total_, 2)}" }
+                    td { "{as_decimal(period_based_document.total_credits_.net_total_, 2)}" }
+                    td { "{as_decimal(period_based_document.total_credits_.tax_total_, 2)}" }
+                    td { "{as_decimal(period_based_document.total_credits_.gross_total_, 2)}" }
+                    td {}
+                }
+            },
+            BillInterface::InvoiceType(invoice) => {
+                rsx!{
+                    td {  }
+                    td {  }
+                    td {  }
+                    td {  }
+                    td {  }
+                    td {  }
+                    td { "{as_decimal(invoice.gross_amount_, 2)}" }
+                    td {  }
+                }
+            },
+        };
+
+        rsx!{
+            tr {
+                td { "{abstract_bill.issued_date_}" }
+                td { "{abstract_bill.id_}" }
+                td { "{abstract_bill.from_date_}" }
+                td { "{abstract_bill.to_date_}" }
+                td { "{abstract_bill.bill_type_.as_str()}" }
+                {detail}
+            }
+        }
     }
 
     pub fn print(&self, transactions: Option<Vec<BillTransactionBreakDown>>) {
@@ -565,9 +629,10 @@ impl BillList {
         Ok(())
     }
     
-   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool) -> anyhow::Result<Self> {
+   pub async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: &String, check_for_updates: bool) -> anyhow::Result<Self> {
     let hash_key = format!("{}#Bills", account_number);
 
+    let account_number = account_number.clone();
         let mut bills = Vec::new();
 
         cache_manager.read(&hash_key, &mut bills)?;

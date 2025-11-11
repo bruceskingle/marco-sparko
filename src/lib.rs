@@ -80,14 +80,16 @@ pub struct PageInfo {
     path: &'static str,
 }
 
+//  let x: fn(ModuleProps) -> std::result::Result<VNode, RenderError> = Module;
 #[async_trait]
 pub trait Module: CommandProvider {
     // fn get_page(&self, page_id: &String) -> Component;
     // fn as_component<'a>(&'a self) -> Box<dyn Fn() -> dioxus::core::Element + 'a>;
-    fn as_component<'a>(&'a self) -> Element;
+    // fn as_component<'a>(&'a self) -> Element;
     fn get_page_list(&self) -> Vec<PageInfo>;
-    fn get_page(&self, page_id: &str) -> Element;
+    // fn get_page(&self, page_id: &str) -> Element;
     fn module_id(&self) -> &'static str;
+    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<&'a str>) -> Box<dyn Fn() -> Element + 'a>;
     // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>>;
     // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>>;
     // fn get_component(&self) -> Component;

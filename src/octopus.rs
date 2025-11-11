@@ -21,8 +21,8 @@ use time_tz::timezones;
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use sparko_graphql::TokenManager;
-use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, views::page_content::PageContent};
+use sparko_graphql::{AuthenticatedRequestManager, TokenManager};
+use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::bill::BillList, views::page_content::PageContent};
 
 include!("octopus/graphql.rs");
 // include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -315,11 +315,11 @@ impl Module for Client {
     //         }
     //     })
     // }
-    fn as_component<'a>(&'a self) -> Element {
-        rsx! {
-            div { "Hello, {self.account_id}" }
-        }
-    }
+    // fn as_component<'a>(&'a self) -> Element {
+    //     rsx! {
+    //         div { "Hello, {self.account_id}" }
+    //     }
+    // }
 
     fn get_page_list(&self) -> Vec<PageInfo> {
         vec!(
@@ -333,39 +333,163 @@ impl Module for Client {
         })
     }
 
-    fn get_page(&self, page_id: &str) -> Element {
+    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<&'a str>) -> Box<dyn Fn() -> Element + 'a> {
+    // fn get_page(&self, page_id: &str) -> Element {
         match page_id {
             "account" => {
-                let account_user = &self.account_manager.viewer.viewer.viewer_;
-                // let x = account_user.full_name_;
-                let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
-                rsx! {
-                    table {
-                        tr {
-                            td { "ID"}, td{"{account_user.id_}"},
-                        },
-                        tr {
-                            td { "Full Name"} td{"{account_user.full_name_}"},
-                        },
-                        tr {
-                            td { "API Key"} td{"{api_key}"},
-                        },
-                        
+                Box::new(|| {
+                    let account_user = &self.account_manager.viewer.viewer.viewer_;
+                    // let x = account_user.full_name_;
+                    let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
+                    rsx! {
+                        table {
+                            tr {
+                                td { "ID"}, td{"{account_user.id_}"},
+                            },
+                            tr {
+                                td { "Full Name"} td{"{account_user.full_name_}"},
+                            },
+                            tr {
+                                td { "API Key"} td{"{api_key}"},
+                            },
+                            
+                        }
+                        // div { "Full Name: {account_user.full_name_}" }
                     }
-                    // div { "Full Name: {account_user.full_name_}" }
-                }
+                })
             },
             "bills" => {
-                // let account_id = self.account_id.clone();
-                // let bills = self.bill_manager.get_bills(account_number)
-                rsx! {
-                    div { "Bills, {self.account_id}" }
-                }
+                Box::new(|| {
+                    // let mut bill_manager_signal = use_signal(|| BillManager::new(&self.cache_manager, &self.request_manager));
+                    // let mut bill_manager = &mut *bill_manager_signal.read();
+                    let check_for_updates = true;
+                    let mut call_signal = use_signal::<bool>(|| true);
+
+                    let cm: Arc<CacheManager> = self.cache_manager.clone();
+                    let rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>> = self.request_manager.clone();
+                    let acid: String = self.account_id.clone();
+
+                    let closure = |cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, acid: String | async move {
+                    // let bills: anyhow::Result<BillList> = 
+                    BillList::new(&cm, &rm, &acid, true).await
+                    };
+                    let mut action = use_action(closure);
+
+                    // // let c: ActionCallback;
+                    // let mut cm: Arc<CacheManager> = self.cache_manager.clone();
+                    // let mut rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>> = self.request_manager.clone();
+                    // let mut account_id = self.account_id.clone();
+
+                    // // // let x1 = 
+                    // // //     move | check_for_updates: &mut bool |  {};
+                    // // // let x1: impl FnOnce(String, bool) =
+                    // let x = 
+                    //     move | cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, account_id: String, check_for_updates: bool|  
+                    //     //move | cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool |  
+                    //     async move { 
+                    //         BillList::new(&cm, &rm, &account_id, check_for_updates).await
+                    //     };
+
+                    // let y = x(self.cache_manager.clone(), self.request_manager.clone(), self.account_id.clone(), check_for_updates);
+                    
+                    // // let y: ActionCallback = x;
+                    // let mut action: Action<(crate::ModuleRegistrations, Arc<MarcoSparkoContext>, String), Box<dyn Module + Send + 'static>>
+
+                    //     //  let mut action 
+                    //      = use_action(move | 
+                    //         // cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, 
+                    //         // account_id: String, 
+                    //         // check_for_updates: bool
+                    //         |  
+                    //     //move | cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool |  
+                    //     async move { 
+                    //         // BillList::new(&cm, &rm, &account_id, check_for_updates).await
+                    //         ()
+                    //     });
+
+                    // // let mut action = use_action( move |cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool|  
+                    // //     async move { 
+                    // //         let x = BillList::new(&cache_manager, &request_manager, account_number, check_for_updates).await;
+                        
+                    // //     });
+
+                    if *call_signal.read() {
+                        call_signal.set(false);
+                        // let t = 
+                        action.call(cm, rm, acid);
+                        //(self.cache_manager.clone(), self.request_manager.clone(), self.account_id.clone(), check_for_updates);
+                    }
+
+                    // let account_id = self.account_id.clone();
+
+                    if let Some(result) = action.value() {
+                        let bills_signal = result?;
+                        let bills = &*bills_signal.read();
+
+                        // for (id, bill) in bills.bills {
+                        //     let x = bill.gui_summary_line();
+                        // }
+
+                        rsx! {
+                            table {
+                                
+                                tr {
+                                    style: "background: #666666;",
+
+                                    th {
+                                        colspan: 5,
+                                        ""
+                                    }
+                                    th {
+                                        "Balance"
+                                    }
+                                    th {
+                                        colspan: 3,
+                                        "Charges"
+                                    }
+                                    th {
+                                        colspan: 3,
+                                        "Credits"
+                                    }
+                                    th {
+                                        "Balance"
+                                    }
+                                }
+                                tr {
+                                    style: "background: #666666;",
+                                    th{"Date"}
+                                    th{"Ref"}
+                                    th{"From"}
+                                    th{"To"}
+                                    th{"Type"}
+                                    th{"b/f"}
+                                    th{"Net"}
+                                    th{"Tax"}
+                                    th{"Gross"}
+                                    th{"Net"}
+                                    th{"Tax"}
+                                    th{"Gross"}
+                                    th{"c/f"}
+                                }
+                                for (id, bill) in &bills.bills {
+                                    {bill.gui_summary_line()?}
+                                }
+                            }
+                        }
+                    }
+                    else {
+                        rsx! {
+                            div { "Loading Bills for account {self.account_id}..." }
+                        }
+                    }
+                })
             },
             _ => {
-                rsx! {
-                    div { "Unknown page_id, {page_id}" }
-                }
+                Box::new(move || {
+                    rsx! {
+                        div { "Unknown page_id, {page_id}" }
+                    }
+                    })
             },
         }
     }
