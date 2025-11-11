@@ -26,7 +26,7 @@ display_json = "0.2.1"
 rust_decimal = "1.36.0"
 rust_decimal_macros = "1.36.0"
 const_format = "0.2.32"
-sparko_graphql = {ZZversion = "0.0.1", path = "../../git/sparko_graphql" }
+sparko_graphql = {version = "0.3.0", path = "../../git/sparko_graphql" }
 #serde_with = "3.9.0"
 #reedline-repl-rs = { version = "1.2.1", features = ["async"] }
 futures = "0.3.31"
@@ -39,6 +39,7 @@ time-tz = "2.0.0"
 dioxus = { version = "0.7.0", features = ["router", "desktop"] }
 dioxus-desktop = "0.7"
 anyhow = "1.0.100"
+wasm-bindgen = "0.2.105"
 
 [dev-dependencies]
 tokio-test = "*"

@@ -29,7 +29,7 @@ pub enum Route {
         #[route("/blog/:module_id")]
         // Fields of the route variant will be passed to the component as props. In this case, the blog component must accept
         // an `id` prop of type `i32`.
-        Blog { module_id: String },
+        Module { module_id: String },
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.

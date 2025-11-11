@@ -15,6 +15,7 @@ use std::sync::OnceLock;
 use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
 use anyhow::anyhow;
 use async_trait::async_trait;
+use dioxus::core::Element;
 use dirs::home_dir;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -73,11 +74,22 @@ enum Commands {
     Test,
 }
 
-
+#[derive(Clone)]
+pub struct PageInfo {
+    label: &'static str,
+    path: &'static str,
+}
 
 #[async_trait]
 pub trait Module: CommandProvider {
-    fn as_component<'a>(&'a self) -> Box<dyn Fn() -> dioxus::core::Element + 'a>;
+    // fn get_page(&self, page_id: &String) -> Component;
+    // fn as_component<'a>(&'a self) -> Box<dyn Fn() -> dioxus::core::Element + 'a>;
+    fn as_component<'a>(&'a self) -> Element;
+    fn get_page_list(&self) -> Vec<PageInfo>;
+    fn get_page(&self, page_id: &str) -> Element;
+    fn module_id(&self) -> &'static str;
+    // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>>;
+    // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>>;
     // fn get_component(&self) -> Component;
 
 

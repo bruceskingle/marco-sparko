@@ -4,7 +4,7 @@ mod account;
 mod bill;
 mod meter;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::anyhow;
 use account::AccountManager;
@@ -22,9 +22,10 @@ use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, ReplCommand};
+use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, views::page_content::PageContent};
 
-include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
+include!("octopus/graphql.rs");
+// include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
 include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 
 pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
@@ -290,18 +291,117 @@ impl Client {
    
 // }
 
+// fn account_page<'a>(client: &'a Client) -> Box<dyn Fn() -> Element + 'a> {
+//         // let x = self.account_id;
+
+//         Box::new(move || {
+//             rsx! {
+//                 div { "Hello, {client.account_id}" }
+//             }
+//         })
+//     }
 
 #[async_trait]
 impl Module for Client {
-    fn as_component<'a>(&'a self) -> Box<dyn Fn() -> Element + 'a> {
-        // let x = self.account_id;
+    fn module_id(&self) -> &'static str {
+        MODULE_ID
+    }
+    // fn as_component<'a>(&'a self) -> Box<dyn Fn() -> Element + 'a> {
+    //     // let x = self.account_id;
 
-        Box::new(move || {
-            rsx! {
-                div { "Hello, {self.account_id}" }
-            }
+    //     Box::new(move || {
+    //         rsx! {
+    //             div { "Hello, {self.account_id}" }
+    //         }
+    //     })
+    // }
+    fn as_component<'a>(&'a self) -> Element {
+        rsx! {
+            div { "Hello, {self.account_id}" }
+        }
+    }
+
+    fn get_page_list(&self) -> Vec<PageInfo> {
+        vec!(
+            PageInfo {
+                label: "Account", 
+                path: "account",
+            },
+            PageInfo {
+                label: "Bills",
+                path: "bills",
         })
     }
+
+    fn get_page(&self, page_id: &str) -> Element {
+        match page_id {
+            "account" => {
+                let account_user = &self.account_manager.viewer.viewer.viewer_;
+                // let x = account_user.full_name_;
+                let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
+                rsx! {
+                    table {
+                        tr {
+                            td { "ID"}, td{"{account_user.id_}"},
+                        },
+                        tr {
+                            td { "Full Name"} td{"{account_user.full_name_}"},
+                        },
+                        tr {
+                            td { "API Key"} td{"{api_key}"},
+                        },
+                        
+                    }
+                    // div { "Full Name: {account_user.full_name_}" }
+                }
+            },
+            "bills" => {
+                // let account_id = self.account_id.clone();
+                // let bills = self.bill_manager.get_bills(account_number)
+                rsx! {
+                    div { "Bills, {self.account_id}" }
+                }
+            },
+            _ => {
+                rsx! {
+                    div { "Unknown page_id, {page_id}" }
+                }
+            },
+        }
+    }
+
+    // // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>> {
+    // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>> {
+    //     // let mut map: HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>> = HashMap::new();
+    //     // let mut map: HashMap<&str, &Box<dyn Fn() -> std::result::Result<VNode, RenderError>>> = HashMap::new();
+    //     let mut map: HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>> = HashMap::new();
+
+    //     // let x: Box<dyn Fn(&'a Client) -> dioxus::core::Element + 'a> = Box::new(Self::as_component);
+    //     // let a: dyn Fn() -> dioxus::core::Element + 'a = Self::as_component;
+    //     // let b = account_page;
+    //     // let x: Box<dyn Fn(&'a Client) -> dioxus::core::Element + 'a> = Box::new(Self::as_component);
+    //     // let y = Box::new(x);
+    //     le = || self.as_component();
+    //     // let y =  x();
+    //     // let z = self.as_component;
+        
+    // //     let x = || -> Box<dyn Fn() -> Element + 'a> {
+    // //     // let x = self.account_id;
+
+    // //     Box::new(move || {
+    // //         rsx! {
+    // //             div { "Hello, {self.account_id}" }
+    // //         }
+    // //     })
+    // // };
+    // //     map.insert("Account", x);
+
+    // // let z = &self.as_component();
+    // // let x = account_page;
+
+    //     map.insert("Account", y);
+    //     map
+    // }
 
 //    fn get_component(&self) -> Component {
 //         self.as_component()
