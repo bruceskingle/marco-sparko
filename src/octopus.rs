@@ -4,7 +4,7 @@ mod account;
 mod bill;
 mod meter;
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use account::AccountManager;
@@ -13,16 +13,15 @@ use async_trait::async_trait;
 use dioxus::prelude::*;
 
 use bill::BillManager;
-use dioxus::prelude::*;
 use meter::MeterManager;
 use serde::{Deserialize, Serialize};
 
-use time_tz::timezones;
+use time_tz::{Tz, timezones};
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::{AuthenticatedRequestManager, TokenManager};
-use crate::{CacheManager, CommandProvider, MarcoSparko, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, graphql::bill::get_bills::BillInterface}, views::page_content::PageContent};
+use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, graphql::bill::get_bills::BillInterface}};
 
 include!("octopus/graphql.rs");
 // include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -64,8 +63,8 @@ pub struct Client{
     // default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
     account_id: String,
     cache_manager: Arc<CacheManager>,
-    bill_manager: BillManager,
-    meter_manager: MeterManager,
+    bill_manager: Arc<BillManager>,
+    meter_manager: Arc<MeterManager>,
     account_manager: AccountManager,
     billing_timezone: &'static time_tz::Tz,
 }
@@ -151,8 +150,8 @@ impl Client {
         let billing_timezone = Self::get_billing_timezone(&profile);
         let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
         let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
-        let bill_manager = BillManager::new(&cache_manager, &request_manager);
-        let meter_manager = MeterManager::new(&cache_manager, &request_manager, &billing_timezone);
+        let meter_manager = Arc::new(MeterManager::new(&cache_manager, &request_manager, &billing_timezone));
+        let bill_manager = Arc::new(BillManager::new(&cache_manager, &request_manager, &meter_manager));
 
         Ok(Client {
             context,
@@ -244,81 +243,24 @@ impl Client {
         }
         Ok(())
     }
-
-    // fn as_component<'a>(&'a self) -> Box<dyn Fn() -> Element + 'a> {
-    //     // let x = self.account_id;
-
-    //     Box::new(move || {
-    //         rsx! {
-    //             div { "Hello, {self.account_id}" }
-    //         }
-    //     })
-    // }
-
-    // // #[component]
-    // pub fn component(&self) -> Element {
-    //     rsx!{
-    //         "This is the Octopus UI"
-    //     }
-    // }
 }
 
-// //     let context = use_context::<DioxusContext>();
-// //     // let context_ref = context.marco_sparko_context.clone();
-// //     // let reg = context.module_registrations.clone();
-// //     let mut action = use_action( move |module_registrations, marco_sparko_context|  async move { MarcoSparko::do_initialize(MODULE_ID, false, &module_registrations, &marco_sparko_context).await});
 
-// //     let t = action.call(context.module_registrations.clone(), context.marco_sparko_context.clone());
 
-// //    if let Some(result) = action.value() {
-// //         let module = *result?.read();
-// //         let x = module.get_component();
-// //         x()
-// //     }
-// //     else {
-// //          rsx!{
-// //     "This is Octopus"
-
-// //     if let Some(module) = opt_module {
-// //         "Got module {module}"
-// //     }
-// //     else {
-// //         "Loading..."
-// //     }
-// //     }
-
-   
-// }
-
-// fn account_page<'a>(client: &'a Client) -> Box<dyn Fn() -> Element + 'a> {
-//         // let x = self.account_id;
-
-//         Box::new(move || {
-//             rsx! {
-//                 div { "Hello, {client.account_id}" }
-//             }
-//         })
-//     }
+fn find_bill<'a>(bill_id: &String, bills: &'a BillList) -> Option<&'a BillInterface> {
+    for (_id, bill) in &bills.bills {
+        if bill_id == &bill.as_bill_interface().id_ {
+            return Some(bill);
+        }
+    }
+    None
+}
 
 #[async_trait]
 impl Module for Client {
     fn module_id(&self) -> &'static str {
         MODULE_ID
     }
-    // fn as_component<'a>(&'a self) -> Box<dyn Fn() -> Element + 'a> {
-    //     // let x = self.account_id;
-
-    //     Box::new(move || {
-    //         rsx! {
-    //             div { "Hello, {self.account_id}" }
-    //         }
-    //     })
-    // }
-    // fn as_component<'a>(&'a self) -> Element {
-    //     rsx! {
-    //         div { "Hello, {self.account_id}" }
-    //     }
-    // }
 
     fn get_page_list(&self) -> Vec<PageInfo> {
         vec!(
@@ -333,7 +275,6 @@ impl Module for Client {
     }
 
     fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a> {
-    // fn get_page(&self, page_id: &str) -> Element {
         match page_id {
             "account" => {
                 Box::new(|| {
@@ -353,31 +294,15 @@ impl Module for Client {
                             },
                             
                         }
-                        // div { "Full Name: {account_user.full_name_}" }
                     }
                 })
             },
             "bills" => {
                 Box::new(move || {
-                    // let mut bill_manager_signal = use_signal(|| BillManager::new(&self.cache_manager, &self.request_manager));
-                    // let mut bill_manager = &mut *bill_manager_signal.read();
-                    let check_for_updates = true;
-                    // let mut path_signal = use_context::<Signal<Vec<String>>>();
-                    // // let whole_path = &*path_signal.read();
+                    // Create all the signals and actions.
 
-                    // let mut nav_callback = move |id| {
-                    //     let new_path = vec!(String::from("bills"),id);
-                    //     path_signal.set(new_path);
-                    // };
-// nav_callback: impl FnMut(String)
-                    // println!("Whole path ={:?} path={:?}", &*path_signal.read(), path);
-
-                    // if path.len() == 0 {
-                    //     println!("Navigate!");
-                    //     let new_path = vec!("account");
-                    //     path_signal.set(new_path);
-                    // }
-                    let mut call_signal = use_signal::<bool>(|| true);
+                    // First the lit of all bills.
+                    let mut bill_list_call_signal = use_signal::<bool>(|| true);
 
                     let cm: Arc<CacheManager> = self.cache_manager.clone();
                     let rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>> = self.request_manager.clone();
@@ -387,73 +312,108 @@ impl Module for Client {
                     // let bills: anyhow::Result<BillList> = 
                     BillList::new(&cm, &rm, &acid, true).await
                     };
-                    let mut action = use_action(closure);
+                    let mut bill_list_action = use_action(closure);
 
-                    // // let c: ActionCallback;
-                    // let mut cm: Arc<CacheManager> = self.cache_manager.clone();
-                    // let mut rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>> = self.request_manager.clone();
-                    // let mut account_id = self.account_id.clone();
-
-                    // // // let x1 = 
-                    // // //     move | check_for_updates: &mut bool |  {};
-                    // // // let x1: impl FnOnce(String, bool) =
-                    // let x = 
-                    //     move | cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, account_id: String, check_for_updates: bool|  
-                    //     //move | cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool |  
-                    //     async move { 
-                    //         BillList::new(&cm, &rm, &account_id, check_for_updates).await
-                    //     };
-
-                    // let y = x(self.cache_manager.clone(), self.request_manager.clone(), self.account_id.clone(), check_for_updates);
-                    
-                    // // let y: ActionCallback = x;
-                    // let mut action: Action<(crate::ModuleRegistrations, Arc<MarcoSparkoContext>, String), Box<dyn Module + Send + 'static>>
-
-                    //     //  let mut action 
-                    //      = use_action(move | 
-                    //         // cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, 
-                    //         // account_id: String, 
-                    //         // check_for_updates: bool
-                    //         |  
-                    //     //move | cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool |  
-                    //     async move { 
-                    //         // BillList::new(&cm, &rm, &account_id, check_for_updates).await
-                    //         ()
-                    //     });
-
-                    // // let mut action = use_action( move |cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool|  
-                    // //     async move { 
-                    // //         let x = BillList::new(&cache_manager, &request_manager, account_number, check_for_updates).await;
-                        
-                    // //     });
-
-                    if *call_signal.read() {
-                        call_signal.set(false);
-                        // let t = 
-                        action.call(cm, rm, acid);
-                        //(self.cache_manager.clone(), self.request_manager.clone(), self.account_id.clone(), check_for_updates);
+                    if *bill_list_call_signal.read() {
+                        bill_list_call_signal.set(false);
+                        bill_list_action.call(cm, rm, acid);
                     }
 
-                    // let account_id = self.account_id.clone();
 
-                    if let Some(result) = action.value() {
+                    // Now the transactions for one bill
+                    let mut bill_transactions_call_signal = use_signal::<Option<String>>(|| None);
+                    let mut bill_transactions__action = use_action(
+                        | args: (Arc<BillManager>, String, String, 
+                        &'static Tz)
+                        | async move {
+                           let (bm, account_number, statement_id, billing_timezone) = args;
+
+                            bm.get_statement_transactions(account_number, statement_id, 
+                                // billing_timezone
+                                timezones::db::europe::LONDON
+                            ).await
+                        });
+
+
+
+
+                    // Do we have the list of all bills on this account?
+
+                    if let Some(result) = bill_list_action.value() {
                         let bills_signal = result?;
                         let bills = &*bills_signal.read();
 
-                        // for (id, bill) in bills.bills {
-                        //     let x = bill.gui_summary_line();
-                        // }
+                        // Are we looking at one bill?
+                        if let Some(bill_id) = path.get(0) {
 
-                        let path_str = format!("{:?}", path);
+                            // Yes, have we initiated the fetch of the transactions?
+                            let opt_current_bill_id =
+                            if let Some(current_bill_id) = &*bill_transactions_call_signal.read() {
+                                if current_bill_id != bill_id {
+                                    // This is a different bill, so cancel the fetch
+                                    bill_transactions__action.cancel();
+                                    None
+                                }
+                                else {
+                                    Some(current_bill_id.clone())
+                                }
+                            }
+                            else {
+                                None
+                            };
 
-                        rsx! {
-                            {"Path is "  }{path_str}
-                            table {
-                                
-                                
-                                 {BillInterface::gui_summary_header()?}
-                                for (id, bill) in &bills.bills {
-                                    {bill.gui_summary_line()?}
+                            if opt_current_bill_id.is_none() {
+                                // start transaction fetch
+                                bill_transactions_call_signal.set(Some(bill_id.clone()));
+                                let acid: String = self.account_id.clone();
+
+                                bill_transactions__action.call((self.bill_manager.clone(), acid, bill_id.clone(), self.billing_timezone));
+                            }
+
+                            if let Some(bill) = find_bill(bill_id, bills) {
+                                if let Some(result) = bill_transactions__action.value() {
+                                    let bill_transactions_signal = result?;
+                                    let bill_transactions = &*bill_transactions_signal.read();
+                                    
+                                    bill.gui_display(bill_transactions)
+                                }
+                                else {
+                                    rsx! {
+                                        {"Loading transactions for bill {bill_id}..."  }
+                                    }
+                                }
+                            }
+                            else {
+                                rsx! {
+                                    {"No such bill {bill_id}"  }
+                                }
+                            }
+
+                            
+
+
+
+
+
+
+
+
+
+
+                            
+                        }
+                        else {
+                            let path_str = format!("{:?}", path);
+
+                            rsx! {
+                                {"Path is "  }{path_str}
+                                table {
+                                    
+                                    
+                                    {BillInterface::gui_summary_header()?}
+                                    for (_id, bill) in &bills.bills {
+                                        {bill.gui_summary_line()?}
+                                    }
                                 }
                             }
                         }
@@ -474,71 +434,6 @@ impl Module for Client {
             },
         }
     }
-
-    // // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>> {
-    // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>> {
-    //     // let mut map: HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>> = HashMap::new();
-    //     // let mut map: HashMap<&str, &Box<dyn Fn() -> std::result::Result<VNode, RenderError>>> = HashMap::new();
-    //     let mut map: HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>> = HashMap::new();
-
-    //     // let x: Box<dyn Fn(&'a Client) -> dioxus::core::Element + 'a> = Box::new(Self::as_component);
-    //     // let a: dyn Fn() -> dioxus::core::Element + 'a = Self::as_component;
-    //     // let b = account_page;
-    //     // let x: Box<dyn Fn(&'a Client) -> dioxus::core::Element + 'a> = Box::new(Self::as_component);
-    //     // let y = Box::new(x);
-    //     le = || self.as_component();
-    //     // let y =  x();
-    //     // let z = self.as_component;
-        
-    // //     let x = || -> Box<dyn Fn() -> Element + 'a> {
-    // //     // let x = self.account_id;
-
-    // //     Box::new(move || {
-    // //         rsx! {
-    // //             div { "Hello, {self.account_id}" }
-    // //         }
-    // //     })
-    // // };
-    // //     map.insert("Account", x);
-
-    // // let z = &self.as_component();
-    // // let x = account_page;
-
-    //     map.insert("Account", y);
-    //     map
-    // }
-
-//    fn get_component(&self) -> Component {
-//         self.as_component()
-//    }
-
-    // async fn test(&mut self) -> Result<(), crate::Error>{
-    //     let user = self.get_account_user().await?;
-    //     println!("get_account_user {} {} {}", user.given_name_, user.family_name_, user.email_);
-    //     let account = self.get_default_account().await?;
-    //     println!("get_default_account {}", account.number_);
-    //     Ok(())
-    // }
-
-    // async fn summary(&mut self) -> Result<(), crate::Error>{
-    //     let user = self.get_account_user().await?;
-    //     println!("{}", user);
-    //     Ok(())
-    // }
-
-    // async fn bill(&mut self) -> Result<(), crate::Error>{
-    //     println!("DEPRECATED");
-    //     // let account = self.get_default_account().await?;
-    //     // // let account_number =  &account.number_;
-
-    //     // let mut bills = bill::get_bills(&self.cache_manager, &self.request_manager, account.number_.clone()).await?;
-
-    //     // // bills.fetch_all(&self.request_manager).await?;
-
-    //     // bills.print_summary_lines();
-
-    //     Ok(())
-    // }
 }
 
 
@@ -658,7 +553,7 @@ impl ClientBuilder {
             let x = token_manager.get_authenticator(true).await;
             // println!("HERE {:?}", x);
             match x {
-                Ok(token) => {
+                Ok(_token) => {
                     println!("Logged in OK");
                 },
                 Err(error) => {

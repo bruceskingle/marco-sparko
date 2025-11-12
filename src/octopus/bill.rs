@@ -27,28 +27,68 @@ pub struct BillManager {
     // pub account_number: String,
     pub cache_manager: Arc<CacheManager>,
     pub request_manager: Arc<RequestManager>,
-    pub bills: HashMap<String, BillList>,
+    meter_manager: Arc<MeterManager>,
+    // pub bills: HashMap<String, BillList>,
 }
 
 impl BillManager {
-    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> Self {
+    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, meter_manager: &Arc<MeterManager>)  -> Self {
         Self {
             // account_number,
             cache_manager: cache_manager.clone(),
             request_manager: request_manager.clone(),
-            bills: HashMap::new(),
+            meter_manager: meter_manager.clone(),
+            // bills: HashMap::new(),
         }
     }
 
-    pub async fn get_bills(&mut self, account_number: &String) -> anyhow::Result<&BillList> {
-        Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?))
+    pub async fn get_bills(&self, account_number: &String) -> anyhow::Result<BillList> {
+        // Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?))
+        BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await
     }
 
     // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> anyhow::Result<BillTransactionList> {
     //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
     // }
 
-    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
+    pub async fn get_statement_transactions(&self, account_number: String, statement_id: String, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
+
+
+        let mut result = Vec::new();
+        let transactions = BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number.clone(), statement_id).await?;
+
+
+        for (_cursor, transaction) in transactions.transactions {
+            if let TransactionType::Charge(charge) = &transaction {
+                if let Some(consumption) = &charge.consumption_ {
+                    // print the line items making up this charge
+                    //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
+
+                    let meter_type = match transaction.as_transaction_type().title_.as_str() {
+                        "Gas" => MeterType::Gas,
+                        "Electricity" => MeterType::Electricity,
+                        _ => panic!("Unknown consumption type")
+                    };
+
+                    let line_items = Some(self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?);
+
+                    result.push(BillTransactionBreakDown{
+                        transaction,
+                        line_items,
+                    });
+                    continue;
+                }
+            }
+            result.push(BillTransactionBreakDown{
+                transaction,
+                line_items: None,
+            });
+        }
+
+        Ok(result)
+    }
+
+    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
 
 
         let mut result = Vec::new();
@@ -85,13 +125,13 @@ impl BillManager {
         Ok(result)
     }
 
-    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
+    pub async fn bills_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
         self.get_bills(account_number).await?.print_summary_lines();
         Ok(())
     }
 
 
-    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    pub async fn bill_handler(&self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         // let one_hundred = Decimal::new(100, 0);
         // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
@@ -149,6 +189,51 @@ impl BillTypeEnum {
 }
 
 impl BillInterface {
+    // pub async fn bill_gui_handler(&self, account_number: &String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    //     // let one_hundred = Decimal::new(100, 0);
+    //     // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+    //     let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
+    //     let request_manager = self.request_manager.clone();
+    //     let bills = self.get_bills(account_number).await?;
+
+    //     if let Some(bill_id) = args.next() {
+    //         for (_id, bill) in &bills.bills {
+    //             if bill_id == bill.as_bill_interface().id_ {
+    //                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+
+
+    //                     let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
+
+    //                     Some(transactions)
+    //                 }
+    //                 else {
+    //                     None
+    //                 };
+
+    //                 bill.print(transactions);
+    //                 return Ok(())
+    //             }
+    //         }
+    //         //println!("Unknown bill '{}'", bill_id);
+    //     }
+    //     else {
+    //         if bills.bills.is_empty() {
+    //             //println!("There are no bills in this account");
+    //         }
+    //         else {
+    //             let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
+    //             let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+    //                 Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
+    //             }
+    //             else {
+    //                 None
+    //             };
+    //             bill.print(transactions);
+    //         }
+    //     }
+    //     Ok(())
+    // }
+
     pub fn print_summary_line_headers() {
         println!("{:-^54} {:-^10} {:-^32} {:-^32} {:-^10}",
             "",
@@ -351,6 +436,22 @@ impl BillInterface {
         }
     }
 
+    pub fn gui_display(&self, transactions: &Vec<BillTransactionBreakDown>) -> Element {
+        let abstract_bill = self.as_bill_interface();
+
+        rsx!{
+            h1 {"Energy Account Statement"}
+            table {
+                tr {
+                    th{"Date"}          td{ "{abstract_bill.issued_date_}" }
+                    th{"Ref"}           td{ "{abstract_bill.id_}" }
+                    th{"From"}          td{ "{abstract_bill.from_date_}" }
+                    th{"To"}            td{ "{abstract_bill.to_date_}" }
+                  }
+            }
+        }
+    }
+
     pub fn print(&self, transactions: Option<Vec<BillTransactionBreakDown>>) {
         let abstract_bill = self.as_bill_interface();
 
@@ -403,7 +504,7 @@ impl BillInterface {
             total_charges = TotalCharges::new();
             
             for transaction in &transactions {
-                transaction.print(&mut total_charges);
+                transaction.print();
             }
         }
         
@@ -521,7 +622,7 @@ impl BillTransactionBreakDown {
         self.transaction.print_summary_line(total_charges);
     }
 
-    pub fn print(&self, total_charges: &mut TotalCharges) {
+    pub fn print(&self) {
         let one_hundred = Decimal::new(100, 0);
         let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let time_format = time::format_description::parse("           [hour]:[minute]:[second]").unwrap();

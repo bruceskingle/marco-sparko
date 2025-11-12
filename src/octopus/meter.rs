@@ -37,8 +37,8 @@ pub struct MeterManager {
     // pub account_number: String,
     pub cache_manager: Arc<CacheManager>,
     pub request_manager: Arc<RequestManager>,
-    pub properties: HashMap<String, Arc<PropertyList>>,
-    pub agreements: IndexMap<String,MeterAgreementList>,
+    // pub properties: HashMap<String, Arc<PropertyList>>,
+    // pub agreements: IndexMap<String,MeterAgreementList>,
 }
 
 //   Rita the
@@ -51,8 +51,8 @@ impl MeterManager {
             // account_number,
             cache_manager: cache_manager.clone(),
             request_manager: request_manager.clone(),
-            properties: HashMap::new(),
-            agreements: IndexMap::new(),
+            // properties: HashMap::new(),
+            // agreements: IndexMap::new(),
         }
     }
 
@@ -61,7 +61,7 @@ impl MeterManager {
         Ok(DateRange::get_current_month_inclusive()?)
     }
 
-    pub async fn consumption_handler(&mut self, args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    pub async fn consumption_handler(&self, args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         let properties = self.get_properties(account_number).await?;
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
@@ -83,7 +83,7 @@ impl MeterManager {
         Ok(())
     }
 
-    pub async fn demand_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         let properties = self.get_properties(account_number).await?;
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
@@ -135,15 +135,17 @@ impl MeterManager {
         Ok(())
     }
 
-    pub async fn get_properties(&mut self, account_number: &String) -> anyhow::Result<Arc<PropertyList>>{
-        if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
-            entry.insert(Arc::new(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?));
-        }
+    pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyList>{
+        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+        //     entry.insert(Arc::new(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?));
+        // }
         
-        Ok(self.properties.get(account_number).unwrap().clone())
+        // Ok(self.properties.get(account_number).unwrap().clone())
+
+        PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await
     }
 
-    pub async fn get_line_items(&mut self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
+    pub async fn get_line_items(&self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
         let properties = self.get_properties(account_number).await?;
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
@@ -227,7 +229,7 @@ impl MeterManager {
 
 
 
-    pub async fn get_consumption(&mut self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>>{
+    pub async fn get_consumption(&self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>>{
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
         // }
