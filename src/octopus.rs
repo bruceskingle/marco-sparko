@@ -332,7 +332,7 @@ impl Module for Client {
         })
     }
 
-    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<&'a str>) -> Box<dyn Fn() -> Element + 'a> {
+    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a> {
     // fn get_page(&self, page_id: &str) -> Element {
         match page_id {
             "account" => {
@@ -358,10 +358,25 @@ impl Module for Client {
                 })
             },
             "bills" => {
-                Box::new(|| {
+                Box::new(move || {
                     // let mut bill_manager_signal = use_signal(|| BillManager::new(&self.cache_manager, &self.request_manager));
                     // let mut bill_manager = &mut *bill_manager_signal.read();
                     let check_for_updates = true;
+                    // let mut path_signal = use_context::<Signal<Vec<String>>>();
+                    // // let whole_path = &*path_signal.read();
+
+                    // let mut nav_callback = move |id| {
+                    //     let new_path = vec!(String::from("bills"),id);
+                    //     path_signal.set(new_path);
+                    // };
+// nav_callback: impl FnMut(String)
+                    // println!("Whole path ={:?} path={:?}", &*path_signal.read(), path);
+
+                    // if path.len() == 0 {
+                    //     println!("Navigate!");
+                    //     let new_path = vec!("account");
+                    //     path_signal.set(new_path);
+                    // }
                     let mut call_signal = use_signal::<bool>(|| true);
 
                     let cm: Arc<CacheManager> = self.cache_manager.clone();
@@ -429,7 +444,10 @@ impl Module for Client {
                         //     let x = bill.gui_summary_line();
                         // }
 
+                        let path_str = format!("{:?}", path);
+
                         rsx! {
+                            {"Path is "  }{path_str}
                             table {
                                 
                                 

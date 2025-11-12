@@ -270,8 +270,11 @@ impl BillInterface {
         }
     }
 
-    pub fn gui_summary_line(&self) -> Element{
+    pub fn gui_summary_line(&self) -> Element {
         let abstract_bill = self.as_bill_interface();
+
+        // let new_path = vec!(String::from("bills"), abstract_bill.id_.clone());
+        // nav_callback(abstract_bill.id_.clone());
 
         // print!("{:10} {:>10} {:10} {:10} {:10}", 
         //     abstract_bill.issued_date_,
@@ -321,10 +324,25 @@ impl BillInterface {
             },
         };
 
+        let id = abstract_bill.id_.clone();
         rsx!{
             tr {
                 td { "{abstract_bill.issued_date_}" }
-                td { "{abstract_bill.id_}" }
+                td { 
+                    div {
+                        class: "link",
+                        // onclick: |_| {path_signal.set(vec!(String::from("bills"), abstract_bill.id_.clone()))},
+                        onclick: move |_| {
+                            // println!("Id={}", id);
+                            // let id = abstract_bill.id_.clone();
+                            // nav_callback(id);
+
+                            let mut path_signal = use_context::<Signal<Vec<String>>>();
+                            let new_path = vec!(String::from("bills"),id.clone());
+                            path_signal.set(new_path);
+                        },
+                        "{abstract_bill.id_}" }
+                    }
                 td { "{abstract_bill.from_date_}" }
                 td { "{abstract_bill.to_date_}" }
                 td { "{abstract_bill.bill_type_.as_str()}" }

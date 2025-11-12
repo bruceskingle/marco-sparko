@@ -32,6 +32,17 @@ body {
     padding: 10px;
 }
 
+.link {
+    color: rgb(153, 153, 226);
+    text-decoration: underline;
+    cursor: pointer;
+    /* margin-top: 20px;
+    margin: 10px 0px;
+    border: white 1px solid;
+    border-radius: 5px;
+    padding: 10px; */
+}
+
 #links a:hover {
     background-color: #1f1f1f;
     cursor: pointer;

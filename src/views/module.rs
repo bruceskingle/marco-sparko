@@ -75,7 +75,7 @@ const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
 
 
 
-fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<&str>, page_list: &'a Vec<PageInfo>) -> (&'a str, Box<dyn Fn() -> Element + 'a>) {
+fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<String>, page_list: &'a Vec<PageInfo>) -> (&'a str, Box<dyn Fn() -> Element + 'a>) {
     let mut page_id = "";
     let mut it = path.into_iter();
 
@@ -87,7 +87,7 @@ fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<&str>, 
 
     loop {
         if let Some(s) = it.next() {
-            remaining_path.push(*s);
+            remaining_path.push((*s).clone());
         }
         else {
             break;
@@ -172,8 +172,11 @@ fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<&str>, 
 pub fn Module(module_id: String) -> Element {
     println!("ZZ2 Blog start i={}", module_id);
 
-    let mut path_signal = use_signal(|| vec!(""));
-    let path = &*path_signal.read();
+    let mut path_signal = use_signal(|| vec!(String::from("")));
+    let path = (&*path_signal.read()).clone();
+
+    use_context_provider::<Signal<Vec<String>>>(move || path_signal);
+
     let context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
     let opt_context = (&*context_signal.read());
     let context = opt_context.as_ref().unwrap();
@@ -208,7 +211,7 @@ pub fn Module(module_id: String) -> Element {
 
 
         let page_list = module.get_page_list();
-        let (active_page_id, content) = get_page(module, path, &page_list);
+        let (active_page_id, content) = get_page(module, &path, &page_list);
         // let sub_menu = rsx!(
         //     div { class: "nav-left",
         //         for page_info in page_list {
@@ -272,7 +275,7 @@ pub fn Module(module_id: String) -> Element {
                                     // class: "nav_item",
                                     class: format_args!("sidebar-item {}", if active_page_id == page_info.path { "active" } else { "inactive" }),
                                     onclick: move |_| {
-                                        path_signal.set(vec!(page_info.path))
+                                        path_signal.set(vec!(String::from(page_info.path)))
                                     }, 
                                     "{page_info.label}"
                                 }

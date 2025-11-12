@@ -89,7 +89,7 @@ pub trait Module: CommandProvider {
     fn get_page_list(&self) -> Vec<PageInfo>;
     // fn get_page(&self, page_id: &str) -> Element;
     fn module_id(&self) -> &'static str;
-    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<&'a str>) -> Box<dyn Fn() -> Element + 'a>;
+    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a>;
     // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>>;
     // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>>;
     // fn get_component(&self) -> Component;
