@@ -454,7 +454,7 @@ impl MeterAgreementList {
             let the_beginning: DateTime = DateTime::from_calendar_date(2000, time::Month::January, 1)?;
             let mut agreements = Vec::new();
     
-            cache_manager.read(&hash_key, &mut agreements)?;
+            cache_manager.read_vec(&hash_key, &mut agreements)?;
     
             let cached_cnt = agreements.len();
     
@@ -468,7 +468,7 @@ impl MeterAgreementList {
 
                     agreements.push((meter_node_id.clone(), response));
                 }
-                cache_manager.write(&hash_key, &agreements, cached_cnt)?;
+                cache_manager.write_vec(&hash_key, &agreements, cached_cnt)?;
             }
 
             let mut export_electricity_map = HashMap::new();
@@ -775,7 +775,7 @@ impl AgreementLineItems {
         let mut transactions: Vec<(String, meter::electricity_agreement_line_items::LineItemType)> = Vec::new();
 
 
-        let (bucket_start_date, bucket_end_date) = cache_manager.read_for_date(date, &hash_key, &mut transactions)?;
+        let (bucket_start_date, bucket_end_date) = cache_manager.read_vec_for_date(date, &hash_key, &mut transactions)?;
         let bucket_start_date_time = bucket_start_date.at_midnight(billing_timezone);
         let bucket_end_date_time = bucket_end_date.at_midnight(billing_timezone);
 
@@ -1016,7 +1016,7 @@ impl AgreementLineItems {
         
 
         if result.line_items.len() > cached_cnt {
-            cache_manager.write_for_date(&result.start_date, &result.hash_key, &result.line_items, cached_cnt)?;
+            cache_manager.write_vec_for_date(&result.start_date, &result.hash_key, &result.line_items, cached_cnt)?;
         }
         
         Ok(result)
@@ -1247,7 +1247,7 @@ impl ConsumptionList {
         let mut transactions: Vec<(String, meter::meter_consumption::ConsumptionType)> = Vec::new();
 
 
-        let (bucket_start_date, bucket_end_date) = cache_manager.read_for_date(date, &hash_key, &mut transactions)?;
+        let (bucket_start_date, bucket_end_date) = cache_manager.read_vec_for_date(date, &hash_key, &mut transactions)?;
         let bucket_start_date_time = bucket_start_date.at_midnight(billing_timezone);
         let bucket_end_date_time = bucket_end_date.at_midnight(billing_timezone);
 
@@ -1343,7 +1343,7 @@ impl ConsumptionList {
         }       
 
         if result.consumption.len() > cached_cnt {
-            cache_manager.write_for_date(&result.start_date, &result.hash_key, &result.consumption, cached_cnt)?;
+            cache_manager.write_vec_for_date(&result.start_date, &result.hash_key, &result.consumption, cached_cnt)?;
         }
         
         Ok(result)

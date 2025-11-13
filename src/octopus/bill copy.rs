@@ -55,7 +55,7 @@ impl Bill {
     //                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
 
 
-    //                     let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
+    //                     let transactions = Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
 
     //                     Some(transactions)
     //                 }
@@ -76,7 +76,7 @@ impl Bill {
     //         else {
     //             let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
     //             let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-    //                 Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
+    //                 Some(Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
     //             }
     //             else {
     //                 None

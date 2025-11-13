@@ -78,11 +78,11 @@ impl CommandProvider for Client {
         match command {
             "bills" => {
                 Ok(self.bill_manager
-                .bills_handler(args, &account_id)
+                .bills_handler(args, account_id)
                 .await?)
             },
             "bill" => {
-                Ok(self.bill_manager.bill_handler(args, &account_id, &mut self.meter_manager, self.billing_timezone).await?)
+                Ok(self.bill_manager.bill_handler(args, account_id, &mut self.meter_manager, self.billing_timezone).await?)
             },
             "demand" => {
                 Ok(self.meter_manager.demand_handler(args, &account_id, self.billing_timezone).await?)
@@ -248,12 +248,18 @@ impl Client {
 
 
 fn find_bill<'a>(bill_id: &String, bills: &'a BillList) -> Option<&'a BillInterface> {
-    for (_id, bill) in &bills.bills {
-        if bill_id == &bill.as_bill_interface().id_ {
-            return Some(bill);
-        }
+    if let Some((_hash, bill)) = bills.bills.get(bill_id) {
+        Some(bill)
     }
-    None
+    else {
+        None
+    }
+    // for (_id, bill) in &bills.bills {
+    //     if bill_id == &bill.as_bill_interface().id_ {
+    //         return Some(bill);
+    //     }
+    // }
+    // None
 }
 
 #[async_trait]
@@ -301,26 +307,38 @@ impl Module for Client {
                 Box::new(move || {
                     // Create all the signals and actions.
 
-                    // First the lit of all bills.
+                    // First the list of all bills.
                     let mut bill_list_call_signal = use_signal::<bool>(|| true);
 
-                    let cm: Arc<CacheManager> = self.cache_manager.clone();
-                    let rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>> = self.request_manager.clone();
-                    let acid: String = self.account_id.clone();
+                    // let cm: Arc<CacheManager> = self.cache_manager.clone();
+                    // let rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>> = self.request_manager.clone();
+                    // let acid: String = self.account_id.clone();
+                    // let bill_manager_clone = self.bill_manager.clone();
 
-                    let closure = |cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, acid: String | async move {
-                    // let bills: anyhow::Result<BillList> = 
-                    BillList::new(&cm, &rm, &acid, true).await
-                    };
-                    let mut bill_list_action = use_action(closure);
+                    let mut bill_list_action = use_action(move |args: (String, Arc<BillManager>)| async move {
+                        args.1.fetch_bills(
+                            args.0).await
+                    });
 
+                    // Initiate the fetch of all bills if we haven;t already done so.
                     if *bill_list_call_signal.read() {
                         bill_list_call_signal.set(false);
-                        bill_list_action.call(cm, rm, acid);
+                        bill_list_action.call((self.account_id.clone(), self.bill_manager.clone()));
                     }
 
+                    // let closure = |cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, acid: String | async move {
+                    // // let bills: anyhow::Result<BillList> = 
+                    // BillList::fetch(&cm, &rm, &acid, true).await
+                    // };
+                    // let mut bill_list_action = use_action(closure);
 
-                    // Now the transactions for one bill
+                    // if *bill_list_call_signal.read() {
+                    //     bill_list_call_signal.set(false);
+                    //     bill_list_action.call(cm, rm, acid);
+                    // }
+
+
+                    // Now the action to fetch all transactions for one bill
                     let mut bill_transactions_call_signal = use_signal::<Option<String>>(|| None);
                     let mut bill_transactions__action = use_action(
                         | args: (Arc<BillManager>, String, String, 
@@ -328,9 +346,9 @@ impl Module for Client {
                         | async move {
                            let (bm, account_number, statement_id, billing_timezone) = args;
 
-                            bm.get_statement_transactions(account_number, statement_id, 
-                                // billing_timezone
-                                timezones::db::europe::LONDON
+                            bm.fetch_bill_transaction_breakdown(account_number, statement_id, 
+                                billing_timezone
+                                // timezones::db::europe::LONDON
                             ).await
                         });
 
@@ -411,7 +429,7 @@ impl Module for Client {
                                     
                                     
                                     {BillInterface::gui_summary_header()?}
-                                    for (_id, bill) in &bills.bills {
+                                    for (_id, (_hash, bill)) in &bills.bills {
                                         {bill.gui_summary_line()?}
                                     }
                                 }

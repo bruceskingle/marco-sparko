@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use dioxus::prelude::*;
 use indexmap::IndexMap;
+use tokio::sync::Mutex;
 use std::sync::Arc;
 
 use anyhow::anyhow;
 
 use sparko_graphql::AuthenticatedRequestManager;
 
+use crate::cache_manager::Indexer;
 use crate::octopus::decimal::Decimal;
 use crate::octopus::meter::MeterType;
 use crate::util::as_decimal;
@@ -23,12 +25,30 @@ use super::{token::OctopusTokenManager};
 // const one_hundred: Decimal = Decimal::new(100, 0);
 // const format: time::format_description = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
 
+/**********************************************************************************
+ * The manager manages an in-memory cache of Bills and related data objects.
+ * 
+ * The current "management" of this cache is to do nothing so our memory footprint will get bigger and bigger over time so we
+ * need to do something about that.
+ * 
+ * 
+ * Each Data Object is immutable but the types have methods which know how to fetch them so for each
+ * fetch_XXX method on the manager the XXX data object has a fetch() method which takes additional parameters
+ * which are e.g. the cache_manager and the request_manager. Those manager objects are themselves stateless.
+ * 
+ * Those data object methods use the local file system cache which currently has imperfect locking so that's something else
+ * which needs fixing.
+ * 
+ * The Manager is stateless but contains Arc refs to managers which are needed to fetch data objects.
+ * 
+ * 
+ * 
+ */
 pub struct BillManager {
-    // pub account_number: String,
     pub cache_manager: Arc<CacheManager>,
     pub request_manager: Arc<RequestManager>,
     meter_manager: Arc<MeterManager>,
-    // pub bills: HashMap<String, BillList>,
+    pub bills: Mutex<HashMap<String, Arc<BillList>>>,
 }
 
 impl BillManager {
@@ -38,27 +58,32 @@ impl BillManager {
             cache_manager: cache_manager.clone(),
             request_manager: request_manager.clone(),
             meter_manager: meter_manager.clone(),
-            // bills: HashMap::new(),
+            bills: Mutex::new(HashMap::new()),
         }
     }
 
-    pub async fn get_bills(&self, account_number: &String) -> anyhow::Result<BillList> {
-        // Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?))
-        BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await
+    pub async fn fetch_bills(&self, account_number: String) -> anyhow::Result<Arc<BillList>> {
+        let mut locked_map = self.bills.lock().await;
+        // let mut map = &*locked_map;
+        Ok((&*locked_map
+            .entry(account_number.clone())
+            .or_insert(
+                Arc::new(BillList::fetch(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?))).clone())
+        // BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await
     }
 
     // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> anyhow::Result<BillTransactionList> {
     //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
     // }
 
-    pub async fn get_statement_transactions(&self, account_number: String, statement_id: String, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
+    pub async fn fetch_bill_transaction_breakdown(&self, account_number: String, statement_id: String, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
 
 
         let mut result = Vec::new();
         let transactions = BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number.clone(), statement_id).await?;
 
 
-        for (_cursor, transaction) in transactions.transactions {
+        for (_key, (_cursor, transaction)) in transactions.transactions {
             if let TransactionType::Charge(charge) = &transaction {
                 if let Some(consumption) = &charge.consumption_ {
                     // print the line items making up this charge
@@ -88,63 +113,26 @@ impl BillManager {
         Ok(result)
     }
 
-    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
-
-
-        let mut result = Vec::new();
-        let transactions = BillTransactionList::new(cache_manager, request_manager, account_number.clone(), statement_id).await?;
-
-
-        for (_cursor, transaction) in transactions.transactions {
-            if let TransactionType::Charge(charge) = &transaction {
-                if let Some(consumption) = &charge.consumption_ {
-                    // print the line items making up this charge
-                    //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
-
-                    let meter_type = match transaction.as_transaction_type().title_.as_str() {
-                        "Gas" => MeterType::Gas,
-                        "Electricity" => MeterType::Electricity,
-                        _ => panic!("Unknown consumption type")
-                    };
-
-                    let line_items = Some(meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?);
-
-                    result.push(BillTransactionBreakDown{
-                        transaction,
-                        line_items,
-                    });
-                    continue;
-                }
-            }
-            result.push(BillTransactionBreakDown{
-                transaction,
-                line_items: None,
-            });
-        }
-
-        Ok(result)
-    }
-
-    pub async fn bills_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
-        self.get_bills(account_number).await?.print_summary_lines();
+    pub async fn bills_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: String) ->  anyhow::Result<()> {
+        self.fetch_bills(account_number).await?.print_summary_lines();
         Ok(())
     }
 
 
-    pub async fn bill_handler(&self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    pub async fn bill_handler(&self, mut args: std::str::SplitWhitespace<'_>, account_number: String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         // let one_hundred = Decimal::new(100, 0);
         // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
         let request_manager = self.request_manager.clone();
-        let bills = self.get_bills(account_number).await?;
+        let bills = self.fetch_bills(account_number.clone()).await?;
 
         if let Some(bill_id) = args.next() {
-            for (_id, bill) in &bills.bills {
+            for (_id, bill) in bills.bills.values() {
                 if bill_id == bill.as_bill_interface().id_ {
                     let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
 
 
-                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
+                        let transactions = self.fetch_bill_transaction_breakdown(account_number, bill_id.to_string(), billing_timezone).await?;
 
                         Some(transactions)
                     }
@@ -163,9 +151,9 @@ impl BillManager {
                 //println!("There are no bills in this account");
             }
             else {
-                let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
+                let (_key, (_id, bill)) = bills.bills.get_index(bills.bills.len() - 1).unwrap();
                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
+                    Some(self.fetch_bill_transaction_breakdown(account_number.clone(), bill.as_bill_interface().id_.to_string(), billing_timezone).await?)
                 }
                 else {
                     None
@@ -202,7 +190,7 @@ impl BillInterface {
     //                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
 
 
-    //                     let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
+    //                     let transactions = Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
 
     //                     Some(transactions)
     //                 }
@@ -223,7 +211,7 @@ impl BillInterface {
     //         else {
     //             let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
     //             let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-    //                 Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
+    //                 Some(Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
     //             }
     //             else {
     //                 None
@@ -736,19 +724,22 @@ impl BillTransactionBreakDown {
     }
 }
 
+// static BILL_INDEXER: Indexer<BillInterface> = Box::new(|bill: &BillInterface| bill.as_bill_interface().id_.clone());
+
 pub struct BillList {
     pub account_number: String,
     pub start_cursor: Option<String>,
     pub has_previous_page: bool,
-    pub bills: Vec<(String, BillInterface)>,
+    pub bills: IndexMap<String, (String, BillInterface)>,
     hash_key: String,
+    indexer: Indexer<BillInterface>,
 }
 
 impl BillList {
     pub fn print_summary_lines(&self) {
         BillInterface::print_summary_line_headers();
 
-        for (_key, bill) in &self.bills {
+        for (_bill_id, (_key, bill)) in &self.bills {
             bill.print_summary_line();
         }
     }
@@ -781,23 +772,26 @@ impl BillList {
             else {
                 has_previous_page = false;
             }
+            let indexer = &self.indexer;
 
             for edge in response.account_.bills_.edges.into_iter().rev() {
                 let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                self.bills.push((sort_key, edge.node));
+                self.bills.insert(indexer(&edge.node), (sort_key, edge.node));
             }
         }
         self.has_previous_page = has_previous_page;
         Ok(())
     }
     
-   pub async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: &String, check_for_updates: bool) -> anyhow::Result<Self> {
+   async fn fetch(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: &String, check_for_updates: bool) -> anyhow::Result<Self> {
     let hash_key = format!("{}#Bills", account_number);
 
     let account_number = account_number.clone();
-        let mut bills = Vec::new();
+        let mut bills = IndexMap::new();
 
-        cache_manager.read(&hash_key, &mut bills)?;
+        let indexer: Indexer<BillInterface> = Box::new(|bill: &BillInterface| bill.as_bill_interface().id_.clone());;
+
+        cache_manager.read(&hash_key, &mut bills, &indexer)?;
 
         let cached_cnt = bills.len();
 
@@ -811,7 +805,7 @@ impl BillList {
 
             for edge in response.account_.bills_.edges {
                 let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                bills.push((sort_key, edge.node));
+                bills.insert(indexer(&edge.node), (sort_key, edge.node));
             }
 
             BillList {
@@ -820,16 +814,18 @@ impl BillList {
                 has_previous_page: response.account_.bills_.page_info.has_previous_page,
                 bills,
                 hash_key,
+                indexer,
             }
         }
         else {
-            let (start_cursor, _) = bills.get(bills.len() - 1).unwrap();
+            let (key, (start_cursor, _)) = bills.get_index(bills.len() - 1).unwrap();
             BillList {
                 account_number,
                 start_cursor: Some(start_cursor.clone()),
                 has_previous_page: true,
                 bills,
                 hash_key,
+                indexer,
             }
         };
 
@@ -851,17 +847,18 @@ pub struct BillTransactionList {
     pub statement_id: String,
     pub start_cursor: Option<String>,
     pub has_previous_page: bool,
-    pub transactions: Vec<(String, TransactionType)>,
+    pub transactions: IndexMap<String, (String, TransactionType)>,
     hash_key: String,
+    indexer: Indexer<TransactionType>,
 }
 
 impl BillTransactionList {
     async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
+            let indexer: Indexer<TransactionType> = Box::new(|txn: &TransactionType| txn.as_transaction_type().id_.clone());;
+            let mut transactions = IndexMap::new();
     
-            let mut transactions = Vec::new();
-    
-            cache_manager.read(&hash_key, &mut transactions)?;
+            cache_manager.read(&hash_key, &mut transactions, &indexer)?;
     
             let cached_cnt = transactions.len();
     
@@ -878,8 +875,9 @@ impl BillTransactionList {
                 if let bill::get_statement_transactions::BillInterface::StatementType(statement) = bill {
 
                     for edge in statement.transactions_.edges {
+                        let key = indexer(&edge.node);
                         let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                        transactions.push((sort_key, edge.node));
+                        transactions.insert(key, (sort_key, edge.node));
                     }
         
                     let mut result = BillTransactionList {
@@ -889,6 +887,7 @@ impl BillTransactionList {
                         has_previous_page: statement.transactions_.page_info.has_previous_page,
                         transactions,
                         hash_key,
+                        indexer,
                     };
 
                     result.fetch_all(request_manager).await?;
@@ -900,7 +899,7 @@ impl BillTransactionList {
                 }
             }
             else {
-                let (start_cursor, _) = transactions.get(transactions.len() - 1).unwrap();
+                let (key, (start_cursor, _)) = transactions.get_index(transactions.len() - 1).unwrap();
                 BillTransactionList {
                     account_number,
                     statement_id,
@@ -908,6 +907,7 @@ impl BillTransactionList {
                     has_previous_page: true,
                     transactions,
                     hash_key,
+                    indexer,
                 }
             };
     
@@ -950,7 +950,8 @@ impl BillTransactionList {
 
                 for edge in statement.transactions_.edges.into_iter().rev() {
                     let sort_key = edge.cursor;
-                    self.transactions.push((sort_key, edge.node));
+                    let key = (self.indexer)(&edge.node);
+                    self.transactions.insert(key, (sort_key, edge.node));
                 }
                 
                 //println!("has_previous_page = {:?}", has_previous_page);
