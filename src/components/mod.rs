@@ -3,5 +3,3 @@
 //! component  to be used in our app.
 
 pub mod app;
-mod hero;
-pub use hero::Hero;

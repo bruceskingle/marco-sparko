@@ -4,8 +4,8 @@
 use std::sync::Arc;
 use clap::Parser;
 
-use crate::{ MarcoSparko, MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, components::app::Route, profile::ProfileManager, views::profile::Profile};
-use dioxus::{CapturedError, prelude::*};
+use crate::{ MarcoSparkoContext, components::app::Route};
+use dioxus::prelude::*;
 
 // use crate::PROFILE_MANAGER;
 
@@ -23,7 +23,7 @@ pub fn Navbar() -> Element {
     println!("Trace 1");
 
     let mut context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
-    let opt_context = (&*context_signal.read());
+    let opt_context = &*context_signal.read();
     let context = opt_context.as_ref().unwrap();
 
 

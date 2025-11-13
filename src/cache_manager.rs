@@ -184,7 +184,7 @@ pub fn read_vec<T: DeserializeOwned>(&self, hash_key: &str, vec: &mut Vec<(Strin
 
             let mut i = cached_cnt;
             while i < map.len() {
-                let (index, (key, value)) = map.get_index(i).unwrap();
+                let (_index, (key, value)) = map.get_index(i).unwrap();
                 writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
                 i += 1;
             }

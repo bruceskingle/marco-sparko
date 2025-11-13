@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 
-use crate::{MarcoSparko, MarcoSparkoContext, ModuleBuilder, ModuleRegistrations, profile::ProfileManager, views::*};
+use crate::{MarcoSparkoContext, ModuleRegistrations, views::*};
 
 
 // use crate::views::{Blog, Home, Navbar};

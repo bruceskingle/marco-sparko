@@ -9,8 +9,8 @@ use super::RequestManager;
 use super::{token::OctopusTokenManager};
 
 pub struct AccountManager {
-    pub cache_manager: Arc<CacheManager>,
-    pub request_manager: Arc<RequestManager>,
+    // pub cache_manager: Arc<CacheManager>,
+    // pub request_manager: Arc<RequestManager>,
     pub viewer: Viewer,
 }
 
@@ -19,8 +19,8 @@ impl AccountManager {
         let viewer = Viewer::new(cache_manager, request_manager).await?;
 
         Ok(Self {
-            cache_manager: cache_manager.clone(),
-            request_manager: request_manager.clone(),
+            // cache_manager: cache_manager.clone(),
+            // request_manager: request_manager.clone(),
             viewer,
         })
     }
@@ -33,7 +33,7 @@ impl AccountManager {
 pub struct Viewer {
     pub viewer: account::viewer::Response,
     pub default_account_id: String,
-    hash_key: String,
+    // hash_key: String,
 }
 
 impl Viewer {
@@ -49,7 +49,7 @@ impl Viewer {
             let query = account::viewer::Query::new();
             let viewer = request_manager.call(&query).await?;
 
-            cache_manager.write_one(&hash_key, &viewer);
+            cache_manager.write_one(&hash_key, &viewer)?;
 
             viewer
         };
@@ -59,7 +59,7 @@ impl Viewer {
         Ok(Viewer {
             default_account_id,
             viewer,
-            hash_key,
+            // hash_key,
         })
     }
 }

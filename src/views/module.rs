@@ -1,5 +1,5 @@
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use dioxus::prelude::*;
 
@@ -170,20 +170,17 @@ fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<String>
 /// re-run and the rendered HTML will be updated.
 #[component]
 pub fn Module(module_id: String) -> Element {
-    println!("ZZ2 Blog start i={}", module_id);
-
     let mut path_signal = use_signal(|| vec!(String::from("")));
     let path = (&*path_signal.read()).clone();
 
     use_context_provider::<Signal<Vec<String>>>(move || path_signal);
 
     let context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
-    let opt_context = (&*context_signal.read());
+    let opt_context = &*context_signal.read();
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
 
     let mut call_signal = use_signal::<bool>(|| true);
-    let a          = move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize(&module_id, false, &module_registrations, &marco_sparko_context).await};
     let mut action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Box<dyn crate::Module + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize(&module_id, false, &module_registrations, &marco_sparko_context).await});
 
     if *call_signal.read() {
@@ -191,18 +188,6 @@ pub fn Module(module_id: String) -> Element {
         // let t = 
         action.call(module_registrations.clone(), context.clone(), module_id.clone());
     }
-
-
-    // let xx = move | 
-    //     // cm: Arc<crate::CacheManager>, 
-    //     // rm: Arc<sparko_graphql::AuthenticatedRequestManager<crate::octopus::token::OctopusTokenManager> >, 
-    //     account_id: String, 
-    //     check_for_updates: bool|  
-    //                     //move | cache_manager: CacheManager, request_manager: AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool |  
-    //                     async move { 
-    //                         Ok("BillList::new(&cm, &rm, &account_id, check_for_updates).await");
-    //                     };
-    // // let mut action2 = use_action(xx);
 
     if let Some(result) = action.value() {
         let module_signal = result?;
@@ -243,14 +228,6 @@ pub fn Module(module_id: String) -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
         div { class: "layout-root",
-            // // Topbar
-            // div { class: "topbar",
-            //     // button { class: "hamburger", onclick: toggle_sidebar,if *sidebar_open.read() { "<<" } else { ">>" } }
-                
-            //     // h2 { class: "title", "My App" }
-            //     "Top Bar"
-            // }
-
             // Main container
             div { class: "container",
                 // Sidebar
@@ -261,15 +238,6 @@ pub fn Module(module_id: String) -> Element {
 
                     div { class: "sidebar-inner",
                         if *sidebar_open.read() {button { class: "hamburger", onclick: toggle_sidebar, "<<" }} 
-                        // h3 { "Secondary Nav" }
-                        // ul {
-                        //     li { "Item 1" }
-                        //     li { "Item 2" }
-                        //     li { "Item 3" }
-                        //     li { "Item 4" }
-                        // }
-                        // {sub_menu}
-                        // div { class: "nav-left",
                             for page_info in page_list.clone() {
                                 div {
                                     // class: "nav_item",

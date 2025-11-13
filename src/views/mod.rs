@@ -9,9 +9,6 @@
 //! a common wrapper around all child routes.
 
 mod home;
-use std::collections::HashMap;
-
-use dioxus::signals::Signal;
 pub use home::Home;
 
 mod module;
@@ -19,17 +16,3 @@ pub use module::Module;
 
 mod navbar;
 pub use navbar::Navbar;
-
-use crate::PageInfo;
-
-pub mod profile;
-pub mod page_content;
-// pub mod sidebar_menu;
-// // pub mod dynamic_router;
-
-
-
-// #[derive(Clone)]
-// struct RuntimePages {
-//     pages: Signal<HashMap<String, PageInfo>>,
-// }

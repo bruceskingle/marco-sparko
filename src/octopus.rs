@@ -20,8 +20,8 @@ use time_tz::{Tz, timezones};
 use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
-use sparko_graphql::{AuthenticatedRequestManager, TokenManager};
-use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, graphql::bill::get_bills::BillInterface}};
+use sparko_graphql::TokenManager;
+use crate::{CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, graphql::bill::get_bills::BillInterface}};
 
 include!("octopus/graphql.rs");
 // include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -59,10 +59,10 @@ impl Profile {
 pub struct Client{
     context: Arc<MarcoSparkoContext>, 
     profile: Option<Profile>,
-    request_manager: Arc<RequestManager>,
+    // request_manager: Arc<RequestManager>,
     // default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
     account_id: String,
-    cache_manager: Arc<CacheManager>,
+    // cache_manager: Arc<CacheManager>,
     bill_manager: Arc<BillManager>,
     meter_manager: Arc<MeterManager>,
     account_manager: AccountManager,
@@ -82,7 +82,7 @@ impl CommandProvider for Client {
                 .await?)
             },
             "bill" => {
-                Ok(self.bill_manager.bill_handler(args, account_id, &mut self.meter_manager, self.billing_timezone).await?)
+                Ok(self.bill_manager.bill_handler(args, account_id, self.billing_timezone).await?)
             },
             "demand" => {
                 Ok(self.meter_manager.demand_handler(args, &account_id, self.billing_timezone).await?)
@@ -156,9 +156,9 @@ impl Client {
         Ok(Client {
             context,
             profile,
-            request_manager,
+            // request_manager,
             account_id: account_manager.get_default_account_id().to_string(),
-            cache_manager,
+            // cache_manager,
             account_manager,
             bill_manager,
             meter_manager,
@@ -340,7 +340,7 @@ impl Module for Client {
 
                     // Now the action to fetch all transactions for one bill
                     let mut bill_transactions_call_signal = use_signal::<Option<String>>(|| None);
-                    let mut bill_transactions__action = use_action(
+                    let mut bill_transactions_action = use_action(
                         | args: (Arc<BillManager>, String, String, 
                         &'static Tz)
                         | async move {
@@ -369,7 +369,7 @@ impl Module for Client {
                             if let Some(current_bill_id) = &*bill_transactions_call_signal.read() {
                                 if current_bill_id != bill_id {
                                     // This is a different bill, so cancel the fetch
-                                    bill_transactions__action.cancel();
+                                    bill_transactions_action.cancel();
                                     None
                                 }
                                 else {
@@ -385,11 +385,11 @@ impl Module for Client {
                                 bill_transactions_call_signal.set(Some(bill_id.clone()));
                                 let acid: String = self.account_id.clone();
 
-                                bill_transactions__action.call((self.bill_manager.clone(), acid, bill_id.clone(), self.billing_timezone));
+                                bill_transactions_action.call((self.bill_manager.clone(), acid, bill_id.clone(), self.billing_timezone));
                             }
 
                             if let Some(bill) = find_bill(bill_id, bills) {
-                                if let Some(result) = bill_transactions__action.value() {
+                                if let Some(result) = bill_transactions_action.value() {
                                     let bill_transactions_signal = result?;
                                     let bill_transactions = &*bill_transactions_signal.read();
                                     

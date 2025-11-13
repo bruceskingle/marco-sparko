@@ -10,24 +10,17 @@ pub use cache_manager::CacheManager;
 
 
 use std::collections::BTreeMap;
-use std::fs::{File, OpenOptions};
-use std::io::{BufReader, Lines, Write};
-use std::io::BufRead;
-use std::path::Path;
-use std::sync::OnceLock;
-use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use dioxus::core::Element;
 use dirs::home_dir;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use clap::{Parser, Subcommand};
 
 use reedline::{Emacs, ExampleHighlighter, FileBackedHistory, MenuBuilder, ReedlineMenu};
 use reedline::{default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, KeyCode, KeyModifiers, Reedline, ReedlineEvent, Signal};
-use sparko_graphql::types::Date;
-use time::Month;
 use crate::profile::ActiveProfile;
 
 use {
@@ -35,7 +28,6 @@ use {
     reedline::{DefaultValidator, DefaultHinter},
   };
 
-use profile::ProfileManager;
 
 // pub static PROFILE_MANAGER: OnceLock<Arc<ProfileManager>> = OnceLock::new();
 
@@ -159,7 +151,7 @@ impl ModuleRegistrations {
 
         println!("Loaded {} modules", module_registrations.len());
 
-        for (k,v) in &module_registrations {
+        for (k, _v) in &module_registrations {
             println!(" Module {}", k);
         }
         ModuleRegistrations(Arc::new(module_registrations))
@@ -232,17 +224,17 @@ impl MarcoSparkoContext {
        }))
     }
 
-    fn create_profile_manager(active_profile: &Option<String>) -> anyhow::Result<ProfileManager>  {
-        // let selector = if let Some(name) = active_profile {
-        //     profile::ProfileSelector::Named(name.clone())
-        // } else {
-        //     profile::ProfileSelector::Default
-        // };
-        match ProfileManager::new(active_profile) {
-            Ok(p) => Ok(p),
-            Err(_) => Err(anyhow!("FAILED")),
-        }
-    }
+    // fn create_profile_manager(active_profile: &Option<String>) -> anyhow::Result<ProfileManager>  {
+    //     // let selector = if let Some(name) = active_profile {
+    //     //     profile::ProfileSelector::Named(name.clone())
+    //     // } else {
+    //     //     profile::ProfileSelector::Default
+    //     // };
+    //     match ProfileManager::new(active_profile) {
+    //         Ok(p) => Ok(p),
+    //         Err(_) => Err(anyhow!("FAILED")),
+    //     }
+    // }
 
     // fn save_updated_profile(&self) -> anyhow::Result<()> {
     //     match self.profile_manager.save_updated_profile() {
@@ -347,13 +339,13 @@ impl MarcoSparko {
         Ok(path)
     }
 
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()> {
-        match command {
-            "list" => self.list_handler(args).await,
-            "init" => self.init_handler(args).await,
-            _ => Err(anyhow!(format!("Invalid command '{}'", command)))
-        }
-    }
+    // async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()> {
+    //     match command {
+    //         "list" => self.list_handler(args).await,
+    //         "init" => self.init_handler(args).await,
+    //         _ => Err(anyhow!(format!("Invalid command '{}'", command)))
+    //     }
+    // }
 
     fn get_repl_commands(&self) -> Vec<ReplCommand> {
         vec!(
@@ -533,7 +525,7 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
         current_module: None,
     };
 
-    let x = &marco_sparko_manager.context.profile.active_profile.modules;
+    // let x = &marco_sparko_manager.context.profile.active_profile.modules;
 
     //    let active_profile = marco_sparko_manager.marco_sparko.get_active_profile();
 

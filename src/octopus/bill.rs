@@ -119,11 +119,9 @@ impl BillManager {
     }
 
 
-    pub async fn bill_handler(&self, mut args: std::str::SplitWhitespace<'_>, account_number: String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    pub async fn bill_handler(&self, mut args: std::str::SplitWhitespace<'_>, account_number: String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
         // let one_hundred = Decimal::new(100, 0);
         // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-        let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
-        let request_manager = self.request_manager.clone();
         let bills = self.fetch_bills(account_number.clone()).await?;
 
         if let Some(bill_id) = args.next() {
@@ -489,7 +487,6 @@ impl BillInterface {
             println!();
             println!("Detailed Breakdown");
             println!("==================");
-            total_charges = TotalCharges::new();
             
             for transaction in &transactions {
                 transaction.print();
@@ -619,7 +616,7 @@ impl BillTransactionBreakDown {
 
 
 
-            for (agreement_id, (tariff, line_items)) in line_item_map {
+            for (_agreement_id, (tariff, line_items)) in line_item_map {
 
                 let mut amount_map = IndexMap::new();
                 let mut total_amount = Decimal::new(0,0);
@@ -789,7 +786,7 @@ impl BillList {
     let account_number = account_number.clone();
         let mut bills = IndexMap::new();
 
-        let indexer: Indexer<BillInterface> = Box::new(|bill: &BillInterface| bill.as_bill_interface().id_.clone());;
+        let indexer: Indexer<BillInterface> = Box::new(|bill: &BillInterface| bill.as_bill_interface().id_.clone());
 
         cache_manager.read(&hash_key, &mut bills, &indexer)?;
 
@@ -818,7 +815,7 @@ impl BillList {
             }
         }
         else {
-            let (key, (start_cursor, _)) = bills.get_index(bills.len() - 1).unwrap();
+            let (_key, (start_cursor, _)) = bills.get_index(bills.len() - 1).unwrap();
             BillList {
                 account_number,
                 start_cursor: Some(start_cursor.clone()),
@@ -855,14 +852,14 @@ pub struct BillTransactionList {
 impl BillTransactionList {
     async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
-            let indexer: Indexer<TransactionType> = Box::new(|txn: &TransactionType| txn.as_transaction_type().id_.clone());;
+            let indexer: Indexer<TransactionType> = Box::new(|txn: &TransactionType| txn.as_transaction_type().id_.clone());
             let mut transactions = IndexMap::new();
     
             cache_manager.read(&hash_key, &mut transactions, &indexer)?;
     
             let cached_cnt = transactions.len();
     
-            let mut result = if transactions.is_empty() {
+            let result = if transactions.is_empty() {
                 
                 let query = super::graphql::bill::get_statement_transactions::Query::builder()
                         .with_account_number(account_number.clone())
@@ -899,7 +896,7 @@ impl BillTransactionList {
                 }
             }
             else {
-                let (key, (start_cursor, _)) = transactions.get_index(transactions.len() - 1).unwrap();
+                let (_key, (start_cursor, _)) = transactions.get_index(transactions.len() - 1).unwrap();
                 BillTransactionList {
                     account_number,
                     statement_id,
