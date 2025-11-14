@@ -81,6 +81,12 @@ body{
   transition:background 150ms, transform 110ms;
   font-size:0.95rem;
 }
+
+.nav-item.active{
+  
+  color:var(--accent);
+}
+
 .nav-item:hover,.nav-item:focus{
   background:var(--glass);
   color:#e6f6fb;

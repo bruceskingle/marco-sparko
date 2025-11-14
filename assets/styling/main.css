@@ -56,6 +56,13 @@ body {
   border: 1px solid;
 } */
 
+
+button.hamburger {
+  /* color: red;
+  background-color: yellow; */
+  color:var(--muted);
+}
+
 table.display, table.display th, table.display td {
     border-collapse: collapse;
     border: rgb(61, 61, 61) 1px solid;

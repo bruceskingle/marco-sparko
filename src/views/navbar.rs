@@ -40,20 +40,26 @@ pub fn Navbar() -> Element {
         all.push(name.clone());
     }
     
+    // get the current route so we can mark the active nav item
+    let current_route = use_route::<Route>();
+
     rsx! {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
         nav { class: "nav",
             div { class: "nav-left",
 
                         Link {
-                            class: "nav-item", 
+                            class: if matches!(&current_route, Route::Home {}) { "nav-item active" } else { "nav-item" },
                             to: Route::Home {},
                             "Home"
                         }
                         
                         for module_id in (context.profile.active_profile.modules.clone().keys()) {
                             Link {
-                                class: "nav-item", 
+                                class: match &current_route {
+                                    Route::Module { module_id: mid } if mid == module_id => "nav-item active",
+                                    _ => "nav-item",
+                                },
                                 to: Route::Module { module_id: module_id.clone() },
                                 "{module_id}"
                             }
