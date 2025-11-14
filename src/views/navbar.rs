@@ -20,8 +20,6 @@ const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
 /// A navigation bar with left-aligned items and a right-aligned dropdown.
 /// Designed for Dioxus Desktop (but works for web too).
 pub fn Navbar() -> Element {
-    println!("Trace 1");
-
     let mut context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
     let opt_context = &*context_signal.read();
     let context = opt_context.as_ref().unwrap();

@@ -45,22 +45,10 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 #[component]
 // pub fn App(profile_manager: Arc<ProfileManager>) -> Element {
 pub fn App() -> Element {
-
-    println!("Trace A1");
     let mut init_signal = use_signal::<bool>(|| true);
     let init = *init_signal.read();
-    // let context_provider = use_context::<Option<DioxusContext>>();
-    // let context_provider = use_context_provider::<Option<DioxusContext>>(|| None);
-
     let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);
-
-    println!("Trace A2");
     if init {
-    // if context_provider.is_none() {
-    println!("Trace A3");
-        // let context = DioxusContext::new()?;
-        // use_context_provider::<DioxusContext>(move || context);
-
         let marco_sparko_context = MarcoSparkoContext::new()?;
         context_signal.set(Some(marco_sparko_context));
         // let x: Signal<Arc<MarcoSparkoContext>>;
@@ -73,9 +61,6 @@ pub fn App() -> Element {
         
         return rsx!{ "Loading..."};
     }
-    println!("Trace A4");
-
-    // The `rsx!` macro lets us define HTML inside of rust. It expands to an Element with all of our HTML inside.
     rsx! {
         ErrorBoundary {
             handle_error: |errors: ErrorContext| {
@@ -95,18 +80,6 @@ pub fn App() -> Element {
             document::Link { rel: "icon", href: FAVICON }
             document::Link { rel: "stylesheet", href: MAIN_CSS }
 
-            // "app_modules["
-            // for module_id in (app_modules.0.keys()) {
-            //     "-{module_id}"
-            // }
-            // "]"
-            // Home { xid: 17
-            //                     , modules_signal: app_modules
-            //                 }
-
-            // Home {}
-            // The router component renders the route enum we defined above. It will handle synchronization of the URL and render
-            // the layouts and components for the active route.
             Router::<Route> {}
         }
     }
