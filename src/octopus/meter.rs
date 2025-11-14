@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 
+use dioxus::prelude::*;
 use indexmap::IndexMap;
 use sparko_graphql::types::{Date, DateRange, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
@@ -284,7 +285,7 @@ pub struct PropertyList {
 
 impl PropertyList {
     // pub fn print_summary_lines(&self) {
-    //     BillInterface::print_summary_line_headers();
+    //     AbstractBill::print_summary_line_headers();
 
     //     for (_key, bill) in &self.bills {
     //         bill.print_summary_line();
@@ -389,6 +390,63 @@ impl Tariff {
                 }
             },
             Tariff::Gas(tariff) => { tariff.standing_charge_ / 1.05},
+        }
+    }
+
+    pub fn gui_display(&self) -> Element {
+        match self {
+            Tariff::Electricity(electricity_tariff_type) => {
+                match electricity_tariff_type {
+                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => {
+                        rsx!{
+                            div {
+                                h3 { "Electricity Tariff: {tariff.display_name_}" }
+                                table {
+                                    class: "display",
+                                    tr { th { class: "row-header", "Full Name" } td {{tariff.full_name_.as_str()}} }
+                                    tr { th { class: "row-header", "Code" } td {{tariff.tariff_code_.as_str()}} }
+                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.to_string()}} }
+                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.to_string()}} }
+                                    tr { th { class: "row-header", "Pre-VAT Unit Rate" } td {{tariff.pre_vat_unit_rate_.to_string()}} }
+                                    tr { th { class: "row-header", "Unit Rate" } td {{tariff.unit_rate_.to_string()}} }
+                                }
+                            }
+                        }
+                    },
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => {
+                        rsx!{
+                            div {
+                                h3 { "Electricity Tariff: {tariff.display_name_}" }
+                                table {
+                                    class: "display",
+                                    tr { th { class: "row-header", "Full Name" } td {{tariff.full_name_.as_str()}} }
+                                    tr { th { class: "row-header", "Code" } td {{tariff.tariff_code_.as_str()}} }
+                                    tr { th { class: "row-header", "Product Code" } td {{tariff.product_code_.as_str()}} }
+                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.to_string()}} }
+                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.to_string()}} }
+                                }
+                            }
+                        }
+                    },
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => todo!(),
+                }
+            },
+            Tariff::Gas(gas_tariff_type) => {
+                rsx!{
+                    div {
+                        h3 { "Gas Tariff: {gas_tariff_type.full_name_}" }
+                        table {
+                            class: "display",
+                            tr { th { class: "row-header", "Code" } td {{gas_tariff_type.tariff_code_.as_str()}} }
+                            tr { th { class: "row-header", "Standing Charge" } td {{gas_tariff_type.standing_charge_.to_string()}} }
+                            tr { th { class: "row-header", "Pre-VAT Unit Rate" } td {{gas_tariff_type.pre_vat_unit_rate_.to_string()}} }
+                            tr { th { class: "row-header", "Unit Rate" } td {{gas_tariff_type.unit_rate_.to_string()}} }
+                        }
+                    }
+                }
+            },
         }
     }
     
@@ -676,7 +734,7 @@ impl MeterAgreementList {
     //         let response = request_manager.call(&query).await?;
 
             
-    //         if let super::graphql::bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
+    //         if let super::graphql::bill::get_statement_transactions::AbstractBill::StatementType(statement) = response.account_.bill_ {
     //             println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
 
     //             self.start_cursor = statement.transactions_.page_info.start_cursor.clone();
@@ -978,7 +1036,7 @@ impl AgreementLineItems {
             
         //     let bill = response.account_.bill_;
 
-        //     if let bill::get_statement_transactions::BillInterface::StatementType(statement) = bill {
+        //     if let bill::get_statement_transactions::AbstractBill::StatementType(statement) = bill {
 
         //         for edge in statement.transactions_.edges {
         //             let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);

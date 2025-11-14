@@ -15,9 +15,9 @@ use crate::CacheManager;
 
 use super::graphql::{bill, meter};
 use super::meter::{MeterManager, Tariff};
-// use bill::get_bills::BillInterface;
+// use bill::get_bills::AbstractBill;
 // use bill::get_statement_transactions::TransactionType;
-// use super::graphql::BillTypeEnum;
+// use super::graphql::BillType;
 
 use super::{token::OctopusTokenManager};
 
@@ -26,20 +26,20 @@ pub mod manager;
 // const one_hundred: Decimal = Decimal::new(100, 0);
 // const format: time::format_description = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
 
-type BillType = super::graphql::BillTypeEnum;
+type BillType = super::graphql::BillType;
 
 impl BillType {
     fn as_str(&self) -> &'static str {
         match self {
-            super::graphql::BillTypeEnum::Statement => "Statement",
-            super::graphql::BillTypeEnum::Invoice => "Invoice",
-            super::graphql::BillTypeEnum::CreditNote => "CreditNote",
-            super::graphql::BillTypeEnum::PreKraken => "PreKraken",
+            super::graphql::BillType::Statement => "Statement",
+            super::graphql::BillType::Invoice => "Invoice",
+            super::graphql::BillType::CreditNote => "CreditNote",
+            super::graphql::BillType::PreKraken => "PreKraken",
         }
     }
 }
 
-type Bill = bill::get_bills::BillInterface;
+type Bill = bill::get_bills::AbstractBill;
 
 impl Bill {
     // pub async fn bill_gui_handler(&self, account_number: &String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
@@ -52,7 +52,7 @@ impl Bill {
     //     if let Some(bill_id) = args.next() {
     //         for (_id, bill) in &bills.bills {
     //             if bill_id == bill.as_bill_interface().id_ {
-    //                 let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+    //                 let transactions = if let bill::get_bills::AbstractBill::StatementType(_) = bill {
 
 
     //                     let transactions = Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
@@ -75,7 +75,7 @@ impl Bill {
     //         }
     //         else {
     //             let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
-    //             let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
+    //             let transactions = if let bill::get_bills::AbstractBill::StatementType(_) = bill {
     //                 Some(Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
     //             }
     //             else {

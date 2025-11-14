@@ -21,7 +21,7 @@ use token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, graphql::bill::get_bills::BillInterface}};
+use crate::{CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, bill::AbstractBill}};
 
 include!("octopus/graphql.rs");
 // include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -247,7 +247,7 @@ impl Client {
 
 
 
-fn find_bill<'a>(bill_id: &String, bills: &'a BillList) -> Option<&'a BillInterface> {
+fn find_bill<'a>(bill_id: &String, bills: &'a BillList) -> Option<&'a AbstractBill> {
     if let Some((_hash, bill)) = bills.bills.get(bill_id) {
         Some(bill)
     }
@@ -428,7 +428,7 @@ impl Module for Client {
                                 table {
                                     
                                     
-                                    {BillInterface::gui_summary_header()?}
+                                    {AbstractBill::gui_summary_header()?}
                                     for (_id, (_hash, bill)) in &bills.bills {
                                         {bill.gui_summary_line()?}
                                     }

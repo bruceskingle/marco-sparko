@@ -56,10 +56,26 @@ body {
   border: 1px solid;
 } */
 
+table.display, table.display th, table.display td {
+    border-collapse: collapse;
+    border: rgb(61, 61, 61) 1px solid;
+}
+
+
 td {
     padding: 6px 6px 6px 6px;
 }
 
 td.numeric {
     text-align: right;
+}
+
+th {
+    color: var(--header);
+}
+
+th.row-header {
+    text-align: right;
+    padding-right: 20px;
+    font-weight: normal;
 }
