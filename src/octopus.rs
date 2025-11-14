@@ -271,6 +271,10 @@ impl Module for Client {
     fn get_page_list(&self) -> Vec<PageInfo> {
         vec!(
             PageInfo {
+                label: "User", 
+                path: "user",
+            },
+            PageInfo {
                 label: "Account", 
                 path: "account",
             },
@@ -282,6 +286,123 @@ impl Module for Client {
 
     fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a> {
         match page_id {
+            "user" => {
+                Box::new(|| {
+                    let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+                    let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
+                    let account_user = &self.account_manager.viewer.viewer.viewer_;
+                    let dob = if let Some(date) = &account_user.date_of_birth_ {
+                        date.format(&date_format).unwrap()
+                    }
+                    else {
+                        "".to_string()
+                    };
+
+                            // tr {
+                            //    th { class: "row-header","accounts"} td{"{account_user.accounts_}"}
+                            // }
+                    rsx! {
+                        h1 { "Viewer (Current User)"}
+                        table {
+                            class: "display",
+                            tr {
+                                th { class: "row-header", "ID"}, td{"{account_user.id_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Full Name"} td{"{account_user.full_name_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Title"} td{"{account_user.title_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Preferred Name"} td{"{account_user.preferred_name_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Given Name"} td{"{account_user.given_name_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Family Name"} td{"{account_user.family_name_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Pronouns"} td{{account_user.pronouns_.as_deref().unwrap_or("")}}
+                            }
+                            tr {
+                                th { class: "row-header","Email"} td{"{account_user.email_}"}
+                            }
+                            
+                            
+                            tr {
+                               th { class: "row-header","Mobile"} td{"{account_user.mobile_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Landline"} td{"{account_user.landline_}"}
+                            }
+                            tr {
+                               th { class: "row-header","API Key"} td{{account_user.live_secret_key_.as_deref().unwrap_or("")}}
+                            }
+                            tr {
+                               th { class: "row-header","Is Deceased"} td{"{account_user.is_deceased_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Date of Birth"} td{{dob}}
+                            }
+                            tr {
+                               th { class: "row-header","Alternative Phone Numbers"} td{{format!("{:?}", account_user.alternative_phone_numbers_)}}
+                            }
+                            tr {
+                               th { class: "row-header","Has Family Iissues"} td{"{account_user.has_family_issues_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Is in Hardship"} td{"{account_user.is_in_hardship_}"}
+                            }
+                            tr {
+                               th { class: "row-header","Is opted in to Wheel of Fortune"} td{"{account_user.is_opted_in_to_wof_}"}
+                            }
+                        }
+
+                        h2 { "Accounts"}
+
+                        for account in &account_user.accounts_ {
+                            div {
+                                h3 { "Account {account.number_}" }
+                                table {
+                                    class: "display",
+                                    tr {
+                                        th { class: "row-header","Brand"} td{"{account.brand_}"}
+                                    }
+                                    tr {
+                                       th { class: "row-header","Overdue Balance"} td{"{account.overdue_balance_}"}
+                                    }
+                                    tr {
+                                       th { class: "row-header","Billing Name"} td{"{account.billing_name_}"}
+                                    }
+                                    tr {
+                                       th { class: "row-header","Billing Sub Name"} td{{account.billing_sub_name_.as_deref().unwrap_or("")}}
+                                    }
+                                    tr {
+                                       th { class: "row-header","Billing EMail"} td{{account.billing_email_.as_deref().unwrap_or("")}}
+                                    }
+                                    /*
+                                    
+                                    #[serde(rename = "number")]
+            pub number_: String, // T1
+            #[serde(rename = "brand")]
+            pub brand_: String, // T1
+            #[serde(rename = "overdueBalance")]
+            pub overdue_balance_: i32, // T1
+            #[serde(rename = "billingName")]
+            pub billing_name_: String, // T1
+            #[serde(rename = "billingSubName")]
+            pub billing_sub_name_: Option<String>, // T1
+            #[serde(rename = "billingEmail")]
+            pub billing_email_: Option<String>, // T1
+                                     */
+                                }
+                            }
+                        }
+                    }
+                })
+            },
             "account" => {
                 Box::new(|| {
                     let account_user = &self.account_manager.viewer.viewer.viewer_;
@@ -289,14 +410,15 @@ impl Module for Client {
                     let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
                     rsx! {
                         table {
+                            class: "display",
                             tr {
-                                td { "ID"}, td{"{account_user.id_}"},
+                                th { class: "row-header", "ID"}, td{"{account_user.id_}"},
                             },
                             tr {
-                                td { "Full Name"} td{"{account_user.full_name_}"},
+                               th { class: "row-header","Full Name"} td{"{account_user.full_name_}"},
                             },
                             tr {
-                                td { "API Key"} td{"{api_key}"},
+                                th { class: "row-header","API Key"} td{"{api_key}"},
                             },
                             
                         }
@@ -310,11 +432,6 @@ impl Module for Client {
                     // First the list of all bills.
                     let mut bill_list_call_signal = use_signal::<bool>(|| true);
 
-                    // let cm: Arc<CacheManager> = self.cache_manager.clone();
-                    // let rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>> = self.request_manager.clone();
-                    // let acid: String = self.account_id.clone();
-                    // let bill_manager_clone = self.bill_manager.clone();
-
                     let mut bill_list_action = use_action(move |args: (String, Arc<BillManager>)| async move {
                         args.1.fetch_bills(
                             args.0).await
@@ -325,18 +442,6 @@ impl Module for Client {
                         bill_list_call_signal.set(false);
                         bill_list_action.call((self.account_id.clone(), self.bill_manager.clone()));
                     }
-
-                    // let closure = |cm: Arc<CacheManager>, rm: Arc<AuthenticatedRequestManager<OctopusTokenManager>>, acid: String | async move {
-                    // // let bills: anyhow::Result<BillList> = 
-                    // BillList::fetch(&cm, &rm, &acid, true).await
-                    // };
-                    // let mut bill_list_action = use_action(closure);
-
-                    // if *bill_list_call_signal.read() {
-                    //     bill_list_call_signal.set(false);
-                    //     bill_list_action.call(cm, rm, acid);
-                    // }
-
 
                     // Now the action to fetch all transactions for one bill
                     let mut bill_transactions_call_signal = use_signal::<Option<String>>(|| None);
@@ -406,28 +511,10 @@ impl Module for Client {
                                     {"No such bill {bill_id}"  }
                                 }
                             }
-
-                            
-
-
-
-
-
-
-
-
-
-
-                            
                         }
                         else {
-                            let path_str = format!("{:?}", path);
-
                             rsx! {
-                                {"Path is "  }{path_str}
                                 table {
-                                    
-                                    
                                     {AbstractBill::gui_summary_header()?}
                                     for (_id, (_hash, bill)) in &bills.bills {
                                         {bill.gui_summary_line()?}
