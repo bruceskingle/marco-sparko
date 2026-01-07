@@ -58,7 +58,7 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
   node(id: $meterNodeId) {
     ... on ElectricityMeterType @ms_required_by_default {
       importMeter @ms_optional {
-        meterPoint: meterPoint {
+        meterPoint {
           mpan
         }
       }
