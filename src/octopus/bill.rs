@@ -1,4 +1,6 @@
 use dioxus::prelude::*;
+use std::fmt;
+
 use indexmap::IndexMap;
 
 use anyhow::anyhow;
@@ -165,43 +167,28 @@ impl AbstractBill {
 
      pub fn gui_summary_header() -> Element{
         rsx!{
-            tr {
-                style: "background: #666666;",
+            tr { style: "background: #666666;",
 
-                th {
-                    colspan: 5,
-                    ""
-                }
-                th {
-                    "Balance"
-                }
-                th {
-                    colspan: 3,
-                    "Charges"
-                }
-                th {
-                    colspan: 3,
-                    "Credits"
-                }
-                th {
-                    "Balance"
-                }
+                th { colspan: 5, "" }
+                th { "Balance" }
+                th { colspan: 3, "Charges" }
+                th { colspan: 3, "Credits" }
+                th { "Balance" }
             }
-            tr {
-                style: "background: #666666;",
-                th{"Date"}
-                th{"Ref"}
-                th{"From"}
-                th{"To"}
-                th{"Type"}
-                th{"b/f"}
-                th{"Net"}
-                th{"Tax"}
-                th{"Gross"}
-                th{"Net"}
-                th{"Tax"}
-                th{"Gross"}
-                th{"c/f"}
+            tr { style: "background: #666666;",
+                th { "Date" }
+                th { "Ref" }
+                th { "From" }
+                th { "To" }
+                th { "Type" }
+                th { "b/f" }
+                th { "Net" }
+                th { "Tax" }
+                th { "Gross" }
+                th { "Net" }
+                th { "Tax" }
+                th { "Gross" }
+                th { "c/f" }
             }
         }
     }
@@ -225,26 +212,38 @@ impl AbstractBill {
             AbstractBill::PreKrakenBillType(_) => rsx!{},
             AbstractBill::PeriodBasedDocumentType(period_based_document) => {
                 rsx!{
-                    td {  }
-                    td { class: "numeric", "{as_decimal(period_based_document.total_charges_.net_total_, 2)}" }
-                    td { class: "numeric", "{as_decimal(period_based_document.total_charges_.tax_total_, 2)}" }
-                    td { class: "numeric", "{as_decimal(period_based_document.total_charges_.gross_total_, 2)}" }
-                    td { class: "numeric", "{as_decimal(period_based_document.total_credits_.net_total_, 2)}" }
-                    td { class: "numeric", "{as_decimal(period_based_document.total_credits_.tax_total_, 2)}" }
-                    td { class: "numeric", "{as_decimal(period_based_document.total_credits_.gross_total_, 2)}" }
+                    td {}
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_charges_.net_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_charges_.tax_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_charges_.gross_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_credits_.net_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_credits_.tax_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_credits_.gross_total_, 2)}"
+                    }
                     td {}
                 }
             },
             AbstractBill::InvoiceType(invoice) => {
                 rsx!{
-                    td {  }
-                    td {  }
-                    td {  }
-                    td {  }
-                    td {  }
-                    td {  }
+                    td {}
+                    td {}
+                    td {}
+                    td {}
+                    td {}
+                    td {}
                     td { class: "numeric", "{as_decimal(invoice.gross_amount_, 2)}" }
-                    td {  }
+                    td {}
                 }
             },
         };
@@ -253,7 +252,7 @@ impl AbstractBill {
         rsx!{
             tr {
                 td { "{abstract_bill.issued_date_}" }
-                td { 
+                td {
                     div {
                         class: "link",
                         // onclick: |_| {path_signal.set(vec!(String::from("bills"), abstract_bill.id_.clone()))},
@@ -263,11 +262,12 @@ impl AbstractBill {
                             // nav_callback(id);
 
                             let mut path_signal = use_context::<Signal<Vec<String>>>();
-                            let new_path = vec!(String::from("bills"),id.clone());
+                            let new_path = vec![String::from("bills"), id.clone()];
                             path_signal.set(new_path);
                         },
-                        "{abstract_bill.id_}" }
+                        "{abstract_bill.id_}"
                     }
+                }
                 td { "{abstract_bill.from_date_}" }
                 td { "{abstract_bill.to_date_}" }
                 td { "{abstract_bill.bill_type_.as_str()}" }
@@ -290,15 +290,19 @@ impl AbstractBill {
         let totals = if total_charges.units.is_positive() {
             let rate = Decimal::from(total_charges.charge) / total_charges.units;
             rsx!{
-                tr { td {} td { "TOTALS" } td {colspan: 10, ""}}
+                tr {
+                    td {}
+                    td { "TOTALS" }
+                    td { colspan: 10, "" }
+                }
                 tr {
                     td {}
                     td { "Electricity Import" }
-                    td {colspan: 3, ""}
-                    td { class: "numeric", {{as_decimal(total_charges.charge, 2)}} }
-                    td {colspan: 4, ""}
-                    td { class: "numeric", {{format!("{}", total_charges.units)}} }
-                    td { class: "numeric", {{format!("{:>10.3}", rate)}} }
+                    td { colspan: 3, "" }
+                    td { class: "numeric", {{ as_decimal(total_charges.charge, 2) }} }
+                    td { colspan: 4, "" }
+                    td { class: "numeric", {{ format!("{}", total_charges.units) }} }
+                    td { class: "numeric", {{ format!("{:>10.3}", rate) }} }
                 }
             }
         } else {
@@ -306,34 +310,37 @@ impl AbstractBill {
         };
             
         parts.push(rsx!{
-            h1 {"Energy Account Statement"}
-            table {
-                class: "display",
+            h1 { "Energy Account Statement" }
+            table { class: "display",
                 tr {
-                    th{class: "row-header", "Date:"}          td{ "{abstract_bill.issued_date_}" }
+                    th { class: "row-header", "Date:" }
+                    td { "{abstract_bill.issued_date_}" }
                 }
                 tr {
-                    th{class: "row-header", "Ref:"}           td{ "{abstract_bill.id_}" }
+                    th { class: "row-header", "Ref:" }
+                    td { "{abstract_bill.id_}" }
                 }
                 tr {
-                    th{class: "row-header", "From:"}          td{ "{abstract_bill.from_date_}" }
+                    th { class: "row-header", "From:" }
+                    td { "{abstract_bill.from_date_}" }
                 }
                 tr {
-                    th{class: "row-header", "To:"}            td{ "{abstract_bill.to_date_}" }
-                  }
+                    th { class: "row-header", "To:" }
+                    td { "{abstract_bill.to_date_}" }
+                }
             }
 
-            h2 {"Summary of Charges"}
+            h2 { "Summary of Charges" }
 
             table {
                 {BillTransactionBreakDown::gui_summary_headers()}
-                
+
                 {transaction_lines}
                 {totals}
             }
 
             if total_charges.units.is_positive() {
-                h2 {"Detailed Breakdown"}
+                h2 { "Detailed Breakdown" }
                 for transaction in transactions {
                     {transaction.gui_display()}
                 }
@@ -442,7 +449,11 @@ impl TransactionType {
     pub fn gui_break_down_line_headers() -> Element {
         rsx!{
             tr {
-                th { colspan: 2, "From" } th { colspan: 2, "To" } th { "Amount" } th { "Units" } th { "p/unit" }
+                th { colspan: 2, "From" }
+                th { colspan: 2, "To" }
+                th { "Amount" }
+                th { "Units" }
+                th { "p/unit" }
             }
         }
     }
@@ -517,14 +528,18 @@ impl TransactionType {
     pub fn gui_summary_headers() -> Element {
         rsx!{
             tr {
-                th{"id"}
-                th{"Description"}
-                th{"Posted"}
-                th{"Net"}
-                th{"Tax"} 
-                th{"Total"}
-                th{"Balance"}
-                th{"From"} th{"To"} th{"Amount"} th{"Units"} th{"p/unit"}
+                th { "id" }
+                th { "Description" }
+                th { "Posted" }
+                th { "Net" }
+                th { "Tax" }
+                th { "Total" }
+                th { "Balance" }
+                th { "From" }
+                th { "To" }
+                th { "Amount" }
+                th { "Units" }
+                th { "p/unit" }
             }
         }
     }
@@ -534,53 +549,63 @@ impl TransactionType {
 
             let mut parts = Vec::new();
 
-            parts.push(rsx!(td { class:"link", "{txn.id_.as_str()}" })?);
+            parts.push(rsx!(
+                td { class: "link", "{txn.id_.as_str()}" }
+
+            )?);
             parts.push(if let TransactionType::Charge(charge) = &self {
                 if charge.is_export_ {
                     rsx!(
-                        td{{txn.title_.as_str()}" Export"}
+                        td {
+                            {txn.title_.as_str()}
+                            " Export"
+                        }
                     )
                 }
                 else {
                         rsx!(
-                            td{{txn.title_.as_str()}}
+                            td { {txn.title_.as_str()} }
                         )
                 }
             }
             else {
                 rsx!(
-                        td{{txn.title_.as_str()}}
-                    )
+                    td { {txn.title_.as_str()} }
+                )
             }?);
-            parts.push(rsx!(td { "{txn.posted_date_}" })?);
+            parts.push(rsx!(
+                td { "{txn.posted_date_}" }
+            )?);
 
             if let TransactionType::Charge(charge) = &self {
                  parts.push(rsx!(
-                    td{class: "numeric", {as_decimal(txn.amounts_.net_, 2)}}
-                    td{class: "numeric", {as_decimal(txn.amounts_.tax_, 2)}}
-                    td{class: "numeric", {as_decimal(txn.amounts_.gross_, 2)}}
-                    td{class: "numeric", {as_decimal(txn.balance_carried_forward_, 2)}}
+                    td { class: "numeric", {as_decimal(txn.amounts_.net_, 2)} }
+                    td { class: "numeric", {as_decimal(txn.amounts_.tax_, 2)} }
+                    td { class: "numeric", {as_decimal(txn.amounts_.gross_, 2)} }
+                    td { class: "numeric", {as_decimal(txn.balance_carried_forward_, 2)} }
                 )?);
                 if let Some(consumption) = &charge.consumption_ {
                     parts.push(rsx!(
-                        td{{format!("{}", consumption.start_date_)}}
-                        td{{format!("{}", consumption.end_date_)}}
-                        td{class: "numeric", {as_decimal(txn.amounts_.net_, 3)}}
-                        td{class: "numeric", {format!("{:>12.4}", consumption.quantity_)}}
+                        td { {format!("{}", consumption.start_date_)} }
+                        td { {format!("{}", consumption.end_date_)} }
+                        td { class: "numeric", {as_decimal(txn.amounts_.net_, 3)} }
+                        td { class: "numeric", {format!("{:>12.4}", consumption.quantity_)} }
                     )?);
 
                     let rate = if consumption.quantity_.is_non_zero() {
                         parts.push(rsx!(
-                            td{class: "numeric", {format!("{:>12.4}", Decimal::from(txn.amounts_.gross_) / consumption.quantity_)}}
-                       )?);
+                            td { class: "numeric",
+                                {format!("{:>12.4}", Decimal::from(txn.amounts_.gross_) / consumption.quantity_)}
+                            }
+                        )?);
                     } else {
                         parts.push(rsx!(
-                            td{class: "numeric", {format!("{:>12.4}", Decimal::new(0, 0))}}
+                            td { class: "numeric", {format!("{:>12.4}", Decimal::new(0, 0))} }
                         )?);
                     };
 
                     parts.push(rsx!(
-                        td{{rate}}
+                        td { {rate} }
                     )?);
 
                     if charge.is_export_ {
@@ -595,38 +620,38 @@ impl TransactionType {
                 }
                 else {
                     parts.push(rsx!(
-                        td{""}
-                        td{""}
-                        td{""}
-                        td{""}
-                        td{""}
+                        td { "" }
+                        td { "" }
+                        td { "" }
+                        td { "" }
+                        td { "" }
                     )?);
                 }
             }
             else {
                 parts.push(rsx!(
-                    td{{as_decimal(-txn.amounts_.net_, 2)}}
-                    td{{as_decimal(-txn.amounts_.tax_, 2)}}
-                    td{{as_decimal(-txn.amounts_.gross_, 2)}}
-                    td{{as_decimal(txn.balance_carried_forward_, 2)}}
+                    td { {as_decimal(-txn.amounts_.net_, 2)} }
+                    td { {as_decimal(-txn.amounts_.tax_, 2)} }
+                    td { {as_decimal(-txn.amounts_.gross_, 2)} }
+                    td { {as_decimal(txn.balance_carried_forward_, 2)} }
                 )?);
                 parts.push(rsx!(
-                        td{""}
-                        td{""}
-                        td{""}
-                        td{""}
-                        td{""}
-                    )?);
+                    td { "" }
+                    td { "" }
+                    td { "" }
+                    td { "" }
+                    td { "" }
+                )?);
             }
             if let Some(note) = &txn.note_ {
                 let note = note.trim();
                 parts.push(rsx!(
-                        td{{note}}
-                    )?);
+                    td { {note} }
+                )?);
             }
             else {
                 parts.push(rsx!(
-                        td{""}
+                    td { "" }
                 )?);
             }
             rsx! {
@@ -659,7 +684,7 @@ impl BillTransactionBreakDown {
 
     pub fn gui_display(&self) -> Element {
         let one_hundred = Decimal::new(100, 0);
-        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let time_format = time::format_description::parse("           [hour]:[minute]:[second]").unwrap();
 
@@ -725,7 +750,7 @@ impl BillTransactionBreakDown {
                             td { {to_date} }
                             td { {to_time} }
                             td { class: "numeric", {format!("{:.3}", amount)} }
-                            td { class: "numeric", {format!("{:.4}", item.number_of_units_)} }  
+                            td { class: "numeric", {format!("{:.4}", item.number_of_units_)} }
                             td { class: "numeric", {format!("{:.3}", unit_cost)} }
                         }
                     }?);
@@ -746,13 +771,17 @@ impl BillTransactionBreakDown {
                     let standing_charge = Decimal::new((tariff.standing_charge() * (10000 * days) as f64) as i64,6);
                     sub_parts.push(rsx!{
                         tr {
-                            td { colspan: 4, {format!("Standing charge ({} days @ {:.3})", days,tariff.standing_charge())}}
+                            td { colspan: 4,
+                                {format!("Standing charge ({} days @ {:.3})", days, tariff.standing_charge())}
+                            }
                             td { class: "numeric", {format!("{:.3}", standing_charge)} }
                         }
                         tr {
-                            
+
                             td { colspan: 4, "Total" }
-                            td { class: "numeric", {format!("{:.3}", total_amount + standing_charge)} }
+                            td { class: "numeric",
+                                {format!("{:.3}", total_amount + standing_charge)}
+                            }
                         }
                     }?);
             
@@ -786,8 +815,7 @@ impl BillTransactionBreakDown {
                     if !amount_map.is_empty() {
                         sub_parts.push(rsx!{
                             h4 { "Consumption Analysis" }
-                            table {
-                                class: "display",
+                            table { class: "display",
                                 tr {
                                     th { "Unit Rate" }
                                     th { "Cost" }
@@ -797,21 +825,34 @@ impl BillTransactionBreakDown {
                                     th { "% Bill" }
                                 }
 
-                                for (key, (amount, units)) in amount_map {
+                                for (key , (amount , units)) in amount_map {
                                     tr {
                                         td { class: "numeric", "{key}" }
                                         td { class: "numeric", {format!("{:.2}", amount)} }
                                         td { class: "numeric", {format!("{:.2}", units)} }
-                                        td { class: "numeric", {format!("{:.2}", one_hundred * amount / total_amount)} }
-                                        td { class: "numeric", {format!("{:.2}", one_hundred * units / total_units)} }
-                                        td { class: "numeric", {format!("{:.2}", one_hundred * amount / (standing_charge + total_amount))} }
+                                        td { class: "numeric",
+                                            {format!("{:.2}", one_hundred * amount / total_amount)}
+                                        }
+                                        td { class: "numeric",
+                                            {format!("{:.2}", one_hundred * units / total_units)}
+                                        }
+                                        td { class: "numeric",
+                                            {format!("{:.2}", one_hundred * amount / (standing_charge + total_amount))}
+                                        }
                                     }
                                 }
                                 tr {
                                     th { class: "row-header", "Standing Charge" }
-                                    td { class: "numeric", {format!("{:.2}", standing_charge )} }
+                                    td { class: "numeric", {format!("{:.2}", standing_charge)} }
                                     th { colspan: 3, "" }
-                                    td { class: "numeric", {format!("{:.2}", one_hundred * standing_charge / (standing_charge + total_amount))} }
+                                    td { class: "numeric",
+                                        {
+                                            format!(
+                                                "{:.2}",
+                                                one_hundred * standing_charge / (standing_charge + total_amount),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }?);
@@ -956,13 +997,29 @@ impl BillTransactionBreakDown {
 
 // static BILL_INDEXER: Indexer<AbstractBill> = Box::new(|bill: &AbstractBill| bill.as_bill_interface().id_.clone());
 
+
+// #[derive(Debug)]
 pub struct BillList {
     pub account_number: String,
     pub start_cursor: Option<String>,
     pub has_previous_page: bool,
     pub bills: IndexMap<String, (String, AbstractBill)>,
     hash_key: String,
+    // #[debug(skip)]
     indexer: Indexer<AbstractBill>,
+}
+
+
+impl fmt::Debug for BillList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BillList")
+            .field("account_number", &self.account_number)
+            .field("start_cursor", &self.start_cursor)
+            .field("has_previous_page", &self.has_previous_page)
+            .field("bills_count", &self.bills.len())
+            .field("hash_key", &self.hash_key)  
+            .finish()
+    }
 }
 
 impl BillList {
@@ -977,7 +1034,7 @@ impl BillList {
     pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
         let mut has_previous_page = self.has_previous_page;
 
-        //println!("fetch_all bills {} in buffer", self.bills.len());
+        println!("fetch_all bills {} in buffer has_previous_page={}", self.bills.len(), has_previous_page);
 
         while has_previous_page 
         {
@@ -991,7 +1048,15 @@ impl BillList {
 
             let query = builder.build()?;
             // let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
-            let response = request_manager.call(&query).await?;
+            let result = request_manager.call(&query).await;
+
+            let response = match result {
+                Ok(response) => response,
+                Err(e) => {
+                    println!("Error fetching bills: {:?}", e);
+                    return Err(e.into());
+                }
+            };
 
             //println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
 
@@ -1060,6 +1125,7 @@ impl BillList {
         };
 
         if check_for_updates {
+            println!("Checking for bill updates, result = {:?}", result);
             result.fetch_all(request_manager).await?;
         }
 

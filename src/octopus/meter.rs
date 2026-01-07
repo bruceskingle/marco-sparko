@@ -382,14 +382,14 @@ impl Tariff {
         match self {
             Tariff::Electricity(electricity_tariff_type) => {
                 match electricity_tariff_type {
-                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => { tariff.pre_vat_standing_charge_},
-                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => { tariff.pre_vat_standing_charge_},
-                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => { tariff.pre_vat_standing_charge_},
-                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => { tariff.pre_vat_standing_charge_},
-                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
+                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
                 }
             },
-            Tariff::Gas(tariff) => { tariff.standing_charge_ / 1.05},
+            Tariff::Gas(tariff) => { tariff.standing_charge_.unwrap_or(0.0) / 1.05},
         }
     }
 
@@ -405,8 +405,8 @@ impl Tariff {
                                     class: "display",
                                     tr { th { class: "row-header", "Full Name" } td {{tariff.full_name_.as_str()}} }
                                     tr { th { class: "row-header", "Code" } td {{tariff.tariff_code_.as_str()}} }
-                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.to_string()}} }
-                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.to_string()}} }
+                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}} }
+                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.unwrap_or(0.0).to_string()}} }
                                     tr { th { class: "row-header", "Pre-VAT Unit Rate" } td {{tariff.pre_vat_unit_rate_.to_string()}} }
                                     tr { th { class: "row-header", "Unit Rate" } td {{tariff.unit_rate_.to_string()}} }
                                 }
@@ -424,8 +424,8 @@ impl Tariff {
                                     tr { th { class: "row-header", "Full Name" } td {{tariff.full_name_.as_str()}} }
                                     tr { th { class: "row-header", "Code" } td {{tariff.tariff_code_.as_str()}} }
                                     tr { th { class: "row-header", "Product Code" } td {{tariff.product_code_.as_str()}} }
-                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.to_string()}} }
-                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.to_string()}} }
+                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}} }
+                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.unwrap_or(0.0).to_string()}} }
                                 }
                             }
                         }
@@ -440,7 +440,7 @@ impl Tariff {
                         table {
                             class: "display",
                             tr { th { class: "row-header", "Code" } td {{gas_tariff_type.tariff_code_.as_str()}} }
-                            tr { th { class: "row-header", "Standing Charge" } td {{gas_tariff_type.standing_charge_.to_string()}} }
+                            tr { th { class: "row-header", "Standing Charge" } td {{gas_tariff_type.standing_charge_.unwrap_or(0.0).to_string()}} }
                             tr { th { class: "row-header", "Pre-VAT Unit Rate" } td {{gas_tariff_type.pre_vat_unit_rate_.to_string()}} }
                             tr { th { class: "row-header", "Unit Rate" } td {{gas_tariff_type.unit_rate_.to_string()}} }
                         }
@@ -461,8 +461,8 @@ impl Tariff {
                         println!("Code               {}", tariff.tariff_code_);
                         // println!("Product Code       {}", tariff.product_code_);
                         // println!("Description        {}", half_hourly_tariff.description_);
-                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_);
-                        println!("Standing Charge    {:7.4}", tariff.standing_charge_);
+                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_.unwrap_or(0.0));
+                        println!("Standing Charge    {:7.4}", tariff.standing_charge_.unwrap_or(0.0));
                         println!("Pre-VAT Unit Rate  {:7.4}", tariff.pre_vat_unit_rate_);
                         println!("Unit Rate          {:7.4}", tariff.unit_rate_);
                     },
@@ -474,8 +474,8 @@ impl Tariff {
                         println!("Code               {}", tariff.tariff_code_);
                         println!("Product Code       {}", tariff.product_code_);
                         // println!("Description        {}", half_hourly_tariff.description_);
-                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_);
-                        println!("Standing Charge    {:7.4}", tariff.standing_charge_);
+                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_.unwrap_or(0.0));
+                        println!("Standing Charge    {:7.4}", tariff.standing_charge_.unwrap_or(0.0));
                         // println!("Unit Rates");
                         // for rate in &half_hourly_tariff.unit_rates_ {
                         //     println!("{:?} {:?} {:10.4} {:10.4}", rate.valid_from_, rate.valid_to_, rate.pre_vat_value_, rate.value_);
@@ -487,7 +487,7 @@ impl Tariff {
             Tariff::Gas(gas_tariff_type) => {
                 println!("Gas Tariff         {}", gas_tariff_type.full_name_);
                 println!("Code               {}", gas_tariff_type.tariff_code_);
-                println!("Standing Charge    {:7.4}", gas_tariff_type.standing_charge_);
+                println!("Standing Charge    {:7.4}", gas_tariff_type.standing_charge_.unwrap_or(0.0));
                 println!("Pre-VAT Unit Rate  {:7.4}", gas_tariff_type.pre_vat_unit_rate_);
                 println!("Unit Rate          {:7.4}", gas_tariff_type.unit_rate_);
             },

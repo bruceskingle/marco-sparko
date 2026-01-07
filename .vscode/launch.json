@@ -109,6 +109,25 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug cli",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin",
+                    "cli"
+                ],
+                "filter": {
+                    "name": "cli",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug executable 'marco-sparko'",
             "cargo": {
                 "args": [

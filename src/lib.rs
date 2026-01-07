@@ -762,7 +762,7 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
                                 },
                                 _ => {
 
-                                    let _result = if let Some(module_id) = &self.current_module {
+                                    let result = if let Some(module_id) = &self.current_module {
                                         let module: &mut Box<dyn Module> = self.modules.get_mut(module_id).unwrap();
                                         module.exec_repl_command(&command, arg_iterator).await
                                     }
@@ -777,9 +777,9 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
                                             _ => Err(anyhow!(format!("Invalid command '{}'", command)))
                                         }
                                     };
-                                    // if let Err(error) = result {
-                                    //     println!("{}", error);
-                                    // }
+                                    if let Err(error) = result {
+                                        println!("\n\n\nERROR============================================================\n{}", error);
+                                    }
                                 }
                             }
 

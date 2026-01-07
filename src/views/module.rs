@@ -7,6 +7,16 @@ use crate::{MarcoSparko, MarcoSparkoContext, ModuleRegistrations, PageInfo};
 
 const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
 
+// Simple HTML escaper
+fn escape_html(input: &str) -> String {
+    input
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#x27;")
+}
+
 
 // #[component]
 // pub fn SidebarMenu() -> Element {
@@ -225,6 +235,20 @@ pub fn Module(module_id: String) -> Element {
     //         path_signal.set(x);
     // };
 
+    let body = match content() {
+        Ok(element) => rsx!(div { class: "filler", {element}})?,
+        // element,
+        Err(error) => {
+            let escaped_error = escape_html(&error.to_string());
+
+            // let html = format!("Failed to load page content: <pre>{}</pre>", escaped_error);
+            let html = format!("<div class=\"error\">Failed to load page content: <pre>{}</pre></div>", escaped_error);
+            rsx! {
+                div { dangerous_inner_html: "{html}" }
+            }?
+        },
+    };
+
     rsx! {
         document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
         div { class: "layout-root",
@@ -259,7 +283,8 @@ pub fn Module(module_id: String) -> Element {
                     if !*sidebar_open.read() {button { class: "hamburger", onclick: toggle_sidebar, ">>" }} 
                     // button { class: "hamburger", onclick: toggle_sidebar, "☰" }
                     // div { class: "filler", "2Content goes here..." }
-                    div { class: "filler", {content()} }
+                    // div { class: "filler", {body}}
+                    {body}
                 }
             }
         }

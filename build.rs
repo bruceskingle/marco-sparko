@@ -44,6 +44,7 @@ mod create_info {{
         .with_query("graphql/octopus/account.graphql", "account")
         .with_query("graphql/octopus/meter.graphql", "meter")
         .with_query("graphql/octopus/bill.graphql", "bill")
+        // .with_query("force_error", "force_error")
         // .with_print(true)
         .build()?;
 

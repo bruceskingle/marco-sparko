@@ -1,39 +1,24 @@
 
-
-pub mod token;
-pub mod decimal;
-mod account;
-mod bill;
-mod meter;
-
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use account::AccountManager;
+use super::account::AccountManager;
 use async_trait::async_trait;
 
 use dioxus::prelude::*;
 
-use bill::BillManager;
-use meter::MeterManager;
+use super::bill::BillManager;
+use super::meter::MeterManager;
 use serde::{Deserialize, Serialize};
 
 use time_tz::{Tz, timezones};
-use token::{OctopusTokenManager, TokenManagerBuilder};
+use super::token::{OctopusTokenManager, TokenManagerBuilder};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
 use crate::{CommandProvider, MarcoSparkoContext, Module, ModuleBuilder, ModuleConstructor, PageInfo, ReplCommand, octopus::{bill::BillList, bill::AbstractBill}};
 
-// include!("octopus/graphql.rs");
-include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
-include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 
-#[cfg(graphql_generation_error)]
-compile_error!("graphql built with Errors");
-
-// #[cfg(not(graphql_generation_error))]
-// compile_error!("NOT graphql built with Errors");
 
 pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
 
@@ -77,7 +62,6 @@ pub struct Client{
     billing_timezone: &'static time_tz::Tz,
 }
 
-const MODULE_ID: &str = "octopus";
 
 #[async_trait(?Send)]
 impl CommandProvider for Client {
@@ -156,7 +140,7 @@ impl Client {
         request_manager: Arc<RequestManager>, verbose: bool) -> anyhow::Result<Client> {   
 
         let billing_timezone = Self::get_billing_timezone(&profile);
-        let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
+        let cache_manager = context.create_cache_manager(MODULE_ID, verbose)?;
         let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
         let meter_manager = Arc::new(MeterManager::new(&cache_manager, &request_manager, &billing_timezone));
         let bill_manager = Arc::new(BillManager::new(&cache_manager, &request_manager, &meter_manager));
@@ -296,7 +280,7 @@ impl Module for Client {
         match page_id {
             "user" => {
                 Box::new(|| {
-                    // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+                    let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
                     let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
                     let account_user = &self.account_manager.viewer.viewer.viewer_;
                     let dob = if let Some(date) = &account_user.date_of_birth_ {
@@ -661,7 +645,7 @@ impl ClientBuilder {
             "https://api.octopus.energy/v1/graphql/".to_string()
         };
 
-        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose, create_info::USER_AGENT)?);
+        let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose, super::create_info::USER_AGENT)?);
 
         let token_manager = self.token_manager_builder
             .with_request_manager(request_manager.clone())
