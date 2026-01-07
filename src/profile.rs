@@ -1,7 +1,6 @@
 use std::collections::HashSet;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap};
 use std::fs;
-use std::path::Path;
 use std::sync::Mutex;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -217,7 +216,7 @@ impl ProfileManager {
         }
 
         // we know its not empty
-        let first_profile_name = map.keys().into_iter().next().unwrap();
+        // let first_profile_name = map.keys().into_iter().next().unwrap();
         // let default = if let Some(name) = opt_default_name { name.clone() } else { first_profile_name.clone()};
         // let last_used = if let Some(name) = opt_last_name { name.clone() } else { first_profile_name.clone()};
 

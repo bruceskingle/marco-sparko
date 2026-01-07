@@ -41,20 +41,14 @@ pub struct MeterManager {
 
 //   Rita the
 impl MeterManager {
-    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, billing_timezone: &time_tz::Tz)  -> Self {
-        // let properties = PropertyList::new(cache_manager, request_manager, account_number.clone()).await?;
-        // let agreements = MeterAgreementList::new(cache_manager, request_manager, account_number.clone(), &properties.meter_node_ids).await?;
-
-        Self {
-            // account_number,
+    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> Self {
+       Self {
             cache_manager: cache_manager.clone(),
             request_manager: request_manager.clone(),
-            // properties: HashMap::new(),
-            // agreements: IndexMap::new(),
         }
     }
 
-    fn get_date_range(args: std::str::SplitWhitespace<'_>) -> anyhow::Result<DateRange> {
+    fn get_date_range(_args: std::str::SplitWhitespace<'_>) -> anyhow::Result<DateRange> {
         // default - current month
         Ok(DateRange::get_current_month_inclusive()?)
     }
@@ -81,14 +75,8 @@ impl MeterManager {
         Ok(())
     }
 
-    pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
         let properties = self.get_properties(account_number).await?;
-        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
-        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
-        // }
-        
-        // let properties =self.properties.get(account_number).unwrap();
-
         for property in &properties.properties.account_.properties_ {
             for network in &property.smart_device_networks_ {
                 for device in &network.smart_devices_ {
@@ -169,7 +157,7 @@ impl MeterManager {
 
         async fn get_line_items2(
             cache_manager: &CacheManager, request_manager: &RequestManager,
-            account_number: &String, meter_type: &MeterType, agreement_id: &String, start_date: &Date,
+            account_number: &String, meter_type: &MeterType, agreement_id: &String,
             start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::electricity_agreement_line_items::LineItemType>> {
                 let mut in_scope_items = Vec::new();
                 let mut bucket_date = start_date_time.to_date();
@@ -207,7 +195,7 @@ impl MeterManager {
             // let agreement_id = agreement_id.to_string(); // Ugh!
 
             // tariff.print();
-            let in_scope_items = get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_type, &agreement_id, start_date, &start_date_time, &end_date_time, billing_timezone).await?;
+            let in_scope_items = get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_type, &agreement_id, &start_date_time, &end_date_time, billing_timezone).await?;
 
             if in_scope_items.is_empty() {
                 //println!("Got no in scope items");
@@ -280,55 +268,9 @@ impl MeterManager {
 pub struct PropertyList {
     pub properties: meter::account_properties_meters::Response,
     pub meter_node_ids: Vec<String>,
-    hash_key: String,
 }
 
 impl PropertyList {
-    // pub fn print_summary_lines(&self) {
-    //     AbstractBill::print_summary_line_headers();
-
-    //     for (_key, bill) in &self.bills {
-    //         bill.print_summary_line();
-    //     }
-    // }
-
-    // pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
-    //     let mut has_previous_page = self.has_previous_page;
-
-    //     println!("fetch_all bills {} in buffer", self.bills.len());
-
-    //     while has_previous_page 
-    //     {
-    //         let mut builder = super::graphql::bill::get_bills::Variables::builder()
-    //         .with_account_number(self.account_number.clone())
-    //         .with_last(20);
-
-    //         if let Some(start_cursor) = &self.start_cursor {
-    //             builder = builder.with_before(start_cursor.clone())
-    //         }
-
-            
-    //         let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
-    //         let response = request_manager.call(&query).await?;
-
-    //         println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
-
-    //         if let Some(start_cursor) = response.account_.bills_.page_info.start_cursor {
-    //             self.start_cursor = Some(start_cursor.clone());
-    //             has_previous_page = response.account_.bills_.page_info.has_previous_page.clone();
-    //         }
-    //         else {
-    //             has_previous_page = false;
-    //         }
-
-    //         for edge in response.account_.bills_.edges.into_iter().rev() {
-    //             let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-    //             self.bills.push((sort_key, edge.node));
-    //         }
-    //     }
-    //     self.has_previous_page = has_previous_page;
-    //     Ok(())
-    // }
     
    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String) -> anyhow::Result<Self> {
     let hash_key = format!("{}#Properties", account_number);
@@ -367,7 +309,6 @@ impl PropertyList {
         Ok(PropertyList {
             properties,
             meter_node_ids,
-            hash_key,
         })
     }
 }
@@ -401,48 +342,94 @@ impl Tariff {
                         rsx!{
                             div {
                                 h3 { "Electricity Tariff: {tariff.display_name_}" }
-                                table {
-                                    class: "display",
-                                    tr { th { class: "row-header", "Full Name" } td {{tariff.full_name_.as_str()}} }
-                                    tr { th { class: "row-header", "Code" } td {{tariff.tariff_code_.as_str()}} }
-                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}} }
-                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.unwrap_or(0.0).to_string()}} }
-                                    tr { th { class: "row-header", "Pre-VAT Unit Rate" } td {{tariff.pre_vat_unit_rate_.to_string()}} }
-                                    tr { th { class: "row-header", "Unit Rate" } td {{tariff.unit_rate_.to_string()}} }
+                                table { class: "display",
+                                    tr {
+                                        th { class: "row-header", "Full Name" }
+                                        td { {tariff.full_name_.as_str()} }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Code" }
+                                        td { {tariff.tariff_code_.as_str()} }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Pre-VAT Standing Charge" }
+                                        td {
+                                            {tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}
+                                        }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Standing Charge" }
+                                        td { {tariff.standing_charge_.unwrap_or(0.0).to_string()} }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Pre-VAT Unit Rate" }
+                                        td { {tariff.pre_vat_unit_rate_.to_string()} }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Unit Rate" }
+                                        td { {tariff.unit_rate_.to_string()} }
+                                    }
                                 }
                             }
                         }
                     },
-                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => todo!(),
-                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(_tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(_tariff) => todo!(),
                     meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => {
                         rsx!{
                             div {
                                 h3 { "Electricity Tariff: {tariff.display_name_}" }
-                                table {
-                                    class: "display",
-                                    tr { th { class: "row-header", "Full Name" } td {{tariff.full_name_.as_str()}} }
-                                    tr { th { class: "row-header", "Code" } td {{tariff.tariff_code_.as_str()}} }
-                                    tr { th { class: "row-header", "Product Code" } td {{tariff.product_code_.as_str()}} }
-                                    tr { th { class: "row-header", "Pre-VAT Standing Charge" } td {{tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}} }
-                                    tr { th { class: "row-header", "Standing Charge" } td {{tariff.standing_charge_.unwrap_or(0.0).to_string()}} }
+                                table { class: "display",
+                                    tr {
+                                        th { class: "row-header", "Full Name" }
+                                        td { {tariff.full_name_.as_str()} }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Code" }
+                                        td { {tariff.tariff_code_.as_str()} }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Product Code" }
+                                        td { {tariff.product_code_.as_str()} }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Pre-VAT Standing Charge" }
+                                        td {
+                                            {tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}
+                                        }
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Standing Charge" }
+                                        td { {tariff.standing_charge_.unwrap_or(0.0).to_string()} }
+                                    }
                                 }
                             }
                         }
                     },
-                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(_tariff) => todo!(),
                 }
             },
             Tariff::Gas(gas_tariff_type) => {
                 rsx!{
                     div {
                         h3 { "Gas Tariff: {gas_tariff_type.full_name_}" }
-                        table {
-                            class: "display",
-                            tr { th { class: "row-header", "Code" } td {{gas_tariff_type.tariff_code_.as_str()}} }
-                            tr { th { class: "row-header", "Standing Charge" } td {{gas_tariff_type.standing_charge_.unwrap_or(0.0).to_string()}} }
-                            tr { th { class: "row-header", "Pre-VAT Unit Rate" } td {{gas_tariff_type.pre_vat_unit_rate_.to_string()}} }
-                            tr { th { class: "row-header", "Unit Rate" } td {{gas_tariff_type.unit_rate_.to_string()}} }
+                        table { class: "display",
+                            tr {
+                                th { class: "row-header", "Code" }
+                                td { {gas_tariff_type.tariff_code_.as_str()} }
+                            }
+                            tr {
+                                th { class: "row-header", "Standing Charge" }
+                                td { {gas_tariff_type.standing_charge_.unwrap_or(0.0).to_string()} }
+                            }
+                            tr {
+                                th { class: "row-header", "Pre-VAT Unit Rate" }
+                                td { {gas_tariff_type.pre_vat_unit_rate_.to_string()} }
+                            }
+                            tr {
+                                th { class: "row-header", "Unit Rate" }
+                                td { {gas_tariff_type.unit_rate_.to_string()} }
+                            }
                         }
                     }
                 }
@@ -466,8 +453,8 @@ impl Tariff {
                         println!("Pre-VAT Unit Rate  {:7.4}", tariff.pre_vat_unit_rate_);
                         println!("Unit Rate          {:7.4}", tariff.unit_rate_);
                     },
-                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => todo!(),
-                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(_tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(_tariff) => todo!(),
                     meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => {
                         println!("Electricity Tariff {}", tariff.display_name_);
                         println!("Full Name          {}", tariff.full_name_);
@@ -481,7 +468,7 @@ impl Tariff {
                         //     println!("{:?} {:?} {:10.4} {:10.4}", rate.valid_from_, rate.valid_to_, rate.pre_vat_value_, rate.value_);
                         // }
                     },
-                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(_tariff) => todo!(),
                 }
             },
             Tariff::Gas(gas_tariff_type) => {
@@ -556,7 +543,7 @@ impl MeterAgreementList {
             })
         }
 
-    fn get_in_scope(mut self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<(String, Tariff)> {
+    fn get_in_scope(self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<(String, Tariff)> {
         let mut in_scope_agreements = Vec::new();
 
         match meter_type {
@@ -760,7 +747,7 @@ impl meter::electricity_agreement_line_items::AgreementInterface {
                 electricity_agreement_type.line_items_.edges
                 //.into_iter().collect()
             },
-            meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) => unreachable!(),
+            meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_abstract_agreement_interface) => unreachable!(),
         }
     }
 
@@ -771,7 +758,7 @@ impl meter::electricity_agreement_line_items::AgreementInterface {
                 &electricity_agreement_type.line_items_.page_info
                 //.into_iter().collect()
             },
-            meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) => unreachable!(),
+            meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_abstract_agreement_interface) => unreachable!(),
         }
     }
 }
@@ -779,7 +766,7 @@ impl meter::electricity_agreement_line_items::AgreementInterface {
 impl meter::gas_agreement_line_items::AgreementInterface {
     pub fn get_line_items(self) -> Vec<EdgeOf<meter::gas_agreement_line_items::LineItemType>> {
         match self {
-            meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => unreachable!(),
+            meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(_electricity_agreement_type) => unreachable!(),
             meter::gas_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) => {
                 abstract_agreement_interface.line_items_.edges
             },
@@ -789,7 +776,7 @@ impl meter::gas_agreement_line_items::AgreementInterface {
 
     pub fn get_page_info(&self) -> &PageInfo {
         match self {
-            meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => unreachable!(),
+            meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(_electricity_agreement_type) => unreachable!(),
             meter::gas_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) =>{
                 &abstract_agreement_interface.line_items_.page_info
             },

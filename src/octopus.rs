@@ -93,7 +93,7 @@ impl CommandProvider for Client {
                 Ok(self.bill_manager.bill_handler(args, account_id, self.billing_timezone).await?)
             },
             "demand" => {
-                Ok(self.meter_manager.demand_handler(args, &account_id, self.billing_timezone).await?)
+                Ok(self.meter_manager.demand_handler(args, &account_id).await?)
             },
             "consumption" => {
                 Ok(self.meter_manager.consumption_handler(args, &account_id, self.billing_timezone).await?)
@@ -158,7 +158,7 @@ impl Client {
         let billing_timezone = Self::get_billing_timezone(&profile);
         let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
         let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
-        let meter_manager = Arc::new(MeterManager::new(&cache_manager, &request_manager, &billing_timezone));
+        let meter_manager = Arc::new(MeterManager::new(&cache_manager, &request_manager));
         let bill_manager = Arc::new(BillManager::new(&cache_manager, &request_manager, &meter_manager));
 
         Ok(Client {
