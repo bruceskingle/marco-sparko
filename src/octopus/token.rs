@@ -161,6 +161,13 @@ impl OctopusTokenManager {
             None
         };
 
+        if let Some(token) = &token {
+            println!("Loaded token from cache: {:?}", token.token);
+        }
+        else {
+            println!("No cached token found");
+        }
+
         OctopusTokenManager {
             context,
             request_manager,
@@ -202,6 +209,9 @@ impl TokenManager for OctopusTokenManager {
         }
         else {
             let input = self.authenticator.to_obtain_json_web_token_input()?;
+
+            println!("Obtaining new Octopus token...{:?}", input);
+
             let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
             let response = self.request_manager.call(&mutation, None).await?;
     
@@ -256,7 +266,13 @@ impl TokenManagerBuilder{
         self
     }
 
+    fn trim_in_place(s: &mut String) {
+        s.truncate(s.trim_end().len());
+    }
+
     pub fn build(mut self, init: bool) -> anyhow::Result<OctopusTokenManager> {
+
+        let context = self.context.ok_or(anyhow!("Context must be provided"))?;
 
         if let None = self.authenticator {
             if init {
@@ -268,12 +284,25 @@ impl TokenManagerBuilder{
                 let mut email = String::new();
                 
                 std::io::stdin().read_line(&mut email)?;
+                Self::trim_in_place(&mut email);
 
-                let password = rpassword::prompt_password("password: ").expect("Failed to read password");
+                let password = 
+                if context.args.debug {
+                    print!("password (visible): ");
+                    std::io::stdout().flush()?;
+                    let mut password = String::new();
+                    std::io::stdin().read_line(&mut password)?;
+                    Self::trim_in_place(&mut password);
+                    password
+                }
+                else {
+                    rpassword::prompt_password("password: ").expect("Failed to read password")
+                };
                 // let mut password = String::new();
                 // std::io::stdin().read_line(&mut password)?;
 
-                self = self.with_password(email.trim_end().to_string(), password);
+                // self = self.with_password(email.trim_end().to_string(), password);
+                self.authenticator = Some(OctopusAuthenticator::from_password(email, password));
             }
             else {
                 return Err(anyhow!("No Octopus authentication credentials given, did you mean to specify --init?"))
@@ -281,7 +310,7 @@ impl TokenManagerBuilder{
         }
 
         Ok(OctopusTokenManager::new(
-            self.context.ok_or(anyhow!("Context must be provided"))?, 
+            context,
             self.request_manager.ok_or(anyhow!("RequestManager must be provided"))?, 
             self.authenticator.ok_or(anyhow!("Credentials must be specified"))?
         ))

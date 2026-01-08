@@ -17,7 +17,7 @@ use dioxus::core::Element;
 use dirs::home_dir;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use clap::{Parser, Subcommand};
+use clap::{Parser};
 
 use reedline::{Emacs, ExampleHighlighter, FileBackedHistory, MenuBuilder, ReedlineMenu};
 use reedline::{default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, KeyCode, KeyModifiers, Reedline, ReedlineEvent, Signal};
@@ -52,6 +52,8 @@ pub struct Args {
     #[arg(short, long)]
     init: bool,
     #[arg(short, long)]
+    debug: bool,
+    #[arg(short, long)]
     verbose: bool,
 
     #[clap(flatten)]
@@ -61,13 +63,13 @@ pub struct Args {
     // command: Option<Commands>,
 }
 
-#[derive(Subcommand, Debug, Clone)]
-enum Commands {
-    Summary,
-    Bill,
-    /// does testing things
-    Test,
-}
+// #[derive(Subcommand, Debug, Clone)]
+// enum Commands {
+//     Summary,
+//     Bill,
+//     /// does testing things
+//     Test,
+// }
 
 #[derive(Clone)]
 pub struct PageInfo {
@@ -78,23 +80,9 @@ pub struct PageInfo {
 //  let x: fn(ModuleProps) -> std::result::Result<VNode, RenderError> = Module;
 #[async_trait]
 pub trait Module: CommandProvider {
-    // fn get_page(&self, page_id: &String) -> Component;
-    // fn as_component<'a>(&'a self) -> Box<dyn Fn() -> dioxus::core::Element + 'a>;
-    // fn as_component<'a>(&'a self) -> Element;
     fn get_page_list(&self) -> Vec<PageInfo>;
-    // fn get_page(&self, page_id: &str) -> Element;
     fn module_id(&self) -> &'static str;
     fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a>;
-    // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<dyn Fn() -> dioxus::core::Element + 'a>>;
-    // fn get_pages<'a>(&'a self) -> HashMap<&str, Box<impl FnOnce() -> dioxus::core::Element + 'a>>;
-    // fn get_component(&self) -> Component;
-
-
-
-
-    // async fn summary(&mut self) -> anyhow::Result<()>;
-    // async fn bill(&mut self) -> anyhow::Result<()>;
-    // async fn test(&mut self) -> anyhow::Result<()>;
 }
 
 #[async_trait(?Send)]
@@ -145,6 +133,14 @@ impl PartialEq for ModuleRegistrations {
 
 impl ModuleRegistrations {
     fn new() -> ModuleRegistrations {
+
+
+        let dir = std::env::current_dir().unwrap();
+        println!("Current directory is {}", dir.display());
+
+        assert!(cfg!(debug_assertions));
+
+
         let mut module_registrations = HashMap::new();
 
         Self::load_module(&mut module_registrations, octopus::Client::registration());
@@ -162,33 +158,6 @@ impl ModuleRegistrations {
         module_registrations.insert(registration.0, registration.1);
     }
 }
-
-// #[derive(Clone, PartialEq)]
-// pub struct DioxusContext {
-//     marco_sparko_context: Arc<MarcoSparkoContext>,
-//     module_registrations:   ModuleRegistrations,
-// }
-
-// impl Default for DioxusContext {
-//     fn default() -> Self {
-//         let marco_sparko_context = MarcoSparkoContext::new().unwrap();
-//         Self { 
-//             marco_sparko_context,
-//             module_registrations: Default::default() }
-//     }
-// }
-
-// impl DioxusContext {
-//     pub fn new() -> anyhow::Result<DioxusContext> {
-//         let marco_sparko_context = MarcoSparkoContext::new()?;
-//         let module_registrations = ModuleRegistrations::new();
-
-//         Ok(DioxusContext {
-//             marco_sparko_context,
-//             module_registrations,
-//         })
-//     }
-// }
 
 /*
  * This context is shared with all modules and needs to be separate from MarcoSparko because that struct holds the list of modules.

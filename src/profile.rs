@@ -127,21 +127,29 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
 {
     if let Ok(file)= fs::File::open(&MarcoSparko::get_file_path()?) {
         let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
+
+        println!("existing profile_file <{:?}>", &profile_file);
+
         let mut found = false;
-        let mut profiles = Vec::new();
+        // let mut profiles = Vec::new();
 
         for profile in profile_file.iter_mut() {
             if &profile.name == profile_name {
+                println!("existing profile <{:?}>", &profile);
                 profile.modules.insert(module_id.to_string(), serde_json::to_value(module_profile)?);
                 found = true;
+
+                println!("updated profile <{:?}>", &profile);
             }
-            profiles.push(profile.name.clone());
+            // profiles.push(profile);
         }
         if ! found{
             return Err(anyhow!("No such profile \"{}\"", profile_name)); 
         };
 
-            serde_json::to_writer_pretty(fs::File::create(&MarcoSparko::get_file_path()?)?, &profiles)?;
+         println!("saving profiles <{:?}>", &profile_file);
+
+            serde_json::to_writer_pretty(fs::File::create(&MarcoSparko::get_file_path()?)?, &profile_file)?;
 
         Ok(())
     }

@@ -235,7 +235,7 @@ impl Client {
                         ..old_profile.clone()
                     };
 
-                    //println!("UPDATE profile <{:?}>", &new_profile);
+                    println!("UPDATE profile <{:?}>", &new_profile);
                     crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
                     // self.context.update_profile(MODULE_ID, new_profile)?;
                 }
@@ -244,7 +244,7 @@ impl Client {
                 let mut new_profile  = Profile::new();
                 new_profile.api_key = Some(new_api_key.clone());
 
-                //println!("CREATE profile <{:?}>", &new_profile);
+                println!("CREATE profile <{:?}>", &new_profile);
                 crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
                 // self.context.update_profile(MODULE_ID, new_profile)?;
             }
@@ -668,31 +668,31 @@ impl ClientBuilder {
             .with_context(self.context.clone())
             .build(init)?;
 
-        if init {
-            let x = token_manager.get_authenticator(true).await;
-            // println!("HERE {:?}", x);
-            match x {
-                Ok(_token) => {
-                    println!("Logged in OK");
-                },
-                Err(error) => {
-                    if let sparko_graphql::Error::GraphQLError(graphql_errors) = &error {
-                        let graphql_errors = &**graphql_errors;
-                        for graphql_error in graphql_errors {
-                            if let Some(error_code) = graphql_error.extensions.get("errorCode") {
-                                if error_code == "KT-CT-1138" {
-                                    println!("Username or password is incorrect.");
-                                    return Err(anyhow!(error));
-                                }
-                            }
-                        }
+        // if init {
+        //     let x = token_manager.get_authenticator(true).await;
+        //     // println!("HERE {:?}", x);
+        //     match x {
+        //         Ok(_token) => {
+        //             println!("Logged in OK");
+        //         },
+        //         Err(error) => {
+        //             if let sparko_graphql::Error::GraphQLError(graphql_errors) = &error {
+        //                 let graphql_errors = &**graphql_errors;
+        //                 for graphql_error in graphql_errors {
+        //                     if let Some(error_code) = graphql_error.extensions.get("errorCode") {
+        //                         if error_code == "KT-CT-1138" {
+        //                             println!("Username or password is incorrect.");
+        //                             return Err(anyhow!(error));
+        //                         }
+        //                     }
+        //                 }
                  
-                    }
-                    println!("Login failed {}", error);
-                    return Err(anyhow!(error));
-                },
-            }
-        }
+        //             }
+        //             println!("Login failed {}", error);
+        //             return Err(anyhow!(error));
+        //         },
+        //     }
+        // }
 
         let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(request_manager, token_manager)?);
        
