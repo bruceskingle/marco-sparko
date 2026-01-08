@@ -516,13 +516,13 @@ impl Module for Client {
                                 }
                                 else {
                                     rsx! {
-                                        {"Loading transactions for bill {bill_id}..."}
+                                        {format!("Loading transactions for bill {}...", bill_id)}
                                     }
                                 }
                             }
                             else {
                                 rsx! {
-                                    {"No such bill {bill_id}"}
+                                    {format!("No such bill {bill_id}")}
                                 }
                             }
                         }
