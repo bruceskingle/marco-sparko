@@ -43,27 +43,31 @@ pub fn Navbar() -> Element {
     // get the current route so we can mark the active nav item
     let current_route = use_route::<Route>();
 
+    println!("Current route in Navbar: {:?}", current_route);
+
     rsx! {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
         nav { class: "nav",
             div { class: "nav-left",
 
-                        Link {
-                            class: if matches!(&current_route, Route::Home {}) { "nav-item active" } else { "nav-item" },
-                            to: Route::Home {},
-                            "Home"
-                        }
-                        
-                        for module_id in (context.profile.active_profile.modules.clone().keys()) {
-                            Link {
-                                class: match &current_route {
-                                    Route::Module { module_id: mid } if mid == module_id => "nav-item active",
-                                    _ => "nav-item",
-                                },
-                                to: Route::Module { module_id: module_id.clone() },
-                                "{module_id}"
-                            }
-                        }
+                Link {
+                    class: if matches!(&current_route, Route::Home {}) { "nav-item active" } else { "nav-item" },
+                    to: Route::Home {},
+                    "Home"
+                }
+
+                for module_id in (context.profile.active_profile.modules.clone().keys()) {
+                    Link {
+                        class: match &current_route {
+                            Route::Module { module_id: mid } if mid == module_id => "nav-item active",
+                            _ => "nav-item",
+                        },
+                        to: Route::Module {
+                            module_id: module_id.clone(),
+                        },
+                        "{module_id}"
+                    }
+                }
             }
 
             div { class: "spacer" }
@@ -75,11 +79,13 @@ pub fn Navbar() -> Element {
                         onclick: toggle_menu,
                         // ARIA roles for accessibility
                         // aria_has_popup: "true",
-                        aria_expanded: "{menu_open}" ,
-                        
+                        aria_expanded: "{menu_open}",
+
                         "Profile {context.profile.active_profile.name} "
                         svg {
-                            width: "14", height: "14", view_box: "0 0 24 24",
+                            width: "14",
+                            height: "14",
+                            view_box: "0 0 24 24",
                             path {
                                 d: "M6 9l6 6 6-6",
                                 stroke: "currentColor",
@@ -98,24 +104,25 @@ pub fn Navbar() -> Element {
                         }
                     }
 
-                    
-
                     // Dropdown menu
-                    div {
-                        class: if *menu_open.read() { "menu open" } else { "menu" },
+                    div { class: if *menu_open.read() { "menu open" } else { "menu" },
 
                         for name in all {
-                            div { class: "menu-item", onclick:  move |_| {
-                                
-                                menu_open.set(false);
-                                let new_context = Arc::new(MarcoSparkoContext {
+                            div {
+                                class: "menu-item",
+                                onclick: move |_| {
+
+                                    menu_open.set(false);
+                                    let new_context = Arc::new(MarcoSparkoContext {
                                         args: crate::Args::parse(),
                                         profile: crate::profile::set_active_profile(&name)?,
-                                });
+                                    });
 
-                                context_signal.set(Some(new_context));
-                                Ok(())
-                            }, "{&name}" }
+                                    context_signal.set(Some(new_context));
+                                    Ok(())
+                                },
+                                "{&name}"
+                            }
                         }
                     }
                 }

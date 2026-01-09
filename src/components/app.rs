@@ -59,22 +59,19 @@ pub fn App() -> Element {
 
         init_signal.set(false);
         
-        return rsx!{ "Loading..."};
+        return rsx!{ "Loading..." };
     }
     rsx! {
         ErrorBoundary {
             handle_error: |errors: ErrorContext| {
                 rsx! {
-                    div {
-                        "Oops, we encountered an error. Please report this to the developer of this application"
-                    }
 
-                    pre {
-                        "{errors:?}"
-                    }
+                    div { "Oops, we encountered an error. Please report this to the developer of this application" }
+        
+                    pre { "{errors:?}" }
                 }
             },
-            
+
             // In addition to element and text (which we will see later), rsx can contain other components. In this case,
             // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
             document::Link { rel: "icon", href: FAVICON }

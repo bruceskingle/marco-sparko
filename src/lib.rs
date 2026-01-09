@@ -815,6 +815,8 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
             else {
                 None
             };
+
+            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
             let builder = constructor(context.clone(), profile)?;
             let module = builder.build(init).await?;
             
