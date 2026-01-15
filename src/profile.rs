@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use anyhow::anyhow;
 
-use crate::{MarcoSparko};
+use crate::{Cli};
 
 const DEFAULT_PROFILE: &str = "default";
 
@@ -31,7 +31,7 @@ pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<Act
     let mut set = HashSet::new();
     let mut active_profile = None;
 
-    if let Ok(file)= fs::File::open(&MarcoSparko::get_file_path()?) {
+    if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
         let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
         for profile in profile_file {
@@ -69,7 +69,7 @@ pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<Act
 
         profiles.push(&active_profile.active_profile);
 
-        serde_json::to_writer_pretty(fs::File::create(&MarcoSparko::get_file_path()?)?, &profiles)?;
+        serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profiles)?;
 
         active_profile
     }
@@ -87,7 +87,7 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
     let mut map = IndexMap::new();
     
 
-    if let Ok(file)= fs::File::open(&MarcoSparko::get_file_path()?) {
+    if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
         let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
         for profile in profile_file {
@@ -109,7 +109,7 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
         profiles.push(&active_profile);
         profiles.extend(map.values());
 
-        serde_json::to_writer_pretty(fs::File::create(&MarcoSparko::get_file_path()?)?, &profiles)?;
+        serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profiles)?;
 
         Ok(ActiveProfile {
             all_profiles,
@@ -125,7 +125,7 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
     where
     T: Serialize
 {
-    if let Ok(file)= fs::File::open(&MarcoSparko::get_file_path()?) {
+    if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
         let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
 
         println!("existing profile_file <{:?}>", &profile_file);
@@ -149,7 +149,7 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
 
          println!("saving profiles <{:?}>", &profile_file);
 
-            serde_json::to_writer_pretty(fs::File::create(&MarcoSparko::get_file_path()?)?, &profile_file)?;
+            serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profile_file)?;
 
         Ok(())
     }
@@ -206,7 +206,7 @@ impl ProfileManager {
         let mut map = IndexMap::new();
         let mut profile_names = Vec::new();
 
-        if let Ok(file)= fs::File::open(&MarcoSparko::get_file_path()?) {
+        if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
             let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
             for profile in profile_file {
@@ -417,7 +417,7 @@ impl ProfileManager {
             // };
 
            
-            serde_json::to_writer_pretty(fs::File::create(&MarcoSparko::get_file_path()?)?, &profiles)?;
+            serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profiles)?;
             
             return Ok(())
         }

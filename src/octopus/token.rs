@@ -1,7 +1,5 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::io::Write;
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use crate::MarcoSparkoContext;
@@ -194,28 +192,6 @@ impl TokenManager for OctopusTokenManager {
             } 
         }
 
-        // let current_token = if refresh {
-        //     None
-        // }
-        // else {
-        //     if let Some(token) = &*locked_token {
-        //         let now = SystemTime::now()
-        //             .duration_since(UNIX_EPOCH)
-        //             .unwrap()
-        //             .as_secs() as u32;
-
-        //         if token.token_expires - GRACE_PERIOD > now {
-        //             Some(token.token.clone())
-        //         }
-        //         else {
-
-        //             None
-        //         }
-        //     } else {
-        //         None
-        //     }
-        // };
-
         if let Some(token) = current_token {
             Ok(token)
         }
@@ -276,91 +252,6 @@ impl TokenManager for OctopusTokenManager {
 
 }
 
-// pub struct ZZTokenManagerBuilder {
-//     context:            Option<Arc<MarcoSparkoContext>>,
-//     authenticator:      Option<OctopusAuthenticator>,
-//     request_manager: Option<Arc<RequestManager>>,
-// }
-
-// impl ZZTokenManagerBuilder{
-//     fn new() -> TokenManagerBuilder {
-//         TokenManagerBuilder {
-//             context: None,
-//             authenticator: None,
-//             request_manager: None
-//         }
-//     }
-    
-//     pub fn with_context(mut self, context: Arc<MarcoSparkoContext>) -> TokenManagerBuilder {
-//         self.context = Some(context);
-//         self
-//     }
-
-//     pub fn with_request_manager(mut self, request_manager: Arc<RequestManager>) -> TokenManagerBuilder {
-//             self.request_manager = Some(request_manager);
-//             self
-//         }
-
-//     pub fn with_api_key(mut self, api_key: String) -> TokenManagerBuilder {
-//         self.authenticator = Some(OctopusAuthenticator::from_api_key(api_key));
-//         self
-//     }
-
-//     pub fn with_password(mut self, email: String, password: String) -> TokenManagerBuilder {
-//         self.authenticator = Some(OctopusAuthenticator::from_password(email, password));
-//         self
-//     }
-
-//     fn trim_in_place(s: &mut String) {
-//         s.truncate(s.trim_end().len());
-//     }
-
-//     pub fn build(mut self, init: bool) -> anyhow::Result<OctopusTokenManager> {
-
-//         let context = self.context.ok_or(anyhow!("Context must be provided"))?;
-
-//         if let None = self.authenticator {
-//             if init {
-//                 println!("Octopus API Authentication (set OCTOPUS_API_KEY to avoid this)");
-//                 print!("email: ");
-
-//                 std::io::stdout().flush()?;
-
-//                 let mut email = String::new();
-                
-//                 std::io::stdin().read_line(&mut email)?;
-//                 Self::trim_in_place(&mut email);
-
-//                 let password = 
-//                 if context.args.debug {
-//                     print!("password (visible): ");
-//                     std::io::stdout().flush()?;
-//                     let mut password = String::new();
-//                     std::io::stdin().read_line(&mut password)?;
-//                     Self::trim_in_place(&mut password);
-//                     password
-//                 }
-//                 else {
-//                     rpassword::prompt_password("password: ").expect("Failed to read password")
-//                 };
-//                 // let mut password = String::new();
-//                 // std::io::stdin().read_line(&mut password)?;
-
-//                 // self = self.with_password(email.trim_end().to_string(), password);
-//                 self.authenticator = Some(OctopusAuthenticator::from_password(email, password));
-//             }
-//             else {
-//                 return Err(anyhow!("No Octopus authentication credentials given, did you mean to specify --init?"))
-//             }
-//         }
-
-//         Ok(OctopusTokenManager::new(
-//             context,
-//             self.request_manager.ok_or(anyhow!("RequestManager must be provided"))?, 
-//             self.authenticator.ok_or(anyhow!("Credentials must be specified"))?
-//         ))
-//     }
-// }
 
 // These tests actually hit the API and cause "Too many requests." errors
 // #[cfg(test)]

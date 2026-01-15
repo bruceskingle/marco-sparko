@@ -13,7 +13,6 @@ use account::AccountManager;
 use async_trait::async_trait;
 
 use dioxus::prelude::*;
-use dioxus_router::Navigator;
 
 use bill::BillManager;
 use meter::MeterManager;
@@ -33,8 +32,6 @@ include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 #[cfg(graphql_generation_error)]
 compile_error!("graphql built with Errors");
 
-// #[cfg(not(graphql_generation_error))]
-// compile_error!("NOT graphql built with Errors");
 
 pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
 
@@ -66,12 +63,7 @@ impl Profile {
 }
 
 pub struct OctopusModule{
-    context: Arc<MarcoSparkoContext>, 
-    profile: Profile,
-    // request_manager: Arc<RequestManager>,
-    // default_account: Option<Arc<graphql::summary::get_viewer_accounts::AccountInterface>>,
     account_id: String,
-    // cache_manager: Arc<CacheManager>,
     bill_manager: Arc<BillManager>,
     meter_manager: Arc<MeterManager>,
     account_manager: AccountManager,
@@ -162,21 +154,16 @@ struct LoginForm {
 }
 
 impl OctopusModule {
-    async fn new(context: Arc<MarcoSparkoContext>, cache_manager: Arc<CacheManager>,profile: Profile, 
-        request_manager: Arc<RequestManager>, verbose: bool) -> anyhow::Result<OctopusModule> {   
+    async fn new(cache_manager: Arc<CacheManager>,profile: Profile, 
+        request_manager: Arc<RequestManager>, _verbose: bool) -> anyhow::Result<OctopusModule> {   
 
         let billing_timezone = Self::get_billing_timezone(&profile);
-        // let cache_manager = context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
         let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
         let meter_manager = Arc::new(MeterManager::new(&cache_manager, &request_manager));
         let bill_manager = Arc::new(BillManager::new(&cache_manager, &request_manager, &meter_manager));
 
         Ok(OctopusModule {
-            context,
-            profile,
-            // request_manager,
             account_id: account_manager.get_default_account_id().to_string(),
-            // cache_manager,
             account_manager,
             bill_manager,
             meter_manager,
@@ -196,258 +183,13 @@ impl OctopusModule {
         return timezones::db::europe::LONDON;
     }
 
-    fn get_api_key(&self) -> &Option<String> {
-        &self.account_manager.viewer.viewer.viewer_.live_secret_key_
-    }
-
     pub fn registration() -> ModuleRegistration {
-
-        // Client::foo(Client::constructor);
-
         ModuleRegistration {
             module_id: MODULE_ID.to_string(),
             constructor: Arc::new(OctopusModule::constructor),
-            // init_page_provider: Box::new(Client::init_page_provider),
         }
-
-        // (MODULE_ID.to_string(), Box::new(Client::constructor))
     }
     
-
-
-    // pub fn init_page_provider(context: Arc<MarcoSparkoContext>, request_manager: Arc<sparko_graphql::RequestManager>) -> Element {
-            
-    
-    //         let mut email = use_signal(|| String::new());
-    //         let mut password = use_signal(|| String::new());
-    //         let mut api_key = use_signal(|| String::new());
-    //         let mut login_method = use_signal(|| "email".to_string());
-    //         let mut errors: Signal<Vec<String>>   = use_signal(|| Vec::new());
-    //         // let ctx = context.clone();
-    //         let profile_name = context.profile.active_profile.name.clone();
-
-    //         rsx! {
-    //             for error in errors.read().iter() {
-    //                 div { class: "error", "{error}" }
-    //             }
-    //             div {
-    //                 h1 { "Octopus Login" }
-    //                 form {
-    //                     onsubmit: move |evt: FormEvent| {
-    //                         let context = context.clone();
-    //                         let request_manager = request_manager.clone();
-    //                         async move {
-    //                             // Prevent the default browser navigation behavior
-    //                             evt.prevent_default();
-
-    //                             println!("evt={:?}", evt);
-    //                             // Extract the form values into the LoginForm struct
-    //                             let values: LoginForm = evt
-
-    //                                 // In a desktop app, you might print to console, use native APIs
-    //                                 // to save to a file, or call a backend server function.
-    //                                 // Perform further actions like authentication...
-    //                                 .parsed_values()
-    //                                 .expect("Failed to parse form values");
-    //                             println!("Login attempt for user: {:?}", values);
-    //                             // ctx.clone(),
-    //                             Self::handle_login(
-    //                                     context.clone(),
-    //                                     request_manager.clone(),
-    //                                     values,
-    //                                     &mut errors,
-    //                                 )
-    //                                 .await;
-    //                         }
-    //                     },
-    //                     table {
-    //                         tr {
-    //                             td { colspan: "2",
-    //                                 label {
-    //                                     input {
-    //                                         r#type: "radio",
-    //                                         name: "login_method",
-    //                                         value: "email",
-    //                                         checked: login_method() == "email",
-    //                                         onchange: move |_| login_method.set("email".to_string()),
-    //                                     }
-    //                                     " Login with Email and Password"
-    //                                 }
-    //                             }
-    //                         }
-    //                         tr {
-    //                             td { colspan: "2",
-    //                                 label {
-    //                                     input {
-    //                                         r#type: "radio",
-    //                                         name: "login_method",
-    //                                         value: "api_key",
-    //                                         checked: login_method() == "api_key",
-    //                                         onchange: move |_| login_method.set("api_key".to_string()),
-    //                                     }
-    //                                     " Use API Key"
-    //                                 }
-    //                             }
-    //                         }
-    //                         if login_method() == "email" {
-    //                             tr {
-    //                                 td {
-    //                                     label { "Email:" }
-    //                                 }
-    //                                 td {
-    //                                     input {
-    //                                         r#type: "email",
-    //                                         id: "email",
-    //                                         name: "email",
-    //                                         value: "{email}",
-    //                                         oninput: move |e| email.set(e.value().clone()),
-    //                                     }
-    //                                 }
-    //                             }
-    //                             tr {
-    //                                 td {
-    //                                     label { "Password:" }
-    //                                 }
-    //                                 td {
-    //                                     input {
-    //                                         r#type: "password",
-    //                                         id: "password",
-    //                                         name: "password",
-    //                                         value: "{password}",
-    //                                         oninput: move |e| password.set(e.value().clone()),
-    //                                     }
-    //                                 }
-    //                             }
-    //                         }
-    //                         if login_method() == "api_key" {
-    //                             tr {
-    //                                 td {
-    //                                     label { "API Key:" }
-    //                                 }
-    //                                 td {
-    //                                     input {
-    //                                         r#type: "text",
-    //                                         id: "api_key",
-    //                                         name: "api_key",
-    //                                         value: "{api_key}",
-    //                                         oninput: move |e| api_key.set(e.value().clone()),
-    //                                     }
-    //                                 }
-    //                             }
-    //                         }
-    //                         tr {
-    //                             td {
-    //                                 button {
-    //                                     // onclick: async move |_| {
-    //                                     //     let em = (*email.read()).clone();
-    //                                     //     let pw = (*password.read()).clone();
-    //                                     //     Self::handle_login(context.clone(), em, pw, &mut errors).await;
-    //                                     // },
-    //                                     r#type: "submit", // Explicitly set as submit button
-    //                                     "Log In"
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    // async fn handle_login(
-    //     context: Arc<MarcoSparkoContext>,
-    //     request_manager: Arc<sparko_graphql::RequestManager>,
-    //     // profile_name: &String,
-    //     //  email: String, password: String, 
-    //     values: LoginForm, 
-    //     error_signal: &mut Signal<Vec<String>>) {
-    //     let mut errors = Vec::new();
-
-    //     println!("Octopus login submitted for: {:?}", values);
-        
-    //     let login_method = values.login_method.trim().to_string();
-        
-    //     if login_method == "email" {
-    //         let email = values.email.as_ref().unwrap_or(&String::new()).trim().to_string();
-    //         let password = values.password.as_ref().unwrap_or(&String::new()).trim().to_string();
-            
-    //         if email.trim().is_empty() {
-    //             errors.push("Email is required".to_string());
-    //         }
-    //         if password.trim().is_empty() {
-    //             errors.push("Password is required".to_string());
-    //         }
-
-    //         if errors.is_empty() {
-    //             // Perform login logic here
-    //             println!("Performing login for email: {}", email);
-    //             // On success, you might want to update the context or navigate to another page
-
-    //             match OctopusTokenManager::builder()
-    //                 .with_context(context)
-    //                 .with_request_manager(request_manager)
-    //                 .with_password(email,password)
-    //                 .build(true) {
-    //                     Ok(token_manager) => {
-    //                         match token_manager.get_authenticator(true).await {
-    //                             Ok(_authenticator) => {
-    //                                 println!("Login successful!");
-    //                                 // Update context or navigate as needed
-    //                             },
-    //                             Err(e) => {
-    //                                 errors.push(format!("Authentication failed: {}", e));
-    //                             }
-    //                         }
-    //                         // Use the authenticator for further operations
-    //                     },
-    //                     Err(e) => {
-    //                         errors.push(format!("Failed to build token manager: {}", e));
-    //                     }
-    //                 }
-    //         }
-    //     } else if login_method == "api_key" {
-    //         let api_key = values.api_key.as_ref().unwrap_or(&String::new()).trim().to_string();
-            
-    //         if api_key.trim().is_empty() {
-    //             errors.push("API Key is required".to_string());
-    //         }
-
-    //         if errors.is_empty() {
-    //             println!("Performing login with API key");
-                
-    //             match OctopusTokenManager::builder()
-    //                 .with_api_key(api_key)
-    //                 .build(true) {
-    //                     Ok(token_manager) => {
-    //                         match token_manager.get_authenticator(true).await {
-    //                             Ok(_authenticator) => {
-    //                                 println!("Login successful!");
-    //                                 // Update context or navigate as needed
-    //                             },
-    //                             Err(e) => {
-    //                                 errors.push(format!("Authentication failed: {}", e));
-    //                             }
-    //                         }
-    //                     },
-    //                     Err(e) => {
-    //                         errors.push(format!("Failed to build token manager: {}", e));
-    //                     }
-    //                 }
-    //         }
-    //     } else {
-    //         errors.push("Invalid login method".to_string());
-    //     }
-
-    //     error_signal.set(errors);
-    //     // For now, store the api_key into the active profile if appropriate, or trigger auth flow.
-    //     // Example placeholder behaviour:
-    //     // let new_profile = Profile {
-    //     //     api_key: Some(new_api_key.clone()),
-    //     //     ..old_profile.clone()
-    //     // };
-    //     // crate::profile::update_profile(&context.profile.active_profile.name, MODULE_ID, &new_profile).unwrap_or_else(|e| println!("profile update failed: {}", e));
-    // }
-
     pub fn constructor(context: Arc<MarcoSparkoContext>, 
         json_profile: Option<serde_json::Value>) -> anyhow::Result<Arc<dyn ModuleFactory>> {
 
@@ -462,49 +204,6 @@ impl OctopusModule {
 
         OctopusModuleFactoryBuilder::new(context, json_profile)
     }
-
-    // async fn update_profile(&mut self)  -> anyhow::Result<()> {
-
-    //     let api_key = if let Some(profile) = &self.profile {
-    //         profile.api_key.clone()
-    //     }
-    //     else {
-    //         None
-    //     };
-
-    //     if let Some(new_api_key) = self.get_api_key() {
-    //         if let Some(old_profile) = &self.profile {
-            
-    //             if 
-    //                 if let Some(old_api_key) = api_key {
-    //                     old_api_key.ne(new_api_key)
-    //                 }
-    //                 else {
-    //                     true
-    //                 }
-    //             {
-    //                 // let old_octopus_config = new_profile.octopus_config;
-    //                 let new_profile = Profile {
-    //                     api_key: Some(new_api_key.clone()),
-    //                     ..old_profile.clone()
-    //                 };
-
-    //                 println!("UPDATE profile <{:?}>", &new_profile);
-    //                 crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
-    //                 // self.context.update_profile(MODULE_ID, new_profile)?;
-    //             }
-    //         }
-    //         else {
-    //             let mut new_profile  = Profile::new();
-    //             new_profile.api_key = Some(new_api_key.clone());
-
-    //             println!("CREATE profile <{:?}>", &new_profile);
-    //             crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
-    //             // self.context.update_profile(MODULE_ID, new_profile)?;
-    //         }
-    //     }
-    //     Ok(())
-    // }
 }
 
 
@@ -516,12 +215,6 @@ fn find_bill<'a>(bill_id: &String, bills: &'a BillList) -> Option<&'a AbstractBi
     else {
         None
     }
-    // for (_id, bill) in &bills.bills {
-    //     if bill_id == &bill.as_bill_interface().id_ {
-    //         return Some(bill);
-    //     }
-    // }
-    // None
 }
 
 #[async_trait]
@@ -812,7 +505,6 @@ impl Module for OctopusModule {
 pub struct OctopusModuleFactory {
     context: Arc<MarcoSparkoContext>,
     cache_manager: Arc<CacheManager>,
-    // json_profile: Option<serde_json::Value>,
     token_manager: Arc<OctopusTokenManager>,
     request_manager: Arc<sparko_graphql::RequestManager>,
     profile: Profile,
@@ -821,73 +513,15 @@ pub struct OctopusModuleFactory {
 
 impl OctopusModuleFactory {
     pub async fn do_build(&self) -> anyhow::Result<OctopusModule> {
-        // let option_profile = if init {
-        //     if let Some(mut profile) = self.profile {
-        //         profile.init = true;
-        //         Some(profile)
-        //     }
-        //     else {
-        //         let mut profile = Profile::new();
-        //         profile.init = true;
-
-        //         Some(profile)
-        //     }
-        // }
-        // else {
-        //     self.profile
-        // };
-
-        // let url = if let Some(url) = self.url {
-        //     url
-        // }
-        // else {
-        //     "https://api.octopus.energy/v1/graphql/".to_string()
-        // };
-
-        // let request_manager = Arc::new(sparko_graphql::RequestManager::new(url.clone(), self.verbose, create_info::USER_AGENT)?);
-
-        // let token_manager = self.token_manager_builder
-        //     .with_request_manager(request_manager.clone())
-        //     .with_context(self.context.clone())
-        //     .build(init)?;
-
-        // // if init {
-        // //     let x = token_manager.get_authenticator(true).await;
-        // //     // println!("HERE {:?}", x);
-        // //     match x {
-        // //         Ok(_token) => {
-        // //             println!("Logged in OK");
-        // //         },
-        // //         Err(error) => {
-        // //             if let sparko_graphql::Error::GraphQLError(graphql_errors) = &error {
-        // //                 let graphql_errors = &**graphql_errors;
-        // //                 for graphql_error in graphql_errors {
-        // //                     if let Some(error_code) = graphql_error.extensions.get("errorCode") {
-        // //                         if error_code == "KT-CT-1138" {
-        // //                             println!("Username or password is incorrect.");
-        // //                             return Err(anyhow!(error));
-        // //                         }
-        // //                     }
-        // //                 }
-                 
-        // //             }
-        // //             println!("Login failed {}", error);
-        // //             return Err(anyhow!(error));
-        // //         },
-        // //     }
-        // // }
 
         let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?);
        
-        let client = OctopusModule::new(self.context.clone(), self.cache_manager.clone(), self.profile.clone(), 
+        let client = OctopusModule::new( self.cache_manager.clone(), self.profile.clone(), 
             authenticated_request_manager, self.verbose
         ).await?;
 
         if self.profile.init {
-            // let account_user = client.get_account_user().await?;
-            // let x = client.account_manager.viewer.viewer.viewer_.live_secret_key_
             crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &self.profile)?;
-            // client.update_profile().await?;
         }
         
         Ok(client)
@@ -895,9 +529,7 @@ impl OctopusModuleFactory {
 
     async fn login(errors: &mut Vec<String>, token_manager: &Arc<OctopusTokenManager>) -> anyhow::Result<()> {
 
-            let x = token_manager.get_authenticator(true).await;
-            // println!("HERE {:?}", x);
-            match x {
+            match token_manager.get_authenticator(true).await {
                 Ok(_token) => {
                     println!("Logged in OK");
                     Ok(())
@@ -949,9 +581,7 @@ impl OctopusModuleFactory {
             }
 
             if errors.is_empty() {
-                // Perform login logic here
                 println!("Performing login for email: {}", email);
-                // On success, you might want to update the context or navigate to another page
                 token_manager.set_authenticator(
                     OctopusAuthenticator::from_email_password(email.clone(), password.clone())
                 ).await;
@@ -963,14 +593,6 @@ impl OctopusModuleFactory {
                 if let Some(mut init_sig) = init_signal {
                     init_sig.set(true);
                 }
-                // match token_manager.get_authenticator(true).await {
-                //     Ok(_authenticator) => {
-                //         println!("Login successful!");
-                //     },
-                //     Err(e) => {
-                //         errors.push(format!("Authentication failed: {}", e));
-                //     }
-                // }
             }
         } else if login_method == "api_key" {
             let api_key = values.api_key.as_ref().unwrap_or(&String::new()).trim().to_string();
@@ -997,57 +619,13 @@ impl OctopusModuleFactory {
                         crate::profile::update_profile(&context.profile.active_profile.name, MODULE_ID, &new_profile).unwrap_or_else(|e| println!("profile update failed: {}", e));
 
                         // Reset the app initialization to reload context with new profile
-                        let mut init_signal = try_consume_context::<Signal<bool>>();
+                        let init_signal = try_consume_context::<Signal<bool>>();
                         if let Some(mut init_sig) = init_signal {
                             init_sig.set(true);
                         }
-
-                        // // Navigate to the module page
-                        // navigator.push(format!("/blog/{}", MODULE_ID));
-
-                        // //aaaaaa
-                        // let api_key = if let Some(profile) = &self.profile {
-                        //     profile.api_key.clone()
-                        // }
-                        // else {
-                        //     None
-                        // };
-
-                        // if let Some(new_api_key) = self.get_api_key() {
-                        //     if let Some(old_profile) = &self.profile {
-                            
-                        //         if 
-                        //             if let Some(old_api_key) = api_key {
-                        //                 old_api_key.ne(new_api_key)
-                        //             }
-                        //             else {
-                        //                 true
-                        //             }
-                        //         {
-                        //             // let old_octopus_config = new_profile.octopus_config;
-                        //             let new_profile = Profile {
-                        //                 api_key: Some(new_api_key.clone()),
-                        //                 ..old_profile.clone()
-                        //             };
-
-                        //             println!("UPDATE profile <{:?}>", &new_profile);
-                        //             crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
-                        //             // self.context.update_profile(MODULE_ID, new_profile)?;
-                        //         }
-                        //     }
-                        //     else {
-                        //         let mut new_profile  = Profile::new();
-                        //         new_profile.api_key = Some(new_api_key.clone());
-
-                        //         println!("CREATE profile <{:?}>", &new_profile);
-                        //         crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &new_profile)?;
-                        //         // self.context.update_profile(MODULE_ID, new_profile)?;
-                        //     }
-                        // }
-                        // //sssss
                     },
-                    Err(e) => {
-                        // errors.push(format!("Authentication failed: {}", e));
+                    Err(_) => {
+                        // Already reported to user
                     }
                 }
             }
@@ -1056,13 +634,6 @@ impl OctopusModuleFactory {
         }
 
         error_signal.set(errors);
-        // For now, store the api_key into the active profile if appropriate, or trigger auth flow.
-        // Example placeholder behaviour:
-        // let new_profile = Profile {
-        //     api_key: Some(new_api_key.clone()),
-        //     ..old_profile.clone()
-        // };
-        // crate::profile::update_profile(&context.profile.active_profile.name, MODULE_ID, &new_profile).unwrap_or_else(|e| println!("profile update failed: {}", e));
     }
 }
 
@@ -1083,11 +654,8 @@ impl ModuleFactory for OctopusModuleFactory {
         let mut api_key = use_signal(|| String::new());
         let mut login_method = use_signal(|| "email".to_string());
         let mut errors: Signal<Vec<String>>   = use_signal(|| Vec::new());
-        // let ctx = context.clone();
-        // let profile_name = self.context.profile.active_profile.name.clone();
 
         let context: Arc<MarcoSparkoContext> = self.context.clone();
-        let request_manager: Arc<sparko_graphql::RequestManager> = self.request_manager.clone();
         let token_manager: Arc<OctopusTokenManager> = self.token_manager.clone();
         let profile: Profile = self.profile.clone();
         rsx! {
@@ -1099,24 +667,17 @@ impl ModuleFactory for OctopusModuleFactory {
                 form {
                     onsubmit: move |evt: FormEvent| {
                         let context = context.clone();
-                        // let request_manager = request_manager.clone();
                         let token_manager = token_manager.clone();
                         let profile = profile.clone();
                         async move {
                             // Prevent the default browser navigation behavior
                             evt.prevent_default();
 
-                            println!("evt={:?}", evt);
                             // Extract the form values into the LoginForm struct
                             let values: LoginForm = evt
-
-                                // In a desktop app, you might print to console, use native APIs
-                                // to save to a file, or call a backend server function.
-                                // Perform further actions like authentication...
                                 .parsed_values()
                                 .expect("Failed to parse form values");
-                            println!("Login attempt for user: {:?}", values);
-                            // ctx.clone(),
+
                             Self::handle_login(
                                     token_manager,
                                     profile,
@@ -1204,15 +765,7 @@ impl ModuleFactory for OctopusModuleFactory {
                         }
                         tr {
                             td {
-                                button {
-                                    // onclick: async move |_| {
-                                    //     let em = (*email.read()).clone();
-                                    //     let pw = (*password.read()).clone();
-                                    //     Self::handle_login(context.clone(), em, pw, &mut errors).await;
-                                    // },
-                                    r#type: "submit", // Explicitly set as submit button
-                                    "Log In"
-                                }
+                                button { r#type: "submit", "Log In" }
                             }
                         }
                     }
@@ -1235,18 +788,6 @@ pub struct OctopusModuleFactoryBuilder {
 }
 
 impl OctopusModuleFactoryBuilder {
-
-    // fn get_profile_api_key(option_profile: &Option<Profile>) -> anyhow::Result<Option<String>> {
-
-    //     if let Some(profile) =  option_profile {
-    //         if let Some(api_key) = &profile.api_key {
-    //             return Ok(Some(api_key.to_string()))
-    //         }
-    //     }
-
-    //     Ok(None)
-    // }
-
     fn new(
             context: Arc<MarcoSparkoContext>,
             json_profile: Option<serde_json::Value>
@@ -1263,7 +804,6 @@ impl OctopusModuleFactoryBuilder {
             Some(api_key.to_string())
         }
         else {
-            // Self::get_profile_api_key(&profile)?
             if let Some(api_key) = &profile.api_key {
                 Some(api_key.to_string())
             }
@@ -1288,14 +828,6 @@ impl OctopusModuleFactoryBuilder {
             url: None,
             verbose,
         })
-
-        // if let Some(api_key) = option_api_key {
-        //     Ok(Arc::new(builder.with_api_key(api_key)?))
-        // }
-        // else {
-        //     Ok(Arc::new(builder))
-        // }
-        
     }
 
     pub fn with_url(mut self, url: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {

@@ -483,11 +483,11 @@ impl Tariff {
 }
 
 pub struct MeterAgreementList {
-    pub account_number: String,
+    pub _account_number: String,
     pub import_electricity_map: HashMap<String, Vec<meter::meter_agreements::ElectricityAgreementType>>,
     pub export_electricity_map: HashMap<String, Vec<meter::meter_agreements::ElectricityAgreementType>>,
     pub gas_map: HashMap<String, Vec<meter::meter_agreements::GasAgreementType>>,
-    hash_key: String,
+    _hash_key: String,
 }
 
 impl MeterAgreementList {
@@ -535,11 +535,11 @@ impl MeterAgreementList {
             }
             
             Ok(MeterAgreementList {
-                account_number,
+                _account_number: account_number,
                 export_electricity_map,
                 import_electricity_map,
                 gas_map,
-                hash_key,
+                _hash_key: hash_key,
             })
         }
 
@@ -584,160 +584,6 @@ impl MeterAgreementList {
         in_scope_agreements
     }
     
-    // pub fn print(&self) {
-        
-    //     print!("{:30} {:10} ", 
-    //         "Description",
-    //         "Posted"
-    //     );
-    //     print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //         "Net",
-    //         "Tax", 
-    //         "Total",
-    //         "Balance"
-    //     );
-    //     print!("{:10} {:10} {:>12} ", 
-    //         "From",
-    //         "To",
-    //         "Units"
-    //     );
-    //     print!("{:>12}", "p / unit");
-    //     println!();
-
-    //     let mut total_electric_charge = 0;
-    //     let mut total_electric_units = Decimal::new(0, 0);
-
-    //     for (_key, transaction) in &self.agreements {
-    //     // for edge in (&statement.transactions_.edges).into_iter().rev() {
-    //         let txn = transaction.as_transaction_type();
-
-    //         if let TransactionType::Charge(charge) = &transaction {
-    //             if charge.is_export_ {
-    //                 print!("{} {:width$} ", txn.title_, "Export", width = 30 - txn.title_.len() - 1);
-    //             }
-    //             else {
-    //                     print!("{:30} ", txn.title_);
-    //             }
-    //         }
-    //         else {
-    //             print!("{:30} ", txn.title_);
-    //         }
-    //         print!("{:10} ", 
-    //                     txn.posted_date_
-    //                 );
-
-    //         if let TransactionType::Charge(charge) = &transaction {
-    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //                 as_decimal(txn.amounts_.net_, 2),
-    //                 as_decimal(txn.amounts_.tax_, 2), 
-    //                 as_decimal(txn.amounts_.gross_, 2),
-    //                 as_decimal(txn.balance_carried_forward_, 2)
-    //             );
-    //             if let Some(consumption) = &charge.consumption_ {
-    //                 print!("{:10} {:10} {:>12.4} ", 
-    //                     consumption.start_date_,
-    //                     consumption.end_date_,
-    //                     consumption.quantity_
-    //                 );
-
-    //                 let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
-
-    //                 print!("{:>12.4}", rate); //.round_dp(2));
-
-    //                 if charge.is_export_ {
-                        
-    //                 }
-    //                 else {
-    //                         if txn.title_.eq("Electricity") {
-    //                             total_electric_charge += *&txn.amounts_.gross_;
-    //                             total_electric_units += consumption.quantity_;
-    //                         }
-    //                     }
-    //             }
-    //             else {
-    //                 print!("{:47}","");
-    //             }
-    //         }
-    //         else {
-    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //                 as_decimal(-txn.amounts_.net_, 2),
-    //                 as_decimal(-txn.amounts_.tax_, 2), 
-    //                 as_decimal(-txn.amounts_.gross_, 2),
-    //                 as_decimal(txn.balance_carried_forward_, 2)
-    //             );
-    //             print!("{:47}","");
-    //         }
-    //         if let Some(note) = &txn.note_ {
-    //             let note = note.trim();
-    //             print!(" {}", note);
-    //         }
-    //         println!();
-
-    //     }
-
-    //     if total_electric_units.is_positive() {
-    //         println!("\nTOTALS");
-    //         let rate = Decimal::from(total_electric_charge) / total_electric_units;
-
-    //         print!("{:30} {:10} ", 
-    //             "Electricity Import",
-    //             ""
-    //         );
-    //         print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //             "",
-    //             "", 
-    //             as_decimal(total_electric_charge, 2),
-    //             ""
-    //         );
-    //         print!("{:10} {:10} {:>12.4} ", 
-    //             "",
-    //             "",
-    //             total_electric_units
-    //         );
-    //         print!("{:>12.4}", rate);
-    //         println!();
-    //     }
-    // }
-
-    // pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
-    //     let mut has_previous_page = self.has_previous_page;
-
-    //     println!("fetch_all statement transactions {} in buffer", self.agreements.len());
-
-        
-
-    //     while has_previous_page {
-    //         let mut builder = super::graphql::bill::get_statement_transactions::Variables::builder()
-    //             .with_account_number(self.account_number.clone())
-    //             .with_statement_id(self.statement_id.clone())
-    //             .with_transactions_first(100);
-
-    //         if let Some(end_cursor) = &self.start_cursor {
-    //             builder = builder.with_transactions_before(end_cursor.clone());
-    //         }
-    //         let query = super::graphql::bill::get_statement_transactions::Query::from(
-    //             builder.build()?
-    //         );
-    //         let response = request_manager.call(&query).await?;
-
-            
-    //         if let super::graphql::bill::get_statement_transactions::AbstractBill::StatementType(statement) = response.account_.bill_ {
-    //             println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
-
-    //             self.start_cursor = statement.transactions_.page_info.start_cursor.clone();
-    //             has_previous_page = statement.transactions_.page_info.has_previous_page.clone();
-
-    //             for edge in statement.transactions_.edges.into_iter().rev() {
-    //                 let sort_key = edge.cursor;
-    //                 self.agreements.push((sort_key, edge.node));
-    //             }
-                
-    //             println!("has_previous_page = {:?}", has_previous_page);
-    //         }
-    //     }
-    //     self.has_previous_page = has_previous_page;
-    //     Ok(())
-    // }
 }
 
 impl meter::electricity_agreement_line_items::AgreementInterface {
@@ -797,7 +643,7 @@ impl Into<meter::electricity_agreement_line_items::LineItemType> for meter::gas_
 }
 
 pub struct AgreementLineItems {
-    pub account_number: String,
+    pub _account_number: String,
     pub agreement_id: String,
     pub end_cursor: Option<String>,
     pub has_next_page: bool,
@@ -805,7 +651,7 @@ pub struct AgreementLineItems {
     hash_key: String,
     start_date: Date,
     end_date: Date,
-    start_date_time: DateTime,
+    _start_date_time: DateTime,
     end_date_time: DateTime,
 }
 
@@ -834,12 +680,6 @@ impl AgreementLineItems {
             end_cursor = Some(cursor.clone());
         }
 
-        // let path = Path::new("/tmp/response.json");
-        // let mut out = File::create(path)?;
-        // // let mut input = File::open(path)?;
-
-
-
         while has_next_page {
             match meter_type {
                 MeterType::Gas => {
@@ -858,11 +698,6 @@ impl AgreementLineItems {
                     let query = builder.build()?;
 
                     let response = request_manager.call(&query).await?;
-
-                    // writeln!(out, "{}", serde_json::to_string(&response)?)?;
-
-                    // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
-
 
                     let response_has_next_page = *&response.gas_agreement_.get_page_info().has_next_page;
 
@@ -944,67 +779,8 @@ impl AgreementLineItems {
 
 
 
-
-
-
-
-
-
-        // if transactions.is_empty() {
-        //     match meter_type {
-        //         MeterType::Gas => todo!(),
-        //         MeterType::Electricity =>{
-        //             let query = meter::electricity_agreement_line_items::Query::builder()
-        //                     .with_agreement_id(agreement_id.clone())
-        //                     .with_start_at(bucket_start_date_time.clone())
-        //                     .with_timezone(String::from("Europe/London"))
-        //                     .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
-        //                     .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
-        //                     .with_first(50)
-        //                     .build()?;
-        //             let response = request_manager.call(&query).await?;
-
-                    
-        //             let response_has_next_page = *&response.electricity_agreement_.get_page_info().has_next_page;
-
-        //             for edge in response.electricity_agreement_.get_line_items() {
-        //                 println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
-        //                 if edge.node.start_at_ >= bucket_end_date_time { // have to test here before we move edge.node and break later
-        //                     println!("Beyond the end of this bucket, break");
-        //                     // this bucket is full
-        //                     has_next_page = false;
-        //                 }
-        //                 transactions.push((edge.cursor.clone(), edge.node));
-        //                 end_cursor = Some(edge.cursor);
-
-
-        //                 if !has_next_page {
-        //                     // this bucket is full
-        //                     break; // TODO: save this in the next bucket
-        //                 }
-        //             }
-
-        //             // perhaps there were no additional rows for the next bucket but no more rows for this one either
-        //             if has_next_page {
-        //                 if response_has_next_page {
-        //                     println!("No more data available so we are done");
-        //                 }
-        //                 has_next_page = response_has_next_page;
-        //             }
-        //         },
-        //     }
-        // }
-        // else {
-        //     let (cursor, final_txn) = transactions.get(transactions.len()-1).unwrap();
-        //     if final_txn.end_at_ >= bucket_end_date_time {
-        //         // this bucket is full
-        //         has_next_page = false;
-        //     }
-        //     end_cursor = Some(cursor.clone());
-        // }
-
         let mut result = AgreementLineItems {
-            account_number,
+            _account_number: account_number,
             agreement_id,
             end_cursor,
             has_next_page,
@@ -1012,7 +788,7 @@ impl AgreementLineItems {
             hash_key,
             start_date: bucket_start_date,
             end_date: bucket_end_date,
-            start_date_time: bucket_start_date_time.clone(),
+            _start_date_time: bucket_start_date_time.clone(),
             end_date_time: bucket_end_date_time,
         };
 
@@ -1020,40 +796,6 @@ impl AgreementLineItems {
             // bucket is not yet full
             result.fetch_all(request_manager, &bucket_start_date_time).await?;
         }
-            
-        //     let bill = response.account_.bill_;
-
-        //     if let bill::get_statement_transactions::AbstractBill::StatementType(statement) = bill {
-
-        //         for edge in statement.transactions_.edges {
-        //             let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-        //             transactions.push((sort_key, edge.node));
-        //         }
-    
-        //         AgreementTransactionList {
-        //             account_number,
-        //             statement_id: agreement_id,
-        //             end_cursor: statement.transactions_.page_info.end_cursor,
-        //             has_next_page: statement.transactions_.page_info.has_next_page,
-        //             transactions,
-        //             hash_key,
-        //         }
-        //     }
-        //     else {
-        //         return Err(Error::StringError(format!("Bill {} is not a statement", agreement_id)))
-        //     }
-        // }
-        // else {
-        //     let (end_cursor, _) = transactions.get(transactions.len() - 1).unwrap();
-        //     AgreementTransactionList {
-        //         account_number,
-        //         statement_id: agreement_id,
-        //         end_cursor: Some(end_cursor.clone()),
-        //         has_next_page: true,
-        //         transactions,
-        //         hash_key,
-        //     }
-        // };
 
         
 
@@ -1064,167 +806,8 @@ impl AgreementLineItems {
         Ok(result)
     }
 
-    pub fn print(&self) {
-        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-
-        println!();
-        println!("{:-^20} {:-^20} {:-^10} ", "From", "To", "Charge Amount");
-
-
-        for (_cursor, item) in &self.line_items {
-            println!("{:20} {:20} {:10.2} {:10.3} {:10.3}", item.start_at_.format(&format).unwrap(), item.end_at_.format(&format).unwrap(), item.net_amount_, item.number_of_units_, 
-                        
-            if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.number_of_units_ }  );
-            // println!("Start {} End {}", item.start_at_, item.end_at_, item.number_of_units_)
-
-            // match agreement {
-            //     graphql::meters::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
-            //         for edge in &electricity_agreement_type.line_items_.edges {
-            //             let item = &edge.node;
-
-            //             println!("{:20} {:20} {:10.2} {:10.3} {:10.3}", item.start_at_.format(format).unwrap(), item.end_at_.format(format).unwrap(), item.net_amount_, item.number_of_units_, 
-                        
-            //             if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.number_of_units_ }  );
-            //             // println!("Start {} End {}", item.start_at_, item.end_at_, item.number_of_units_)
-            //         }
-
-
-            //         if electricity_agreement_type.line_items_.page_info.has_next_page {
-            //             if let Some(end_cursor) = &electricity_agreement_type.line_items_.page_info.end_cursor {
-            //                 Some(end_cursor.clone())
-            //             }
-            //             else {
-            //                 None
-            //             }
-            //         }
-            //         else {
-            //             None
-            //         }
-
-            //     },
-            //     graphql::meters::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_) => unreachable!(),
-            // }
-        }
-        
-    //     print!("{:30} {:10} ", 
-    //         "Description",
-    //         "Posted"
-    //     );
-    //     print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //         "Net",
-    //         "Tax", 
-    //         "Total",
-    //         "Balance"
-    //     );
-    //     print!("{:10} {:10} {:>12} ", 
-    //         "From",
-    //         "To",
-    //         "Units"
-    //     );
-    //     print!("{:>12}", "p / unit");
-    //     println!();
-
-    //     let mut total_electric_charge = 0;
-    //     let mut total_electric_units = Decimal::new(0, 0);
-
-    //     for (_key, transaction) in &self.transactions {
-    //     // for edge in (&statement.transactions_.edges).into_iter().rev() {
-    //         let txn = transaction.as_transaction_type();
-
-    //         if let TransactionType::Charge(charge) = &transaction {
-    //             if charge.is_export_ {
-    //                 print!("{} {:width$} ", txn.title_, "Export", width = 30 - txn.title_.len() - 1);
-    //             }
-    //             else {
-    //                     print!("{:30} ", txn.title_);
-    //             }
-    //         }
-    //         else {
-    //             print!("{:30} ", txn.title_);
-    //         }
-    //         print!("{:10} ", 
-    //                     txn.posted_date_
-    //                 );
-
-    //         if let TransactionType::Charge(charge) = &transaction {
-    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //                 as_decimal(txn.amounts_.net_, 2),
-    //                 as_decimal(txn.amounts_.tax_, 2), 
-    //                 as_decimal(txn.amounts_.gross_, 2),
-    //                 as_decimal(txn.balance_carried_forward_, 2)
-    //             );
-    //             if let Some(consumption) = &charge.consumption_ {
-    //                 print!("{:10} {:10} {:>12.4} ", 
-    //                     consumption.start_date_,
-    //                     consumption.end_date_,
-    //                     consumption.quantity_
-    //                 );
-
-    //                 let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
-
-    //                 print!("{:>12.4}", rate); //.round_dp(2));
-
-    //                 if charge.is_export_ {
-                        
-    //                 }
-    //                 else {
-    //                         if txn.title_.eq("Electricity") {
-    //                             total_electric_charge += *&txn.amounts_.gross_;
-    //                             total_electric_units += consumption.quantity_;
-    //                         }
-    //                     }
-    //             }
-    //             else {
-    //                 print!("{:47}","");
-    //             }
-    //         }
-    //         else {
-    //             print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //                 as_decimal(-txn.amounts_.net_, 2),
-    //                 as_decimal(-txn.amounts_.tax_, 2), 
-    //                 as_decimal(-txn.amounts_.gross_, 2),
-    //                 as_decimal(txn.balance_carried_forward_, 2)
-    //             );
-    //             print!("{:47}","");
-    //         }
-    //         if let Some(note) = &txn.note_ {
-    //             let note = note.trim();
-    //             print!(" {}", note);
-    //         }
-    //         println!();
-
-    //     }
-
-    //     if total_electric_units.is_positive() {
-    //         println!("\nTOTALS");
-    //         let rate = Decimal::from(total_electric_charge) / total_electric_units;
-
-    //         print!("{:30} {:10} ", 
-    //             "Electricity Import",
-    //             ""
-    //         );
-    //         print!("{:>10} {:>10} {:>10} {:>10} ", 
-    //             "",
-    //             "", 
-    //             as_decimal(total_electric_charge, 2),
-    //             ""
-    //         );
-    //         print!("{:10} {:10} {:>12.4} ", 
-    //             "",
-    //             "",
-    //             total_electric_units
-    //         );
-    //         print!("{:>12.4}", rate);
-    //         println!();
-    //     }
-    }
-
     pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> anyhow::Result<()> {
         let mut has_next_page = self.has_next_page;
-
-        //println!("fetch_all statement transactions {} in buffer", self.line_items.len());
-
-        
 
         while has_next_page {
             let mut builder = meter::electricity_agreement_line_items::Query::builder()
@@ -1463,38 +1046,3 @@ impl ConsumptionList {
         Ok(())
     }
 }
-
-
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn test_bill_deserialize() {
-//         let all_json = r#"{
-//   "account": {
-//     "bills": {
-//       "edges": [
-//         {
-//           "node": {
-//             "__typename": "StatementType",
-//             "billType": "STATEMENT",
-//             "closingBalance": 30711,
-//             "fromDate": "2025-01-10",
-//             "heldStatus": {
-//               "isHeld": false,
-//               "reason": null
-//             },
-//         "pageInfo": {
-//           "endCursor": "YXJyYXljb25uZWN0aW9uOjE5",
-//           "hasNextPage": true
-//         }
-//       }
-//     }
-//   }"#;
-//         let response: super::super::graphql::bill::get_bills_and_transactions::Response = serde_json::from_str(all_json).unwrap();
-
-//         serde_json::to_string_pretty(&response);
-//     }
-// }

@@ -1,13 +1,13 @@
-use marco_sparko::MarcoSparko;
+use marco_sparko::Cli;
 
 #[tokio::main]
 async fn main() {
 
-    match MarcoSparko::new().await {
+    match Cli::new().await {
         Ok(ms) => {
-            let mut marco_sparko = ms; //Box::new(ms);
+            let mut cli = ms;
 
-            if let Err(error) = marco_sparko.run().await {
+            if let Err(error) = cli.run().await {
                 println!("Execution failed: {}", error);
             }
         },
