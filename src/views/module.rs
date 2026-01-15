@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 
-use crate::{MarcoSparko, MarcoSparkoContext, ModuleRegistrations, PageInfo};
+use crate::{MarcoSparko, MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
 
 const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
 
@@ -111,9 +111,7 @@ fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<String>
         // );
         // let y: impl Fn() -> Element = x;
 
-        let x1 = Box::new(move || rsx!(
-            "Module page list is empty {module_id}"
-        ));
+        let x1 = Box::new(move || rsx!( "Module page list is empty {module_id}" ));
         return ("", x1);
     }
 
@@ -126,9 +124,7 @@ fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<String>
 
 
     let msg = format!("{:?}", path);
-    let x2 = Box::new(move || rsx!(
-        "Unknown page in path {msg}"
-    ));
+    let x2 = Box::new(move || rsx!( "Unknown page in path {msg}" ));
     ("", x2)
 
 
@@ -190,115 +186,183 @@ pub fn Module(module_id: String) -> Element {
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
 
-    let mut call_signal = use_signal::<bool>(|| true);
-    let mut action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Box<dyn crate::Module + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize(&module_id, false, &module_registrations, &marco_sparko_context).await});
+    // let mut call_init_profile_signal = use_signal::<bool>(|| true);
+    // let mut init_profile_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Box<dyn crate::Module + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_initialize_profile(&module_id, false, &module_registrations, &marco_sparko_context).await});
 
-    if *call_signal.read() {
-        call_signal.set(false);
+
+    let mut call_construct_module_signal = use_signal::<bool>(|| true);
+    let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { MarcoSparko::do_construct(&module_id, false, &module_registrations, &marco_sparko_context).await});
+
+
+    let mut call_check_ready_module_signal = use_signal::<bool>(|| true);
+    let mut check_ready_module_action: Action<(Arc<dyn ModuleFactory>, bool), bool> = use_action( move |builder: Arc<dyn ModuleFactory>, _dummy: bool|  async move { builder.is_ready().await});
+
+    let mut call_build_module_signal = use_signal::<bool>(|| true);
+    let mut build_module_action: Action<(Arc<dyn ModuleFactory>, bool), Box<dyn crate::Module + Send>> = use_action( move |builder: Arc<dyn ModuleFactory>, _dummy: bool|  async move { builder.build().await});
+
+
+    // if context.profile.active_profile.modules.get(&module_id).is_none() {
+    //     // let reg = module_registrations.get(&module_id);
+    //     if let Some(module_registration) = module_registrations.0.get(&module_id) {
+    //         let page_provider = module_registration.init_page_provider.as_ref();
+    //         page_provider(context.clone(), re)
+    //     }
+    //     else {
+    //         rsx!{ "Unknown module {module_id}..." }
+    //     }
+    // }
+    // else 
+
+
+    if *call_construct_module_signal.read() {
+        call_construct_module_signal.set(false);
         // let t = 
-        action.call(module_registrations.clone(), context.clone(), module_id.clone());
+        construct_module_action.call(module_registrations.clone(), context.clone(), module_id.clone());
     }
 
-    if let Some(result) = action.value() {
-        let module_signal = result?;
-        let module = &*module_signal.read();
+    if let Some(result) = construct_module_action.value() {
+        let builder_signal = result?;
+        let builder = (*builder_signal.read()).clone();
         // let x = z.as_component();
 
-
-        let page_list = module.get_page_list();
-        let (active_page_id, content) = get_page(module, &path, &page_list);
-        // let sub_menu = rsx!(
-        //     div { class: "nav-left",
-        //         for page_info in page_list {
-        //             div {
-        //                 class: "nav_item",
-        //                 "{page_info.label}"
-        //             }
-
-        //         }
-        //     }
-        // );
-
-        // Signal for sidebar visibility
-    let mut sidebar_open = use_signal(|| true);
-
-    // Toggle sidebar
-    let toggle_sidebar = {
-        let b = !*sidebar_open.read();
-        move |_| {
-            sidebar_open.set(b);
+        if *call_check_ready_module_signal.read() {
+            call_check_ready_module_signal.set(false);
+            // let t = 
+            check_ready_module_action.call(builder.clone(), true);
         }
-    };
 
-    // let zgoto_page = |p: &str| {
-    //         let x= vec!(p);
-    //         path_signal.set(x);
-    // };
+        if let Some(result) = check_ready_module_action.value() {
+            let is_ready_signal = result?;
+            let is_ready = *is_ready_signal.read();
 
-    let body = match content() {
-        Ok(element) => rsx!(div { class: "filler", {element}})?,
-        // element,
-        Err(error) => {
-            let escaped_error = escape_html(&error.to_string());
+            if is_ready {
+                if *call_build_module_signal.read() {
+                    call_build_module_signal.set(false);
+                    // let t = 
+                    build_module_action.call(builder.clone(), true);
+                }
 
-            // let html = format!("Failed to load page content: <pre>{}</pre>", escaped_error);
-            let html = format!("<div class=\"error\">Failed to load page content: <pre>{}</pre></div>", escaped_error);
-            rsx! {
-                div { dangerous_inner_html: "{html}" }
-            }?
-        },
-    };
+                if let Some(result) = build_module_action.value() {
+                    let module_signal = result?;
+                    let module = &*module_signal.read();
+                    // let x = z.as_component();
 
-    rsx! {
-        document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
-        div { class: "layout-root",
-            // Main container
-            div { class: "container",
-                // Sidebar
-                nav {
-                    class: format_args!("sidebar {}", if *sidebar_open.read() { "open" } else { "closed" }),
-                    style: "width: 240px;",  // fixed width
-                    aria_label: "secondary navigation",
 
-                    div { class: "sidebar-inner",
-                        if *sidebar_open.read() {button { class: "hamburger", onclick: toggle_sidebar, "<<" }} 
-                            for page_info in page_list.clone() {
-                                div {
-                                    // class: "nav_item",
-                                    class: format_args!("sidebar-item {}", if active_page_id == page_info.path { "active" } else { "inactive" }),
-                                    onclick: move |_| {
-                                        path_signal.set(vec!(String::from(page_info.path)))
-                                    }, 
-                                    "{page_info.label}"
+                    let page_list = module.get_page_list();
+                    let (active_page_id, content) = get_page(&module, &path, &page_list);
+                    // let sub_menu = rsx!(
+                    //     div { class: "nav-left",
+                    //         for page_info in page_list {
+                    //             div {
+                    //                 class: "nav_item",
+                    //                 "{page_info.label}"
+                    //             }
+
+                    //         }
+                    //     }
+                    // );
+
+                    // Signal for sidebar visibility
+                    let mut sidebar_open = use_signal(|| true);
+
+                    // Toggle sidebar
+                    let toggle_sidebar = {
+                        let b = !*sidebar_open.read();
+                        move |_| {
+                            sidebar_open.set(b);
+                        }
+                    };
+
+                    // let zgoto_page = |p: &str| {
+                    //         let x= vec!(p);
+                    //         path_signal.set(x);
+                    // };
+
+                    let body = match content() {
+                        Ok(element) => rsx!(
+                            div { class: "filler", {element} }
+                        )?,
+                        // element,
+                        Err(error) => {
+                            let escaped_error = escape_html(&error.to_string());
+
+                            // let html = format!("Failed to load page content: <pre>{}</pre>", escaped_error);
+                            let html = format!("<div class=\"error\">Failed to load page content: <pre>{}</pre></div>", escaped_error);
+                            rsx! {
+                                div { dangerous_inner_html: "{html}" }
+                            }?
+                        },
+                    };
+
+                    rsx! {
+                        document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
+                        div { class: "layout-root",
+                            // Main container
+                            div { class: "container",
+                                // Sidebar
+                                nav {
+                                    class: format_args!("sidebar {}", if *sidebar_open.read() { "open" } else { "closed" }),
+                                    style: "width: 240px;", // fixed width
+                                    aria_label: "secondary navigation",
+
+                                    div { class: "sidebar-inner",
+                                        if *sidebar_open.read() {
+                                            button {
+                                                class: "hamburger",
+                                                onclick: toggle_sidebar,
+                                                "<<"
+                                            }
+                                        }
+                                        for page_info in page_list.clone() {
+                                            div {
+                                                // class: "nav_item",
+                                                class: format_args!(
+                                                    "sidebar-item {}",
+                                                    if active_page_id == page_info.path { "active" } else { "inactive" },
+                                                ),
+                                                onclick: move |_| { path_signal.set(vec![String::from(page_info.path)]) },
+                                                "{page_info.label}"
+                                            }
+                                        }
+                                                                        // }
+                                    }
                                 }
 
+                                // Main content
+                                main { class: "main",
+                                    // button { class: "hamburger", onclick: toggle_sidebar,if *sidebar_open.read() { "<<" } else { ">>" } }
+                                    if !*sidebar_open.read() {
+                                        button {
+                                            class: "hamburger",
+                                            onclick: toggle_sidebar,
+                                            ">>"
+                                        }
+                                    }
+                                    // button { class: "hamburger", onclick: toggle_sidebar, "☰" }
+                                    // div { class: "filler", "2Content goes here..." }
+                                    // div { class: "filler", {body}}
+                                    {body}
+                                }
                             }
-                        // }
+                        }
                     }
                 }
-
-                // Main content
-                main { class: "main",
-                    // button { class: "hamburger", onclick: toggle_sidebar,if *sidebar_open.read() { "<<" } else { ">>" } }
-                    if !*sidebar_open.read() {button { class: "hamburger", onclick: toggle_sidebar, ">>" }} 
-                    // button { class: "hamburger", onclick: toggle_sidebar, "☰" }
-                    // div { class: "filler", "2Content goes here..." }
-                    // div { class: "filler", {body}}
-                    {body}
+                else {
+                    rsx!{ "Building {module_id}..." }
                 }
             }
+            else {
+                builder.init_page()
+            }
         }
-    }
+        else {
+            rsx!{ "Loading {module_id}..." }
+        }
     }
     else {
-         rsx!{
-            "Loading {module_id}..."
-        }
+        rsx!{ "Loading {module_id}..." }
     }
-
-
-
-
+}
 
 
 
@@ -404,4 +468,3 @@ pub fn Module(module_id: String) -> Element {
     //         }
     //     }
     // }
-}

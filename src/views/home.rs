@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{MarcoSparkoContext, ModuleRegistrations};
+use crate::{MarcoSparkoContext, ModuleRegistrations, components::app::Route};
 use dioxus::prelude::*;
 
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
@@ -38,9 +38,16 @@ pub fn Home(
     rsx! {
         div {
             // h1 { "This is Home #{xid}!" }
-            h1 { "Modules"}
-            for (module_id, active) in modules {
-                "{module_id} [{active}]"
+            h1 { "Modules" }
+            for (module_id , active) in modules {
+                Link {
+                    class: "nav-item",
+                    to: Route::Module {
+                        module_id: module_id.clone(),
+                    },
+                    "{module_id}"
+                }
+                " [{active}]"
             }
         }
     }

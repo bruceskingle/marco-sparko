@@ -7,6 +7,7 @@ pub mod profile;
 
 mod cache_manager;
 pub use cache_manager::CacheManager;
+use sparko_graphql::RequestManager;
 
 
 use std::collections::BTreeMap;
@@ -92,15 +93,24 @@ pub trait CommandProvider {
 }
 
 #[async_trait]
-pub trait ModuleBuilder {
-     // fn with_init(&mut self, init: bool) -> anyhow::Result<&mut Self>;
-     async fn build(self: Box<Self>, init: bool) -> anyhow::Result<Box<dyn Module + Send>>;
+pub trait ModuleFactory: Send {
+    async fn is_ready(&self) -> anyhow::Result<bool>;
+    fn init_page(&self) -> Element;
+    async fn build(&self) -> anyhow::Result<Box<dyn Module + Send>>;
 }
 
-pub type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> anyhow::Result<Box<dyn ModuleBuilder>>;
+pub type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> anyhow::Result<Arc<dyn ModuleFactory>>;
+// pub type InitPageProvider = dyn Fn(Arc<MarcoSparkoContext>, Arc<RequestManager>) -> Element;
+
+pub struct ModuleRegistration {
+    pub module_id: String,
+    pub constructor: Arc<ModuleConstructor>,
+    // pub init_page_provider: Box<InitPageProvider>,
+    // pub builder: Option<Box<dyn ModuleBuilder>>,
+}
 
 #[derive(Clone, Default)]
-pub struct ModuleRegistrations(Arc<HashMap<String, Box<ModuleConstructor>>>);
+pub struct ModuleRegistrations(Arc<HashMap<String, ModuleRegistration>>);
 
 impl std::fmt::Debug for ModuleRegistrations {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -143,7 +153,7 @@ impl ModuleRegistrations {
 
         let mut module_registrations = HashMap::new();
 
-        Self::load_module(&mut module_registrations, octopus::Client::registration());
+        Self::load_module(&mut module_registrations, octopus::OctopusModule::registration());
 
         println!("Loaded {} modules", module_registrations.len());
 
@@ -153,9 +163,9 @@ impl ModuleRegistrations {
         ModuleRegistrations(Arc::new(module_registrations))
     }
 
-    fn load_module(module_registrations: &mut HashMap<String, Box<ModuleConstructor>> , registration: (String, Box<ModuleConstructor>)) {
-        println!("Load module {}", registration.0);
-        module_registrations.insert(registration.0, registration.1);
+    fn load_module(module_registrations: &mut HashMap<String, ModuleRegistration> , registration: ModuleRegistration) {
+        println!("Load module {}", &registration.module_id);
+        module_registrations.insert(registration.module_id.clone(), registration);
     }
 }
 
@@ -392,7 +402,7 @@ prints more detailed help on that specific command.
                     println!("ERROR: module '{}' is already active", module_id); 
                 }
                 else {
-                    let constructor = module_registration.as_ref();
+                    let constructor = module_registration.constructor.as_ref();
                     let profile = if let Some(value) = self.context.profile.active_profile.modules.get(module_id) {
                         Some(value.clone())
                     }
@@ -400,7 +410,7 @@ prints more detailed help on that specific command.
                         None
                     };
                     let builder = constructor(self.context.clone(), profile)?;
-                    let module = builder.build(true).await?;
+                    let module = builder.build().await?;
                     self.modules.insert(module_id.to_string(),module);
 
                     if self.current_module.is_none() {
@@ -808,7 +818,7 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
 
     pub async fn do_initialize(module_id: &str, init: bool, module_registrations: &ModuleRegistrations, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Box<dyn Module + Send>> {
         if let Some(module_registration) = module_registrations.0.get(module_id) {
-            let constructor = module_registration.as_ref();
+            let constructor = module_registration.constructor.as_ref();
             let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
                 Some(value.clone())
             }
@@ -818,12 +828,32 @@ pub async fn new() -> anyhow::Result<MarcoSparko> {
 
             println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
             let builder = constructor(context.clone(), profile)?;
-            let module = builder.build(init).await?;
+            let module = builder.build().await?;
             
             
             
 
             Ok(module)
+        }
+        else {
+            return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
+        }
+    }
+
+    pub async fn do_construct(module_id: &str, init: bool, module_registrations: &ModuleRegistrations, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Arc<dyn ModuleFactory + Send>> {
+        if let Some(module_registration) = module_registrations.0.get(module_id) {
+            let constructor = module_registration.constructor.as_ref();
+            let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
+                Some(value.clone())
+            }
+            else {
+                None
+            };
+
+            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            let builder = constructor(context.clone(), profile)?;
+
+            Ok(builder)
         }
         else {
             return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))

@@ -86,3 +86,121 @@ th.row-header {
     padding-right: 20px;
     font-weight: normal;
 }
+
+.error {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px dashed rgba(0,0,0,0.06);
+    background: red;
+    color: yellow;
+}
+
+/* Form input styling */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="radio"],
+textarea,
+select {
+    background-color: #1a1a1f;
+    color: #b0b0b0;
+    border: 1px solid #404045;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+textarea:focus,
+select:focus {
+    background-color: #252530;
+    color: #d0d0d0;
+    border-color: #505055;
+    outline: none;
+}
+
+input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 0;
+    margin-right: 8px;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #505055;
+    border-radius: 50%;
+    background-color: #2a2a2f;
+    transition: all 0.2s ease;
+}
+
+input[type="radio"]:hover {
+    border-color: #606065;
+    background-color: #353540;
+}
+
+input[type="radio"]:checked {
+    border-color: #5a5a60;
+    background: radial-gradient(circle, #707075 30%, #2a2a2f 70%);
+}
+
+label {
+    color: #a0a0a0;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* Button styling */
+button {
+    background-color: #2a2a2f;
+    color: #b0b0b0;
+    border: 1px solid #404045;
+    border-radius: 4px;
+    padding: 10px 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+button:hover {
+    background-color: #353540;
+    color: #d0d0d0;
+    border-color: #505055;
+}
+
+/* Heading styles */
+h1 {
+    color: #d0d0d0;
+    font-size: 28px;
+    margin-bottom: 16px;
+}
+
+h2 {
+    color: #c0c0c0;
+    font-size: 22px;
+    margin-bottom: 12px;
+}
+
+h3 {
+    color: #b0b0b0;
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+h4 {
+    color: #a0a0a0;
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+h5,
+h6 {
+    color: #909090;
+    font-size: 14px;
+    margin-bottom: 6px;
+}

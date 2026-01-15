@@ -48,6 +48,10 @@ pub fn App() -> Element {
     let mut init_signal = use_signal::<bool>(|| true);
     let init = *init_signal.read();
     let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);
+    
+    // Store the init signal in context so it can be accessed and reset from anywhere
+    use_context_provider::<Signal<bool>>(move || init_signal);
+    
     if init {
         let marco_sparko_context = MarcoSparkoContext::new()?;
         context_signal.set(Some(marco_sparko_context));
@@ -65,6 +69,8 @@ pub fn App() -> Element {
         ErrorBoundary {
             handle_error: |errors: ErrorContext| {
                 rsx! {
+
+        
 
                     div { "Oops, we encountered an error. Please report this to the developer of this application" }
         
