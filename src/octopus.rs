@@ -879,7 +879,7 @@ impl OctopusModuleFactory {
 
         let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?);
        
-        let mut client = OctopusModule::new(self.context.clone(), self.cache_manager.clone(), self.profile.clone(), 
+        let client = OctopusModule::new(self.context.clone(), self.cache_manager.clone(), self.profile.clone(), 
             authenticated_request_manager, self.verbose
         ).await?;
 

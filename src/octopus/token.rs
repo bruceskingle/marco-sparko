@@ -45,13 +45,17 @@ const GRACE_PERIOD: u32 = 300;
 struct StoredToken {
     token_expires:      u32,
     token:              String,
+    refresh_expires:    u32,
+    refresh:            String,
 }
 
 impl From<&OctopusToken> for StoredToken {
     fn from(from: &OctopusToken) -> StoredToken {
         StoredToken {
             token_expires: from.token_expires,
-            token: from.token.as_ref().clone()
+            token: from.token.as_ref().clone(),
+            refresh_expires: from.refresh_expires,
+            refresh: from.refresh.as_ref().clone()
         }
     }
 }
@@ -59,13 +63,17 @@ impl From<&OctopusToken> for StoredToken {
 struct OctopusToken {
     token_expires:      u32,
     token:              Arc<String>,
+    refresh_expires:    u32,
+    refresh:            Arc<String>,
 }
 
 impl From<StoredToken> for OctopusToken {
     fn from(from: StoredToken) -> OctopusToken {
         OctopusToken {
             token_expires: from.token_expires,
-            token: Arc::new(from.token)
+            token: Arc::new(from.token),
+            refresh_expires: from.refresh_expires,
+            refresh: Arc::new(from.refresh)
         }
     }
 }
@@ -84,6 +92,8 @@ impl From<ObtainKrakenJsonWebToken> for OctopusToken {
         OctopusToken {
             token_expires: expires,
             token: Arc::new(from.token_),
+            refresh_expires: from.refresh_expires_in_ as u32,
+            refresh: Arc::new(from.refresh_token_),
         }
     }
 }
@@ -118,58 +128,6 @@ impl OctopusAuthenticator {
         }
     }
 }
-
-// pub struct OctopusAuthenticatorInput {
-//     api_key:            Option<String>,
-//     email:              Option<String>,
-//     password:           Option<String>,
-// }
-
-// impl OctopusAuthenticatorInput {
-//     fn from_api_key(api_key: String) -> OctopusAuthenticatorInput {
-//         OctopusAuthenticatorInput {
-//             api_key: Some(api_key),
-//             email: None,
-//             password: None
-//         }
-//     }
-
-//     fn from_password(email: String, password: String) -> OctopusAuthenticatorInput {
-//         OctopusAuthenticatorInput {
-//             api_key: None,
-//             email: Some(email),
-//             password: Some(password)
-//         }
-//     }
-
-//     fn to_obtain_json_web_token_input(&self) ->  Result<ObtainJsonWebTokenInput, sparko_graphql::Error>{
-
-        
-//         if let Some(api_key) = &self.api_key {
-//             ObtainJsonWebTokenInput::builder()
-//             .with_apikey(api_key.clone())
-//             .build()
-//         }
-//         else {
-//             if let Some(email) = &self.email {
-//                 if let Some(password) = &self.password {
-//                     ObtainJsonWebTokenInput::builder()
-//                         .with_email(email.clone())
-//                         .with_password(password.clone())
-//                         .build()
-//                 }
-//                 else {
-//                     // panic!("Unreachable");
-//                     Err(sparko_graphql::Error::MissingRequiredValueError("Email provided but Password not provided"))
-//                 }
-//             }
-//             else {
-//                 // panic!("Unreachable");
-//                 Err(sparko_graphql::Error::MissingRequiredValueError("Neither API_KEY or Email provided"))
-//             }
-//         }
-//     }
-// }
 
 pub struct OctopusTokenManager {
     context: Arc<MarcoSparkoContext>,
@@ -217,10 +175,10 @@ impl TokenManager for OctopusTokenManager {
     async fn get_authenticator(&self, refresh: bool)  -> Result<Arc<String>, sparko_graphql::Error> {
         let mut locked_token = self.token.lock().await;
 
-        let current_token = if refresh {
-            None
-        }
-        else {
+        let mut current_token = None;
+        let mut refresh_token = None;
+
+        if !refresh {
             if let Some(token) = &*locked_token {
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -228,32 +186,53 @@ impl TokenManager for OctopusTokenManager {
                     .as_secs() as u32;
 
                 if token.token_expires - GRACE_PERIOD > now {
-                    Some(token.token.clone())
+                    current_token = Some(token.token.clone());
                 }
-                else {
+                if token.refresh_expires - GRACE_PERIOD > now {
+                    refresh_token = Some(token.refresh.clone());
+                }
+            } 
+        }
 
-                    None
-                }
-            } else {
-                None
-            }
-        };
+        // let current_token = if refresh {
+        //     None
+        // }
+        // else {
+        //     if let Some(token) = &*locked_token {
+        //         let now = SystemTime::now()
+        //             .duration_since(UNIX_EPOCH)
+        //             .unwrap()
+        //             .as_secs() as u32;
+
+        //         if token.token_expires - GRACE_PERIOD > now {
+        //             Some(token.token.clone())
+        //         }
+        //         else {
+
+        //             None
+        //         }
+        //     } else {
+        //         None
+        //     }
+        // };
 
         if let Some(token) = current_token {
             Ok(token)
         }
         else {
-            let mut locked_authenticator = self.authenticator.lock().await;
-            if let Some(authenticator) = &*locked_authenticator {
-                
-                let input = authenticator.to_obtain_json_web_token_input()?;
+            if let Some(refresh_token) = refresh_token {
+                println!("Refreshing Octopus token using refresh token...");
 
-                println!("Obtaining new Octopus token...{:?}", input);
+                let input = ObtainJsonWebTokenInput::builder()
+                    .with_refresh_token(refresh_token.as_ref().clone())
+                    .build()?;
 
                 let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-                let response = self.request_manager.call(&mutation, None).await?;
+                let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call(&mutation, None).await?;
         
                 let token = OctopusToken::from(response.obtain_kraken_token_);
+
+                println!("Obtained new Octopus token via refresh: {:?}", token.token);
         
                 if let Err(error) = self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token)) {
                     return Err(sparko_graphql::Error::InternalError(format!("Failed to update cache {}", error)))
@@ -266,7 +245,31 @@ impl TokenManager for OctopusTokenManager {
                 Ok(result)
             }
             else {
-                Err(sparko_graphql::Error::MissingRequiredValueError("No authenticator provided"))
+                let locked_authenticator = self.authenticator.lock().await;
+                if let Some(authenticator) = &*locked_authenticator {
+                    
+                    let input = authenticator.to_obtain_json_web_token_input()?;
+
+                    println!("Obtaining new Octopus token...{:?}", input);
+
+                    let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
+                    let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call(&mutation, None).await?;
+            
+                    let token = OctopusToken::from(response.obtain_kraken_token_);
+            
+                    if let Err(error) = self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token)) {
+                        return Err(sparko_graphql::Error::InternalError(format!("Failed to update cache {}", error)))
+                    }
+            
+                    let result = token.token.clone();
+            
+                    *locked_token = Some(token);
+                    
+                    Ok(result)
+                }
+                else {
+                    Err(sparko_graphql::Error::MissingRequiredValueError("No authenticator provided"))
+                }
             }
         }
     }

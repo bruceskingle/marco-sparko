@@ -280,8 +280,9 @@ impl MarcoSparkoContext {
      {
         if let Ok(path) = self.get_cache_file_path(module_id) {
             if let Ok(reader) = fs::File::open(path) {
-                if let Ok(result) = serde_json::from_reader(reader) {
-                    return Some(result)
+                match serde_json::from_reader(reader) {
+                    Ok(result) => return Some(result),
+                    Err(error) => println!("ERROR reading cached token: {:?}", error),
                 }
             }
         }
