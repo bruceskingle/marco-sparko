@@ -45,6 +45,7 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 #[component]
 // pub fn App(profile_manager: Arc<ProfileManager>) -> Element {
 pub fn App() -> Element {
+    println!("Rendering App component MAIN_CSS={}", MAIN_CSS);
     let mut init_signal = use_signal::<bool>(|| true);
     let init = *init_signal.read();
     let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);

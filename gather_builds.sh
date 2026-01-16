@@ -88,7 +88,7 @@ EOF
     cat > "$RELEASE_ROOT/$arch/$APP_NAME.app/Contents/MacOS/$APP_NAME" <<EOF
 #!/usr/bin/osascript
 set AppleScript's text item delimiters to "/"
-set myPath to {"clear && exec "} as text & (quoted form of ((text items 1 through -2 of (POSIX path of (path to me as text))) & {"marco-sparko"} as text))
+set myPath to {"clear && exec "} as text & (quoted form of ((text items 1 through -2 of (POSIX path of (path to me as text))) & {"Marco Sparko"} as text))
 
 tell application "Terminal"
 	activate
@@ -109,15 +109,16 @@ mkdir -p build
 # tempfile=`mktemp /tmp/marco-sparko-XXXXXXXX`
 # scp $BUILDER_X86_64_APPLE_DARWIN:git/marco-sparko/target/release/marco-sparko $tempfile
 
+arch=aarch64-apple-darwin
+create_app $arch
+cp target/dx/marco-sparko "$RELEASE_ROOT/$arch/$APP_NAME.app/Contents/MacOS"
+cp -r assets "$RELEASE_ROOT/$arch/$APP_NAME.app/Contents/Resources/assets"
+create_dmg $arch "$RELEASE_ROOT/$arch" "marco-sparko-$VERSION-$arch"
+
 
 arch=x86_64-apple-darwin
 create_app $arch
 scp $BUILDER_X86_64_APPLE_DARWIN:git/marco-sparko/target/release/marco-sparko "$RELEASE_ROOT/$arch/$APP_NAME.app/Contents/MacOS"
-create_dmg $arch "$RELEASE_ROOT/$arch" "marco-sparko-$VERSION-$arch"
-
-arch=aarch64-apple-darwin
-create_app $arch
-cp target/release/marco-sparko "$RELEASE_ROOT/$arch/$APP_NAME.app/Contents/MacOS"
 create_dmg $arch "$RELEASE_ROOT/$arch" "marco-sparko-$VERSION-$arch"
 
 cp target/x86_64-pc-windows-msvc/release/marco-sparko.exe build/marco-sparko-$VERSION-x86_64-pc-windows-msvc.exe
