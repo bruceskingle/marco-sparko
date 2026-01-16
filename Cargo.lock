@@ -2693,7 +2693,7 @@ dependencies = [
 
 [[package]]
 name = "marco-sparko"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4444,7 +4444,7 @@ dependencies = [
 
 [[package]]
 name = "sparko_graphql"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "display_json",
  "once_cell",
