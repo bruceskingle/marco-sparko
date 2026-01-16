@@ -2,6 +2,7 @@
     "cSpell.words": [
         "Aira",
         "AMBRIDGE",
+        "apikey",
         "BORSETSHIRE",
         "BORTCHESTER",
         "BROOKFIELD",
@@ -12,13 +13,19 @@
         "mprn",
         "Myenergi",
         "Octoplus",
+        "onchange",
+        "onclick",
+        "oninput",
+        "onsubmit",
         "Powerups",
         "PPMID",
         "Reedline",
         "reqwest",
+        "rpassword",
         "SMETS",
         "sparko",
         "UKPN",
+        "wordlen",
         "Zappi"
     ]
 }

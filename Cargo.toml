@@ -1,8 +1,9 @@
 [package]
 name = "marco-sparko"
 description = "The Energy Explorer"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
+default-run = "marco-sparko"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,7 +15,7 @@ time = { version = "0.3", features = ["serde", "parsing", "formatting"] }
 chrono = "0.4"
 serde = { version = "1.0", features = ["derive"], with = "iso8601"}
 serde_json = "1.0"
-tokio = { version = "1.38", features = ["full"] }
+tokio = { version = "1.48.0", features = ["full"] }
 reqwest = { version = "0.11", features = ["json"] }
 rpassword = "7.3"
 dirs = "5.0"
@@ -25,8 +26,8 @@ display_json = "0.2.1"
 rust_decimal = "1.36.0"
 rust_decimal_macros = "1.36.0"
 const_format = "0.2.32"
-sparko_graphql = {veraion = "0.0.1", path = "../../git/sparko_graphql" }
-serde_with = "3.9.0"
+sparko_graphql = {version = "0.3.0", path = "../../git/sparko_graphql" }
+#serde_with = "3.9.0"
 #reedline-repl-rs = { version = "1.2.1", features = ["async"] }
 futures = "0.3.31"
 reedline = "0.38.0"
@@ -35,6 +36,25 @@ indexmap = "2.7.1"
 time-tz = "2.0.0"
 #tzdb = "0.7.2"
 #tz-rs = "0.7.0"
+dioxus = { version = "0.7.0", features = ["router", "desktop"] }
+dioxus-desktop = "0.7"
+anyhow = "1.0.100"
+wasm-bindgen = "0.2.105"
+fs4 = "0.13.1"
 
 [dev-dependencies]
 tokio-test = "*"
+
+[features]
+default = ["desktop"]
+desktop = ["dioxus/desktop"]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

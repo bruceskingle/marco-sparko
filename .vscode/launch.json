@@ -109,6 +109,61 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug cli",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin",
+                    "cli"
+                ],
+                "filter": {
+                    "name": "cli",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--debug"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Debug Pre-built app",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/marco-sparko",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1"
+            }
+        },
+
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Dioxus Desktop App",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug executable 'marco-sparko'",
             "cargo": {
                 "args": [

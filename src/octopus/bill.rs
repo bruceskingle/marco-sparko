@@ -1,151 +1,91 @@
-use std::collections::HashMap;
+use dioxus::prelude::*;
+use std::fmt;
+
 use indexmap::IndexMap;
-use std::sync::Arc;
+
+use anyhow::anyhow;
 
 use sparko_graphql::AuthenticatedRequestManager;
 
+use crate::cache_manager::Indexer;
 use crate::octopus::decimal::Decimal;
-use crate::octopus::meter::MeterType;
 use crate::util::as_decimal;
 use crate::CacheManager;
 
 use super::graphql::{bill, meter};
-use super::meter::{MeterManager, Tariff};
-use bill::get_bills::BillInterface;
+use super::meter::Tariff;
 use bill::get_statement_transactions::TransactionType;
-use super::graphql::BillTypeEnum;
 use super::RequestManager;
-use super::{token::OctopusTokenManager, Error};
+use super::{token::OctopusTokenManager};
+mod manager;
+pub use manager::BillManager;
 
 // const one_hundred: Decimal = Decimal::new(100, 0);
 // const format: time::format_description = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
 
-pub struct BillManager {
-    // pub account_number: String,
-    pub cache_manager: Arc<CacheManager>,
-    pub request_manager: Arc<RequestManager>,
-    pub bills: HashMap<String, BillList>,
-}
 
-impl BillManager {
-    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> Self {
-        Self {
-            // account_number,
-            cache_manager: cache_manager.clone(),
-            request_manager: request_manager.clone(),
-            bills: HashMap::new(),
-        }
-    }
+pub type BillType = super::graphql::BillTypeEnum;
 
-    pub async fn get_bills(&mut self, account_number: &String) -> Result<&BillList, Error> {
-        Ok(self.bills.entry(account_number.clone()).or_insert(BillList::new(&self.cache_manager, &self.request_manager, account_number.clone(), crate::CHECK_FOR_UPDATES).await?))
-    }
-
-    // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> Result<BillTransactionList, Error> {
-    //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
-    // }
-
-    async fn get_statement_transactions2(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, account_number: String, statement_id: String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz)  -> Result<Vec<BillTransactionBreakDown>, Error> {
-
-
-        let mut result = Vec::new();
-        let transactions = BillTransactionList::new(cache_manager, request_manager, account_number.clone(), statement_id).await?;
-
-
-        for (_cursor, transaction) in transactions.transactions {
-            if let TransactionType::Charge(charge) = &transaction {
-                if let Some(consumption) = &charge.consumption_ {
-                    // print the line items making up this charge
-                    //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
-
-                    let meter_type = match transaction.as_transaction_type().title_.as_str() {
-                        "Gas" => MeterType::Gas,
-                        "Electricity" => MeterType::Electricity,
-                        _ => panic!("Unknown consumption type")
-                    };
-
-                    let line_items = Some(meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?);
-
-                    result.push(BillTransactionBreakDown{
-                        transaction,
-                        line_items,
-                    });
-                    continue;
-                }
-            }
-            result.push(BillTransactionBreakDown{
-                transaction,
-                line_items: None,
-            });
-        }
-
-        Ok(result)
-    }
-
-    pub async fn bills_handler(&mut self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  Result<(), Error> {
-        self.get_bills(account_number).await?.print_summary_lines();
-        Ok(())
-    }
-
-
-    pub async fn bill_handler(&mut self, mut args: std::str::SplitWhitespace<'_>, account_number: &String, meter_manager: &mut MeterManager, billing_timezone: &time_tz::Tz) ->  Result<(), Error> {
-        // let one_hundred = Decimal::new(100, 0);
-        // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-        let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
-        let request_manager = self.request_manager.clone();
-        let bills = self.get_bills(account_number).await?;
-
-        if let Some(bill_id) = args.next() {
-            for (_id, bill) in &bills.bills {
-                if bill_id == bill.as_bill_interface().id_ {
-                    let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-
-
-                        let transactions = Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
-
-                        Some(transactions)
-                    }
-                    else {
-                        None
-                    };
-
-                    bill.print(transactions);
-                    return Ok(())
-                }
-            }
-            //println!("Unknown bill '{}'", bill_id);
-        }
-        else {
-            if bills.bills.is_empty() {
-                //println!("There are no bills in this account");
-            }
-            else {
-                let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
-                let transactions = if let bill::get_bills::BillInterface::StatementType(_) = bill {
-                    Some(Self::get_statement_transactions2(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
-                }
-                else {
-                    None
-                };
-                bill.print(transactions);
-            }
-        }
-        Ok(())
-    }
-}
-
-impl BillTypeEnum {
+impl BillType {
     fn as_str(&self) -> &'static str {
         match self {
-            BillTypeEnum::Statement => "Statement",
-            BillTypeEnum::Invoice => "Invoice",
-            BillTypeEnum::CreditNote => "CreditNote",
-            BillTypeEnum::PreKraken => "PreKraken",
+            BillType::Statement => "Statement",
+            BillType::Invoice => "Invoice",
+            BillType::CreditNote => "CreditNote",
+            BillType::PreKraken => "PreKraken",
         }
     }
 }
 
-impl BillInterface {
+pub type AbstractBill = crate::octopus::graphql::bill::get_bills::BillInterface;
+
+
+impl AbstractBill {
+    // pub async fn bill_gui_handler(&self, account_number: &String, meter_manager: &MeterManager, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    //     // let one_hundred = Decimal::new(100, 0);
+    //     // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+    //     let cache_manager: Arc<CacheManager> = self.cache_manager.clone();
+    //     let request_manager = self.request_manager.clone();
+    //     let bills = self.get_bills(account_number).await?;
+
+    //     if let Some(bill_id) = args.next() {
+    //         for (_id, bill) in &bills.bills {
+    //             if bill_id == bill.as_bill_interface().id_ {
+    //                 let transactions = if let bill::get_bills::AbstractBill::StatementType(_) = bill {
+
+
+    //                     let transactions = Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill_id.to_string(), meter_manager, billing_timezone).await?;
+
+    //                     Some(transactions)
+    //                 }
+    //                 else {
+    //                     None
+    //                 };
+
+    //                 bill.print(transactions);
+    //                 return Ok(())
+    //             }
+    //         }
+    //         //println!("Unknown bill '{}'", bill_id);
+    //     }
+    //     else {
+    //         if bills.bills.is_empty() {
+    //             //println!("There are no bills in this account");
+    //         }
+    //         else {
+    //             let (_id, bill) = bills.bills.get(bills.bills.len() - 1).unwrap();
+    //             let transactions = if let bill::get_bills::AbstractBill::StatementType(_) = bill {
+    //                 Some(Self::fetch_bill_transaction_breakdown(&cache_manager, &request_manager, account_number.clone(), bill.as_bill_interface().id_.to_string(), meter_manager, billing_timezone).await?)
+    //             }
+    //             else {
+    //                 None
+    //             };
+    //             bill.print(transactions);
+    //         }
+    //     }
+    //     Ok(())
+    // }
+
     pub fn print_summary_line_headers() {
         println!("{:-^54} {:-^10} {:-^32} {:-^32} {:-^10}",
             "",
@@ -170,6 +110,7 @@ impl BillInterface {
             "c/f"
         );
     }
+
     pub fn print_summary_line(&self) {
         let abstract_bill = self.as_bill_interface();
 
@@ -182,7 +123,7 @@ impl BillInterface {
         );
 
         match self {
-            BillInterface::StatementType(statement) => {
+            AbstractBill::StatementType(statement) => {
                 print!(" {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}",
                     as_decimal(statement.opening_balance_, 2),
                     as_decimal(statement.total_charges_.net_total_, 2),
@@ -194,8 +135,8 @@ impl BillInterface {
                     as_decimal(statement.closing_balance_, 2)
                 );
             },
-            BillInterface::PreKrakenBillType(_) => {},
-            BillInterface::PeriodBasedDocumentType(period_based_document) => {
+            AbstractBill::PreKrakenBillType(_) => {},
+            AbstractBill::PeriodBasedDocumentType(period_based_document) => {
                 print!(" {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}",
                     "",
                     as_decimal(period_based_document.total_charges_.net_total_, 2),
@@ -207,7 +148,7 @@ impl BillInterface {
                     ""
                 );
             },
-            BillInterface::InvoiceType(invoice) => {
+            AbstractBill::InvoiceType(invoice) => {
                 print!(" {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}",
                     "",
                     "",
@@ -222,6 +163,200 @@ impl BillInterface {
         }
 
         println!();
+    }
+
+     pub fn gui_summary_header() -> Element{
+        rsx!{
+            tr { style: "background: #666666;",
+
+                th { colspan: 5, "" }
+                th { "Balance" }
+                th { colspan: 3, "Charges" }
+                th { colspan: 3, "Credits" }
+                th { "Balance" }
+            }
+            tr { style: "background: #666666;",
+                th { "Date" }
+                th { "Ref" }
+                th { "From" }
+                th { "To" }
+                th { "Type" }
+                th { "b/f" }
+                th { "Net" }
+                th { "Tax" }
+                th { "Gross" }
+                th { "Net" }
+                th { "Tax" }
+                th { "Gross" }
+                th { "c/f" }
+            }
+        }
+    }
+
+    pub fn gui_summary_line(&self) -> Element {
+        let abstract_bill = self.as_bill_interface();
+
+        let detail = match self {
+            AbstractBill::StatementType(statement) => {
+                rsx!{
+                    td { class: "numeric", "{as_decimal(statement.opening_balance_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_charges_.net_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_charges_.tax_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_charges_.gross_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_credits_.net_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_credits_.tax_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.total_credits_.gross_total_, 2)}" }
+                    td { class: "numeric", "{as_decimal(statement.closing_balance_, 2)}" }
+                }
+            },
+            AbstractBill::PreKrakenBillType(_) => rsx!{},
+            AbstractBill::PeriodBasedDocumentType(period_based_document) => {
+                rsx!{
+                    td {}
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_charges_.net_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_charges_.tax_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_charges_.gross_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_credits_.net_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_credits_.tax_total_, 2)}"
+                    }
+                    td { class: "numeric",
+                        "{as_decimal(period_based_document.total_credits_.gross_total_, 2)}"
+                    }
+                    td {}
+                }
+            },
+            AbstractBill::InvoiceType(invoice) => {
+                rsx!{
+                    td {}
+                    td {}
+                    td {}
+                    td {}
+                    td {}
+                    td {}
+                    td { class: "numeric", "{as_decimal(invoice.gross_amount_, 2)}" }
+                    td {}
+                }
+            },
+        };
+
+        let id = abstract_bill.id_.clone();
+        rsx!{
+            tr {
+                td { "{abstract_bill.issued_date_}" }
+                td {
+                    div {
+                        class: "link",
+                        // onclick: |_| {path_signal.set(vec!(String::from("bills"), abstract_bill.id_.clone()))},
+                        onclick: move |_| {
+                            // println!("Id={}", id);
+                            // let id = abstract_bill.id_.clone();
+                            // nav_callback(id);
+
+                            let mut path_signal = use_context::<Signal<Vec<String>>>();
+                            let new_path = vec![String::from("bills"), id.clone()];
+                            path_signal.set(new_path);
+                        },
+                        "{abstract_bill.id_}"
+                    }
+                }
+                td { "{abstract_bill.from_date_}" }
+                td { "{abstract_bill.to_date_}" }
+                td { "{abstract_bill.bill_type_.as_str()}" }
+                {detail}
+            }
+        }
+    }
+
+    pub fn gui_display(&self, transactions: &Vec<BillTransactionBreakDown>) -> Element {
+        let abstract_bill = self.as_bill_interface();
+        let mut total_charges = TotalCharges::new();
+        let mut parts = Vec::new();
+
+        let transaction_lines = rsx!{
+            for txn in transactions {
+                {txn.gui_summary_line(&mut total_charges)}
+            }
+        };
+
+        let totals = if total_charges.units.is_positive() {
+            let rate = Decimal::from(total_charges.charge) / total_charges.units;
+            rsx!{
+                tr {
+                    td {}
+                    td { "TOTALS" }
+                    td { colspan: 10, "" }
+                }
+                tr {
+                    td {}
+                    td { "Electricity Import" }
+                    td { colspan: 3, "" }
+                    td { class: "numeric", {{ as_decimal(total_charges.charge, 2) }} }
+                    td { colspan: 4, "" }
+                    td { class: "numeric", {{ format!("{}", total_charges.units) }} }
+                    td { class: "numeric", {{ format!("{:>10.3}", rate) }} }
+                }
+            }
+        } else {
+            rsx!{}
+        };
+            
+        parts.push(rsx!{
+            h1 { "Energy Account Statement" }
+            table { class: "display",
+                tr {
+                    th { class: "row-header", "Date:" }
+                    td { "{abstract_bill.issued_date_}" }
+                }
+                tr {
+                    th { class: "row-header", "Ref:" }
+                    td { "{abstract_bill.id_}" }
+                }
+                tr {
+                    th { class: "row-header", "From:" }
+                    td { "{abstract_bill.from_date_}" }
+                }
+                tr {
+                    th { class: "row-header", "To:" }
+                    td { "{abstract_bill.to_date_}" }
+                }
+            }
+
+            h2 { "Summary of Charges" }
+
+            table {
+                {BillTransactionBreakDown::gui_summary_headers()}
+
+                {transaction_lines}
+                {totals}
+            }
+
+            if total_charges.units.is_positive() {
+                h2 { "Detailed Breakdown" }
+                for transaction in transactions {
+                    {transaction.gui_display()}
+                }
+            }
+        });
+
+        
+
+
+        rsx! {
+            tr {
+                for item in parts {
+                    {item}
+                }
+            }
+        }
     }
 
     pub fn print(&self, transactions: Option<Vec<BillTransactionBreakDown>>) {
@@ -243,11 +378,6 @@ impl BillInterface {
             }
 
             if total_charges.units.is_positive() {
-
-
-
-
-
                 println!("\nTOTALS");
                 let rate = Decimal::from(total_charges.charge) / total_charges.units;
 
@@ -273,15 +403,15 @@ impl BillInterface {
             println!();
             println!("Detailed Breakdown");
             println!("==================");
-            total_charges = TotalCharges::new();
             
             for transaction in &transactions {
-                transaction.print(&mut total_charges);
+                transaction.print();
             }
         }
         
     }
 }
+
 
 pub struct TotalCharges {
     charge: i32,
@@ -314,6 +444,18 @@ impl TransactionType {
 
     pub fn print_break_down_line_headers() {
         println!("{:-^20} {:-^20} {:-^10} {:-^12} {:-^10}", "From", "To", "Amount", "Units", "p/unit");
+    }
+
+    pub fn gui_break_down_line_headers() -> Element {
+        rsx!{
+            tr {
+                th { colspan: 2, "From" }
+                th { colspan: 2, "To" }
+                th { "Amount" }
+                th { "Units" }
+                th { "p/unit" }
+            }
+        }
     }
 
     pub fn print_summary_line(&self, total_charges: &mut TotalCharges) {
@@ -382,6 +524,144 @@ impl TransactionType {
             }
             println!();
     }
+
+    pub fn gui_summary_headers() -> Element {
+        rsx!{
+            tr {
+                th { "id" }
+                th { "Description" }
+                th { "Posted" }
+                th { "Net" }
+                th { "Tax" }
+                th { "Total" }
+                th { "Balance" }
+                th { "From" }
+                th { "To" }
+                th { "Amount" }
+                th { "Units" }
+                th { "p/unit" }
+            }
+        }
+    }
+
+    pub fn gui_summary_line(&self, total_charges: &mut TotalCharges) -> Element {
+            let txn = self.as_transaction_type();
+
+            let mut parts = Vec::new();
+
+            parts.push(rsx!(
+                td { class: "link", "{txn.id_.as_str()}" }
+
+            )?);
+            parts.push(if let TransactionType::Charge(charge) = &self {
+                if charge.is_export_ {
+                    rsx!(
+                        td {
+                            {txn.title_.as_str()}
+                            " Export"
+                        }
+                    )
+                }
+                else {
+                        rsx!(
+                            td { {txn.title_.as_str()} }
+                        )
+                }
+            }
+            else {
+                rsx!(
+                    td { {txn.title_.as_str()} }
+                )
+            }?);
+            parts.push(rsx!(
+                td { "{txn.posted_date_}" }
+            )?);
+
+            if let TransactionType::Charge(charge) = &self {
+                 parts.push(rsx!(
+                    td { class: "numeric", {as_decimal(txn.amounts_.net_, 2)} }
+                    td { class: "numeric", {as_decimal(txn.amounts_.tax_, 2)} }
+                    td { class: "numeric", {as_decimal(txn.amounts_.gross_, 2)} }
+                    td { class: "numeric", {as_decimal(txn.balance_carried_forward_, 2)} }
+                )?);
+                if let Some(consumption) = &charge.consumption_ {
+                    parts.push(rsx!(
+                        td { {format!("{}", consumption.start_date_)} }
+                        td { {format!("{}", consumption.end_date_)} }
+                        td { class: "numeric", {as_decimal(txn.amounts_.net_, 3)} }
+                        td { class: "numeric", {format!("{:>12.4}", consumption.quantity_)} }
+                    )?);
+
+                    let rate = if consumption.quantity_.is_non_zero() {
+                        parts.push(rsx!(
+                            td { class: "numeric",
+                                {format!("{:>12.4}", Decimal::from(txn.amounts_.gross_) / consumption.quantity_)}
+                            }
+                        )?);
+                    } else {
+                        parts.push(rsx!(
+                            td { class: "numeric", {format!("{:>12.4}", Decimal::new(0, 0))} }
+                        )?);
+                    };
+
+                    parts.push(rsx!(
+                        td { {rate} }
+                    )?);
+
+                    if charge.is_export_ {
+                        
+                    }
+                    else {
+                            if txn.title_.eq("Electricity") {
+                                total_charges.charge += *&txn.amounts_.gross_;
+                                total_charges.units += consumption.quantity_;
+                            }
+                        }
+                }
+                else {
+                    parts.push(rsx!(
+                        td { "" }
+                        td { "" }
+                        td { "" }
+                        td { "" }
+                        td { "" }
+                    )?);
+                }
+            }
+            else {
+                parts.push(rsx!(
+                    td { {as_decimal(-txn.amounts_.net_, 2)} }
+                    td { {as_decimal(-txn.amounts_.tax_, 2)} }
+                    td { {as_decimal(-txn.amounts_.gross_, 2)} }
+                    td { {as_decimal(txn.balance_carried_forward_, 2)} }
+                )?);
+                parts.push(rsx!(
+                    td { "" }
+                    td { "" }
+                    td { "" }
+                    td { "" }
+                    td { "" }
+                )?);
+            }
+            if let Some(note) = &txn.note_ {
+                let note = note.trim();
+                parts.push(rsx!(
+                    td { {note} }
+                )?);
+            }
+            else {
+                parts.push(rsx!(
+                    td { "" }
+                )?);
+            }
+            rsx! {
+                tr {
+                    for item in parts {
+                        {item}
+                    }
+                }
+            }
+    }
 }
 
 pub struct BillTransactionBreakDown {
@@ -394,7 +674,214 @@ impl BillTransactionBreakDown {
         self.transaction.print_summary_line(total_charges);
     }
 
-    pub fn print(&self, total_charges: &mut TotalCharges) {
+    pub fn gui_summary_line(&self, total_charges: &mut TotalCharges) -> Element{
+        self.transaction.gui_summary_line(total_charges)
+    }
+
+    pub fn gui_summary_headers() -> Element{
+        TransactionType::gui_summary_headers()
+    }
+
+    pub fn gui_display(&self) -> Element {
+        let one_hundred = Decimal::new(100, 0);
+        // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
+        let time_format = time::format_description::parse("           [hour]:[minute]:[second]").unwrap();
+
+        let mut parts = Vec::new();
+
+        if let Some(line_item_map) = &self.line_items {
+            for (_agreement_id, (tariff, line_items)) in line_item_map {
+
+                let mut amount_map = IndexMap::new();
+                let mut total_amount = Decimal::new(0,0);
+                let mut total_units = Decimal::new(0,0);
+
+                println!();
+                parts.push(
+                    rsx!{
+                        {tariff.gui_display()}
+                    }?
+                );
+
+
+                let mut sub_parts = Vec::new();
+                
+                sub_parts.push(TransactionType::gui_break_down_line_headers()?);
+                let mut prev = None;
+                for item in line_items {
+                    let amount = item.net_amount_ / one_hundred;
+
+                    total_amount += amount;
+                    total_units += item.number_of_units_;
+
+                    let unit_cost = if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ };
+
+                    let (from_date, from_time) = if let Some(prev) = prev {
+                        if prev == item.start_at_.date() {
+                            ("".to_string(), item.start_at_.format(&time_format).unwrap())
+                        } else {
+                            (item.start_at_.format(&date_format).unwrap(), item.start_at_.format(&time_format).unwrap())
+                        }
+                    } else {
+                        (item.start_at_.format(&date_format).unwrap(), item.start_at_.format(&time_format).unwrap())
+                    };
+
+                    let (to_date, to_time) = if item.end_at_.date() == item.start_at_.date() {("".to_string(), item.end_at_.format(&time_format).unwrap())} else {(item.end_at_.format(&date_format).unwrap(), item.end_at_.format(&time_format).unwrap())};
+
+                    
+
+                    if item.number_of_units_.is_positive() {
+                        let key = format!("{:.2}", unit_cost);
+                        if let Some((total_amount, total_units)) = amount_map.get(&key) {
+                            amount_map.insert(key, (amount + *total_amount, item.number_of_units_ + *total_units));
+                        }
+                        else {
+                            amount_map.insert(key, (amount, item.number_of_units_));
+                        }
+                    }
+                    
+                    prev = Some(item.start_at_.date());
+
+                    sub_parts.push(rsx!{
+                        tr {
+                            td { {from_date} }
+                            td { {from_time} }
+                            td { {to_date} }
+                            td { {to_time} }
+                            td { class: "numeric", {format!("{:.3}", amount)} }
+                            td { class: "numeric", {format!("{:.4}", item.number_of_units_)} }
+                            td { class: "numeric", {format!("{:.3}", unit_cost)} }
+                        }
+                    }?);
+                }
+
+                sub_parts.push(rsx!{
+                    tr {
+                        td { colspan: 4, "Total Consumption" }
+                        td { class: "numeric", {format!("{:.3}", total_amount)} }
+                        td { class: "numeric", {format!("{:.4}", total_units)} }
+                    }
+                }?);
+
+                if line_items.len() > 0 {
+                    let start_date = line_items.get(0).unwrap().start_at_.date();
+                    let end_date = line_items.get(line_items.len() - 1).unwrap().end_at_.date();
+                    let days = end_date.to_julian_day() - start_date.to_julian_day();
+                    let standing_charge = Decimal::new((tariff.standing_charge() * (10000 * days) as f64) as i64,6);
+                    sub_parts.push(rsx!{
+                        tr {
+                            td { colspan: 4,
+                                {format!("Standing charge ({} days @ {:.3})", days, tariff.standing_charge())}
+                            }
+                            td { class: "numeric", {format!("{:.3}", standing_charge)} }
+                        }
+                        tr {
+
+                            td { colspan: 4, "Total" }
+                            td { class: "numeric",
+                                {format!("{:.3}", total_amount + standing_charge)}
+                            }
+                        }
+                    }?);
+            
+        
+                    let txn = self.transaction.as_transaction_type();
+                    
+            
+                    if let TransactionType::Charge(charge) = &self.transaction {
+                        if let Some(consumption) = &charge.consumption_ {
+                            let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
+            
+                            sub_parts.push(rsx!{
+                                tr {
+                                    td { colspan: 4, "As shown on bill" }
+                                    td { class: "numeric", {as_decimal(txn.amounts_.net_, 2)} }
+                                    td { class: "numeric", {format!("{:.4}", consumption.quantity_)} }
+                                    td { class: "numeric", {format!("{:.3}", rate)} }
+                                }
+                            }?);
+                        }
+                        else {
+                            sub_parts.push(rsx!{
+                                tr {
+                                    td { colspan: 4, "As shown on bill" }
+                                    td { class: "numeric", {as_decimal(txn.amounts_.net_, 2)} }
+                                }
+                            }?);
+                        }
+                    }
+            
+                    if !amount_map.is_empty() {
+                        sub_parts.push(rsx!{
+                            h4 { "Consumption Analysis" }
+                            table { class: "display",
+                                tr {
+                                    th { "Unit Rate" }
+                                    th { "Cost" }
+                                    th { "Units" }
+                                    th { "% Cost" }
+                                    th { "% Units" }
+                                    th { "% Bill" }
+                                }
+
+                                for (key , (amount , units)) in amount_map {
+                                    tr {
+                                        td { class: "numeric", "{key}" }
+                                        td { class: "numeric", {format!("{:.2}", amount)} }
+                                        td { class: "numeric", {format!("{:.2}", units)} }
+                                        td { class: "numeric",
+                                            {format!("{:.2}", one_hundred * amount / total_amount)}
+                                        }
+                                        td { class: "numeric",
+                                            {format!("{:.2}", one_hundred * units / total_units)}
+                                        }
+                                        td { class: "numeric",
+                                            {format!("{:.2}", one_hundred * amount / (standing_charge + total_amount))}
+                                        }
+                                    }
+                                }
+                                tr {
+                                    th { class: "row-header", "Standing Charge" }
+                                    td { class: "numeric", {format!("{:.2}", standing_charge)} }
+                                    th { colspan: 3, "" }
+                                    td { class: "numeric",
+                                        {
+                                            format!(
+                                                "{:.2}",
+                                                one_hundred * standing_charge / (standing_charge + total_amount),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }?);
+                    }
+                }
+
+                parts.push(rsx!{
+                    table {
+                        for item in sub_parts {
+                            {item}
+                        }
+                    }
+                }?);
+
+
+                    
+            }
+        }
+    
+        rsx! {
+            tr {
+                for item in parts {
+                    {item}
+                }
+            }
+        }
+    }
+
+    pub fn print(&self) {
         let one_hundred = Decimal::new(100, 0);
         let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let time_format = time::format_description::parse("           [hour]:[minute]:[second]").unwrap();
@@ -403,7 +890,7 @@ impl BillTransactionBreakDown {
 
 
 
-            for (agreement_id, (tariff, line_items)) in line_item_map {
+            for (_agreement_id, (tariff, line_items)) in line_item_map {
 
                 let mut amount_map = IndexMap::new();
                 let mut total_amount = Decimal::new(0,0);
@@ -508,27 +995,46 @@ impl BillTransactionBreakDown {
     }
 }
 
+// static BILL_INDEXER: Indexer<AbstractBill> = Box::new(|bill: &AbstractBill| bill.as_bill_interface().id_.clone());
+
+
+// #[derive(Debug)]
 pub struct BillList {
     pub account_number: String,
     pub start_cursor: Option<String>,
     pub has_previous_page: bool,
-    pub bills: Vec<(String, BillInterface)>,
+    pub bills: IndexMap<String, (String, AbstractBill)>,
     hash_key: String,
+    // #[debug(skip)]
+    indexer: Indexer<AbstractBill>,
+}
+
+
+impl fmt::Debug for BillList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BillList")
+            .field("account_number", &self.account_number)
+            .field("start_cursor", &self.start_cursor)
+            .field("has_previous_page", &self.has_previous_page)
+            .field("bills_count", &self.bills.len())
+            .field("hash_key", &self.hash_key)  
+            .finish()
+    }
 }
 
 impl BillList {
     pub fn print_summary_lines(&self) {
-        BillInterface::print_summary_line_headers();
+        AbstractBill::print_summary_line_headers();
 
-        for (_key, bill) in &self.bills {
+        for (_bill_id, (_key, bill)) in &self.bills {
             bill.print_summary_line();
         }
     }
 
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
         let mut has_previous_page = self.has_previous_page;
 
-        //println!("fetch_all bills {} in buffer", self.bills.len());
+        println!("fetch_all bills {} in buffer has_previous_page={}", self.bills.len(), has_previous_page);
 
         while has_previous_page 
         {
@@ -542,7 +1048,15 @@ impl BillList {
 
             let query = builder.build()?;
             // let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
-            let response = request_manager.call(&query).await?;
+            let result = request_manager.call(&query).await;
+
+            let response = match result {
+                Ok(response) => response,
+                Err(e) => {
+                    println!("Error fetching bills: {:?}", e);
+                    return Err(e.into());
+                }
+            };
 
             //println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
 
@@ -553,22 +1067,26 @@ impl BillList {
             else {
                 has_previous_page = false;
             }
+            let indexer = &self.indexer;
 
             for edge in response.account_.bills_.edges.into_iter().rev() {
                 let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                self.bills.push((sort_key, edge.node));
+                self.bills.insert(indexer(&edge.node), (sort_key, edge.node));
             }
         }
         self.has_previous_page = has_previous_page;
         Ok(())
     }
     
-   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, check_for_updates: bool) -> Result<Self, Error> {
+   async fn fetch(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: &String, check_for_updates: bool) -> anyhow::Result<Self> {
     let hash_key = format!("{}#Bills", account_number);
 
-        let mut bills = Vec::new();
+    let account_number = account_number.clone();
+        let mut bills = IndexMap::new();
 
-        cache_manager.read(&hash_key, &mut bills)?;
+        let indexer: Indexer<AbstractBill> = Box::new(|bill: &AbstractBill| bill.as_bill_interface().id_.clone());
+
+        cache_manager.read(&hash_key, &mut bills, &indexer)?;
 
         let cached_cnt = bills.len();
 
@@ -582,7 +1100,7 @@ impl BillList {
 
             for edge in response.account_.bills_.edges {
                 let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                bills.push((sort_key, edge.node));
+                bills.insert(indexer(&edge.node), (sort_key, edge.node));
             }
 
             BillList {
@@ -591,20 +1109,23 @@ impl BillList {
                 has_previous_page: response.account_.bills_.page_info.has_previous_page,
                 bills,
                 hash_key,
+                indexer,
             }
         }
         else {
-            let (start_cursor, _) = bills.get(bills.len() - 1).unwrap();
+            let (_key, (start_cursor, _)) = bills.get_index(bills.len() - 1).unwrap();
             BillList {
                 account_number,
                 start_cursor: Some(start_cursor.clone()),
                 has_previous_page: true,
                 bills,
                 hash_key,
+                indexer,
             }
         };
 
         if check_for_updates {
+            println!("Checking for bill updates, result = {:?}", result);
             result.fetch_all(request_manager).await?;
         }
 
@@ -622,21 +1143,22 @@ pub struct BillTransactionList {
     pub statement_id: String,
     pub start_cursor: Option<String>,
     pub has_previous_page: bool,
-    pub transactions: Vec<(String, TransactionType)>,
+    pub transactions: IndexMap<String, (String, TransactionType)>,
     hash_key: String,
+    indexer: Indexer<TransactionType>,
 }
 
 impl BillTransactionList {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> Result<Self, Error> {
+    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
+            let indexer: Indexer<TransactionType> = Box::new(|txn: &TransactionType| txn.as_transaction_type().id_.clone());
+            let mut transactions = IndexMap::new();
     
-            let mut transactions = Vec::new();
-    
-            cache_manager.read(&hash_key, &mut transactions)?;
+            cache_manager.read(&hash_key, &mut transactions, &indexer)?;
     
             let cached_cnt = transactions.len();
     
-            let mut result = if transactions.is_empty() {
+            let result = if transactions.is_empty() {
                 
                 let query = super::graphql::bill::get_statement_transactions::Query::builder()
                         .with_account_number(account_number.clone())
@@ -649,8 +1171,9 @@ impl BillTransactionList {
                 if let bill::get_statement_transactions::BillInterface::StatementType(statement) = bill {
 
                     for edge in statement.transactions_.edges {
+                        let key = indexer(&edge.node);
                         let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                        transactions.push((sort_key, edge.node));
+                        transactions.insert(key, (sort_key, edge.node));
                     }
         
                     let mut result = BillTransactionList {
@@ -660,6 +1183,7 @@ impl BillTransactionList {
                         has_previous_page: statement.transactions_.page_info.has_previous_page,
                         transactions,
                         hash_key,
+                        indexer,
                     };
 
                     result.fetch_all(request_manager).await?;
@@ -667,11 +1191,11 @@ impl BillTransactionList {
                     result
                 }
                 else {
-                    return Err(Error::from(format!("Bill {} is not a statement", statement_id)))
+                    return Err(anyhow!(format!("Bill {} is not a statement", statement_id)))
                 }
             }
             else {
-                let (start_cursor, _) = transactions.get(transactions.len() - 1).unwrap();
+                let (_key, (start_cursor, _)) = transactions.get_index(transactions.len() - 1).unwrap();
                 BillTransactionList {
                     account_number,
                     statement_id,
@@ -679,6 +1203,7 @@ impl BillTransactionList {
                     has_previous_page: true,
                     transactions,
                     hash_key,
+                    indexer,
                 }
             };
     
@@ -692,7 +1217,7 @@ impl BillTransactionList {
             Ok(result)
         }
 
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> Result<(), Error> {
+    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
         let mut has_previous_page = self.has_previous_page;
 
         //println!("fetch_all statement transactions {} in buffer", self.transactions.len());
@@ -721,7 +1246,8 @@ impl BillTransactionList {
 
                 for edge in statement.transactions_.edges.into_iter().rev() {
                     let sort_key = edge.cursor;
-                    self.transactions.push((sort_key, edge.node));
+                    let key = (self.indexer)(&edge.node);
+                    self.transactions.insert(key, (sort_key, edge.node));
                 }
                 
                 //println!("has_previous_page = {:?}", has_previous_page);

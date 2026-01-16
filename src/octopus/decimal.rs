@@ -6,8 +6,6 @@ use serde::de::{self, Visitor};
 
 use sparko_graphql::types::Int;
 
-use super::Error;
-
 /*
 Implementation of the Decimal CustomScalar defined in the Octopus graphql API Schema.
 =====================================================================================
@@ -102,7 +100,7 @@ impl From<i32> for Decimal {
 }
 
 impl FromStr for Decimal {
-    type Err = Error;
+    type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Decimal, Self::Err> {
       Ok(Decimal(rust_decimal::Decimal::from_str(str)?))

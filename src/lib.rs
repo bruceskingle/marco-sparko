@@ -1,116 +1,41 @@
-pub mod error;
 pub mod octopus;
 pub mod system;
 pub mod util;
+pub mod views;
+pub mod components;
+pub mod profile;
+
+mod cache_manager;
+pub use cache_manager::CacheManager;
+
 
 use std::collections::BTreeMap;
-use std::fs::{File, OpenOptions};
-use std::io::{BufReader, Lines, Write};
-use std::io::BufRead;
-use std::path::Path;
-use std::{collections::HashMap, fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+use anyhow::anyhow;
 use async_trait::async_trait;
+use dioxus::core::Element;
 use dirs::home_dir;
-use error::Error;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use clap::{Parser, Subcommand};
+use serde::Serialize;
+use clap::{Parser};
 
 use reedline::{Emacs, ExampleHighlighter, FileBackedHistory, MenuBuilder, ReedlineMenu};
 use reedline::{default_emacs_keybindings, ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, KeyCode, KeyModifiers, Reedline, ReedlineEvent, Signal};
-use sparko_graphql::types::Date;
-use time::Month;
+use crate::profile::ActiveProfile;
+
 use {
     nu_ansi_term::{Color, Style},
     reedline::{DefaultValidator, DefaultHinter},
   };
 
 pub const CHECK_FOR_UPDATES: bool = true;
-
-// #[derive(Debug)]
-// pub enum Error {
-//     OctopusError(octopus::error::Error),
-//     JsonError(serde_json::Error),
-//     IOError(std::io::Error),
-//     InternalError(String),
-//     UserError(String),
-//     WrappedError(Box<dyn StdError>),
-// }
-
-// impl Display for Error {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Error::OctopusError(err) => f.write_fmt(format_args!("OctopusError({})", err)),
-//             Error::IOError(err) => f.write_fmt(format_args!("IOError({})", err)),
-//             Error::JsonError(err) => f.write_fmt(format_args!("JsonError({})", err)),
-//             Error::InternalError(err) => f.write_fmt(format_args!("InternalError({})", err)),
-//             Error::UserError(err) => f.write_fmt(format_args!("{}", err)),
-//             Error::WrappedError(err) => f.write_fmt(format_args!("WrappedError({})", err)),
-//         }
-//     }
-// }
-
-// impl StdError for Error {
-
-// }
-
-// // impl Send for Error {}
-
-// // impl From<time::error::ComponentRange> for Error {
-// //     fn from(err: time::error::ComponentRange) -> Error {
-// //         Error::WrappedError(Box::new(err))
-// //     }
-// // }
-
-// impl From<sparko_graphql::Error> for Error {
-//     fn from(err: sparko_graphql::Error) -> Error {
-//         Error::WrappedError(Box::new(err))
-//     }
-// }
-
-// impl From<Box<dyn StdError>> for Error {
-//     fn from(err: Box<dyn StdError>) -> Error {
-//         Error::WrappedError(err)
-//     }
-// }
-
-// impl From<reqwest::Error> for Error {
-//         fn from(err: reqwest::Error) -> Error {
-//             Error::WrappedError(Box::new(err))
-//         }
-// }
-
-// impl From<crate::octopus::error::Error> for Error {
-//     fn from(err: crate::octopus::error::Error) -> Error {
-//         Error::OctopusError(err)
-//     }
-// }
-
-// impl From<serde_json::Error> for Error {
-//     fn from(err: serde_json::Error) -> Error {
-//         Error::JsonError(err)
-//     }
-// }
-
-// impl From<std::io::Error> for Error {
-//     fn from(err: std::io::Error) -> Error {
-//         Error::IOError(err)
-//     }
-// }
-
-// impl<T> From<std::sync::PoisonError<T>> for Error {
-//     fn from(err: std::sync::PoisonError<T>) -> Error {
-//         Error::InternalError(format!("Mutex poison error {:?}", err))
-//     }
-// }
-
 pub struct ReplCommand {
     pub command: &'static str,
     pub description: &'static str,
     pub help: &'static str,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, PartialEq)]
 #[command(version, about, long_about = None)] // Read from `Cargo.toml`
 pub struct Args {
     /// Name of the config profile to use
@@ -119,207 +44,151 @@ pub struct Args {
     #[arg(short, long, value_delimiter = ',', num_args = 1..)]
     modules: Vec<String>,
     #[arg(short, long)]
-    init: bool,
+    debug: bool,
     #[arg(short, long)]
     verbose: bool,
 
     #[clap(flatten)]
-    pub octopus: octopus::OctopusArgs,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
+    pub octopus: octopus::OctopusArgs, // TODO: remove code dependency on module octopus
 }
 
-#[derive(Subcommand, Debug)]
-enum Commands {
-    Summary,
-    Bill,
-    /// does testing things
-    Test,
+
+#[derive(Clone)]
+pub struct PageInfo {
+    label: &'static str,
+    path: &'static str,
 }
 
-const DEFAULT_PROFILE: &str = "default";
-
-type ModuleProfiles = HashMap<String, serde_json::Value>;
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Profile {
-    name: String,
-    modules: ModuleProfiles
-}
-
-impl Profile {
-    pub fn new() -> Profile {
-        Profile {
-            name: DEFAULT_PROFILE.to_string(),
-            modules: ModuleProfiles::new()
-        }
-    }
-}
-
+//  let x: fn(ModuleProps) -> std::result::Result<VNode, RenderError> = Module;
 #[async_trait]
 pub trait Module: CommandProvider {
-    // async fn summary(&mut self) -> Result<(), Error>;
-    // async fn bill(&mut self) -> Result<(), Error>;
-    // async fn test(&mut self) -> Result<(), Error>;
+    fn get_page_list(&self) -> Vec<PageInfo>;
+    fn module_id(&self) -> &'static str;
+    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a>;
 }
 
 #[async_trait(?Send)]
 pub trait CommandProvider {
     fn get_repl_commands(&self) -> Vec<ReplCommand>;
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error>;
+    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()>;
 }
 
 #[async_trait]
-pub trait ModuleBuilder {
-     // fn with_init(&mut self, init: bool) -> Result<&mut Self, Error>;
-     async fn build(self: Box<Self>, init: bool) -> Result<Box<dyn Module + Send>, Error>;
+pub trait ModuleFactory: Send {
+    async fn is_ready(&self) -> anyhow::Result<bool>;
+    fn init_page(&self) -> Element;
+    async fn build(&self) -> anyhow::Result<Box<dyn Module + Send>>;
 }
 
-type ModuleConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> Result<Box<dyn ModuleBuilder>, Error>;
+pub type ModuleFactoryConstructor = dyn Fn(Arc<MarcoSparkoContext>, Option<serde_json::Value>) -> anyhow::Result<Arc<dyn ModuleFactory>>;
 
-/*
- * This context is shared with all modules and needs to be separate from MarcoSparko because that struct holds the list of modules.
- */
-pub struct MarcoSparkoContext {
+pub struct ModuleRegistration {
+    pub module_id: String,
+    pub constructor: Arc<ModuleFactoryConstructor>,
+}
+
+#[derive(Clone, Default)]
+pub struct ModuleRegistrations(Arc<HashMap<String, ModuleRegistration>>);
+
+impl std::fmt::Debug for ModuleRegistrations {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for k in self.0.keys() {
+             write!(f, "{}, ", k)?;
+        }
+         write!(f, "]")?;
+         Ok(())
+    }
+}
+
+impl PartialEq for ModuleRegistrations {
+    fn eq(&self, other: &Self) -> bool {
+        let s = self.0.keys();
+        let o = other.0.keys();
+        let mut it = o.into_iter();
+
+        for k in s {
+            if let Some(other_key) = it.next() {
+                if k != other_key {
+                    return false;
+                }
+            }
+        }
+
+        it.next().is_none()
+    }
+}
+
+impl ModuleRegistrations {
+    fn new() -> ModuleRegistrations {
+
+
+        let dir = std::env::current_dir().unwrap();
+        println!("Current directory is {}", dir.display());
+println!("No assertion failure here");
+        //assert!(cfg!(debug_assertions));
+
+
+        let mut module_registrations = HashMap::new();
+
+        Self::load_module(&mut module_registrations, octopus::OctopusModule::registration());
+
+        println!("Loaded {} modules", module_registrations.len());
+
+        for (k, _v) in &module_registrations {
+            println!(" Module {}", k);
+        }
+        ModuleRegistrations(Arc::new(module_registrations))
+    }
+
+    fn load_module(module_registrations: &mut HashMap<String, ModuleRegistration> , registration: ModuleRegistration) {
+        println!("Load module {}", &registration.module_id);
+        module_registrations.insert(registration.module_id.clone(), registration);
+    }
+}
+
+ pub struct MarcoSparkoContext {
     pub args: Args,
-    before_profiles: Vec<Profile>,
-    active_profile: Profile,
-    after_profiles: Vec<Profile>,
-    updated_profile: Mutex<Profile>,
+    pub profile: ActiveProfile,
+}
+
+impl PartialEq for MarcoSparkoContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.args == other.args && self.profile == other.profile
+    }
 }
 
 impl MarcoSparkoContext {
-    fn new() -> Result<Arc<MarcoSparkoContext>, Error> {
+    pub fn new() -> anyhow::Result<Arc<MarcoSparkoContext>> {
 
         let args = Args::parse();
-        let before_profiles;
-        let opt_active_profile;
-        let active_profile;
-        let profile_name;
-        let after_profiles;
-        let updated_profile;
-
-        if let Ok(file)= fs::File::open(Self::get_file_path()?) {
-            let profiles: Vec<Profile> = serde_json::from_reader(file)?;
-            
-            (before_profiles, opt_active_profile, after_profiles) = Self::remove_active_profile(&args, profiles)?;
-
-        }
-        else {
-            before_profiles = Vec::new();
-            opt_active_profile = None;
-            after_profiles = Vec::new();
-        }
-
-
-        if let Some(existing_profile) = opt_active_profile {
-            profile_name = existing_profile.name.clone();
-            active_profile = existing_profile;
-        }
-        else {
-            profile_name = DEFAULT_PROFILE.to_string();
-            active_profile = Profile {
-                name: profile_name.clone(),
-                modules: ModuleProfiles::new()
-            }
-        };
-
-        updated_profile = Mutex::new(Profile {
-            name: profile_name,
-            modules: ModuleProfiles::new()
-        });
+        let profile = crate::profile::fetch_active_profile(&args.profile)?;
+        
 
         Ok(Arc::new(MarcoSparkoContext {
             args,
-            before_profiles,
-            active_profile,
-            after_profiles,
-            updated_profile,
+            profile,
        }))
     }
 
-    fn remove_active_profile(args: &Args, mut profiles: Vec<Profile>) -> 
-        Result<(Vec<Profile>, Option<Profile>, Vec<Profile>), Error> {
-        if let Some(profile_name) = &args.profile {
-            let mut active_profile = None;
-            let mut before_profiles = Vec::new();
-            let mut after_profiles = Vec::new();
-            let mut after = false;
-            
-            
-            for profile in profiles {
-                if profile.name.eq(profile_name) {
-                    active_profile = Some(profile);
-                    after = true;
-                }
-                else {
-                    if after {
-                        after_profiles.push(profile);
-                    }
-                    else {
-                        before_profiles.push(profile);
-                    }
-                }
-            }
-
-            if let None = active_profile {
-                active_profile = Some(Profile {
-                    name: profile_name.clone(),
-                    modules: ModuleProfiles::new()
-                });
-                // return Result::Err(Error::UserError(format!("No profile called {}", profile_name)))
-            }
-            return Ok((before_profiles, active_profile, after_profiles))
-        }
-
-        if profiles.is_empty() {
-            Ok((Vec::new(), None, profiles))
-        }
-        else {
-            Ok((Vec::new(), Some(profiles.remove(0)), profiles))
-        }
+    pub fn with_profile(&self, profile_name: &String) -> anyhow::Result<Arc<MarcoSparkoContext>> {
+        Ok(Arc::new(MarcoSparkoContext {
+            args: self.args.clone(),
+            profile: crate::profile::set_active_profile(profile_name)?,
+       }))
     }
 
-    fn save_updated_profile(&self) -> Result<(), Error> {
-        let updated_profile = self.updated_profile.lock()?;
-
-        if updated_profile.modules.is_empty() {
-            Ok(())
-        }
-        else {
-
-            let mut profiles = Vec::new();
-            
-            profiles.extend(&self.before_profiles);
-            profiles.push(&updated_profile);
-            profiles.extend(&self.after_profiles);
-            
-            serde_json::to_writer_pretty(fs::File::create(Self::get_file_path()?)?, &profiles)?;
-            
-            return Ok(())
-        }
-    }
-
-    fn get_file_path() -> Result<PathBuf, Error> {
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
-
-        path.push(".marco-sparko");
-        Ok(path)
-    }
-
-    fn get_cache_file_path(&self, module_id: &str) -> Result<PathBuf, Error> {
-        let profile_name = &self.active_profile.name;
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+    fn get_cache_file_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
+        let profile_name = &self.profile.active_profile.name;
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}.json", profile_name, module_id));
                 Ok(path)
     }
 
-    fn get_history_file_path(&self, module_id: &Option<String>) -> Result<PathBuf, Error> {
-        let profile_name = &self.active_profile.name;
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+    fn get_history_file_path(&self, module_id: &Option<String>) -> anyhow::Result<PathBuf> {
+        let profile_name =&self.profile.active_profile.name;
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         if let Some(module_id) = module_id {
             path.push(format!("{}-{}-history.txt", profile_name, module_id));
@@ -330,16 +199,16 @@ impl MarcoSparkoContext {
                 Ok(path)
     }
 
-    fn get_cache_data_dir_path(&self, module_id: &str) -> Result<PathBuf, Error> {
-        let profile_name = &self.active_profile.name;
+    fn get_cache_data_dir_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
+        let profile_name =&self.profile.active_profile.name;
 
-        let mut path = home_dir().ok_or(Error::from("Unable to locate home directory"))?;
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(".marco-sparko-cache");
         path.push(format!("{}-{}", profile_name, module_id));
         Ok(path)
     }
       
-    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> Result<Arc<CacheManager>, Error> {
+    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheManager>> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         fs::create_dir_all(&dir_path)?;
 
@@ -348,17 +217,6 @@ impl MarcoSparkoContext {
             verbose,
         }))
     }
-    
-    pub fn update_profile<T>(&self, module_id: &str, profile: T) -> Result<(), Error>
-    where
-        T: Serialize
-    {
-        let mutex = self.updated_profile.lock()?;
-        let mut updated_profile = mutex;
-
-        updated_profile.modules.insert(module_id.to_string(), serde_json::to_value(profile)?);
-        Ok(())
-    }
 
     pub fn read_cache<T>(&self, module_id: &str) -> Option<T>
     where
@@ -366,15 +224,16 @@ impl MarcoSparkoContext {
      {
         if let Ok(path) = self.get_cache_file_path(module_id) {
             if let Ok(reader) = fs::File::open(path) {
-                if let Ok(result) = serde_json::from_reader(reader) {
-                    return Some(result)
+                match serde_json::from_reader(reader) {
+                    Ok(result) => return Some(result),
+                    Err(error) => println!("ERROR reading cached token: {:?}", error),
                 }
             }
         }
         return None
     }
 
-    pub fn update_cache<T>(&self, module_id: &str, profile: &T) -> Result<(), Error>
+    pub fn update_cache<T>(&self, module_id: &str, profile: &T) -> anyhow::Result<()>
     where
         T: Serialize
     {
@@ -387,21 +246,21 @@ impl MarcoSparkoContext {
     }
 }
 
-pub struct MarcoSparko {
+pub struct Cli {
     context: Arc<MarcoSparkoContext>,
-    module_registrations: HashMap<String, Box<ModuleConstructor>>,
+    module_registrations: ModuleRegistrations,
     modules: HashMap<String, Box<dyn Module>>,
     current_module: Option<String>,
 }
 
-impl MarcoSparko {
 
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  Result<(), Error> {
-        match command {
-            "list" => self.list_handler(args).await,
-            "init" => self.init_handler(args).await,
-            _ => Err(Error::from(format!("Invalid command '{}'", command)))
-        }
+impl Cli {
+
+    pub fn get_file_path() -> anyhow::Result<PathBuf> {
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
+
+        path.push(".marco-sparko");
+        Ok(path)
     }
 
     fn get_repl_commands(&self) -> Vec<ReplCommand> {
@@ -473,22 +332,22 @@ prints more detailed help on that specific command.
         )
     }
 
-    pub async fn init_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) -> Result<(), Error> {
+    pub async fn init_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) -> anyhow::Result<()> {
         if let Some(module_id) = args.next() {
-            if let Some(module_registration) = self.module_registrations.get(module_id) {
+            if let Some(module_registration) = self.module_registrations.0.get(module_id) {
                 if self.modules.contains_key(module_id) {
                     println!("ERROR: module '{}' is already active", module_id); 
                 }
                 else {
-                    let constructor = module_registration.as_ref();
-                    let profile = if let Some(value) = self.context.active_profile.modules.get(module_id) {
+                    let constructor = module_registration.constructor.as_ref();
+                    let profile = if let Some(value) = self.context.profile.active_profile.modules.get(module_id) {
                         Some(value.clone())
                     }
                     else {
                         None
                     };
                     let builder = constructor(self.context.clone(), profile)?;
-                    let module = builder.build(true).await?;
+                    let module = builder.build().await?;
                     self.modules.insert(module_id.to_string(),module);
 
                     if self.current_module.is_none() {
@@ -503,12 +362,12 @@ prints more detailed help on that specific command.
         Ok(())
     }
 
-    pub async fn list_handler(&self, mut args: std::str::SplitWhitespace<'_>) -> Result<(), Error> {
+    pub async fn list_handler(&self, mut args: std::str::SplitWhitespace<'_>) -> anyhow::Result<()> {
         if let Some(target) = args.next() {
 
             match target.as_ref() {
                 "modules" => {
-                    for reg in &self.module_registrations {
+                    for reg in &*self.module_registrations.0 {
                         let status = if let Some(_module) = self.modules.get(reg.0) {
                             "Active"
                         }
@@ -519,13 +378,13 @@ prints more detailed help on that specific command.
                     }
                 },
                 "profiles" => {
-                    for profile in &self.context.before_profiles {
-                        println!("{}", profile.name);
-                    }
-                    println!("{} [Active]", &self.context.active_profile.name);
-
-                    for profile in &self.context.after_profiles {
-                        println!("{}", profile.name);
+                    for profile_name in &self.context.profile.all_profiles {
+                        if profile_name == &self.context.profile.active_profile.name {
+                            println!("{} [Active]", profile_name);
+                        }
+                        else {
+                            println!("{}", profile_name);
+                        }
                     }
                 },
                 _ => {
@@ -540,40 +399,34 @@ prints more detailed help on that specific command.
         Ok(())
     }
 
-pub async fn new() -> Result<MarcoSparko, Error> {
+    pub async fn new() -> anyhow::Result<Cli> {
 
-    let mut marco_sparko_manager = MarcoSparko {
-        context: MarcoSparkoContext::new()?,
-        module_registrations: HashMap::new(),
-        modules: HashMap::new(),
-        current_module: None,
-    };
+        let mut marco_sparko_manager = Cli {
+            context: MarcoSparkoContext::new()?,
+            module_registrations: ModuleRegistrations::new(), //Self::load_modules(),
+            modules: HashMap::new(),
+            current_module: None,
+        };
 
-    //    let active_profile = marco_sparko_manager.marco_sparko.get_active_profile();
+        let list = marco_sparko_manager.get_module_list();
 
-    let init = marco_sparko_manager.context.args.init;
-
-    marco_sparko_manager.load_modules();
-
-    let list = marco_sparko_manager.get_module_list();
-
-    if list.is_empty() {
-        let mut keys = Vec::new();
-        for module_id in marco_sparko_manager.context.active_profile.modules.keys() {
-            keys.push(module_id.to_string());
+        if list.is_empty() {
+            let mut keys = Vec::new();
+            for module_id in marco_sparko_manager.context.profile.active_profile.modules.keys() {
+                keys.push(module_id.to_string());
+            }
+            for module_id in &keys {
+                marco_sparko_manager.initialize(module_id).await?;
+            }
         }
-        for module_id in &keys {
-            marco_sparko_manager.initialize(module_id, false).await?;
+        else {
+            for module_id in &list {
+                marco_sparko_manager.initialize(module_id).await?;
+            }
         }
+
+        Ok(marco_sparko_manager)
     }
-    else {
-        for module_id in &list {
-            marco_sparko_manager.initialize(module_id, init).await?;
-        }
-    }
-
-    Ok(marco_sparko_manager)
-}
 
     fn get_module_list(&self) -> Vec<String> {
         self.context.args.modules.clone()
@@ -583,62 +436,16 @@ pub async fn new() -> Result<MarcoSparko, Error> {
         &self.context.args
     }
 
-    fn load_modules(&mut self) {
-        self.load_module(octopus::Client::registration());
-    }
 
-    fn load_module(&mut self, registration: (String, Box<ModuleConstructor>)) {
-        self.module_registrations.insert(registration.0, registration.1);
-    }
 
-    pub async fn run(&mut self) -> Result<(), Error> {
-        // if let Some(command) =  &self.args().command {
-        //     match command {
-        //         Commands::Summary => {
-        //             self.summary().await?; 
-                    
-        //         }
-        //         Commands::Bill => {
-        //             self.bill().await?; 
-                    
-        //         }
-        //         Commands::Test => {
-        //             self.test().await?; 
-                    
-        //         },
-        //     };
-
-            
-        // }
-        // else {
-        //     // match &self.current_module {
-        //     //     Some(name) => {
-        //     //         match self.modules.get_mut(name) {
-        //     //             Some(module) => {
-        //     //                 module.repl().await?;
-        //     //             },
-        //     //             None => return Err(Error::UserError(format!("Unable to find current module {}", name))),
-        //     //         }
-        //     //     },
-        //     //     None => {
-        //     //         self.repl().await?;
-        //     //     },
-        //     // }
-
-        //     self.repl().await?;
-        // }
+    pub async fn run(&mut self) -> anyhow::Result<()> {
         self.repl().await?;
-        self.context.save_updated_profile()?;
 
         return Ok(())
-        // Err(Error::UserError(String::from("No command given - try 'Summary'")))
     }
 
-    async fn repl(&mut self) -> Result<(), crate::Error> {
+    async fn repl(&mut self) -> anyhow::Result<()> {
         let marco_sparko_prompt = "Marco Sparko".to_string();
-
-        
-
         
 
         loop {
@@ -677,9 +484,6 @@ pub async fn new() -> Result<MarcoSparko, Error> {
 
 
             let completer = Box::new(DefaultCompleter::new_with_wordlen(command_list.clone(), 2));
-
-            // let completer = Box::new(completer::ReplCompleter::new(command_list.clone()));
-
             let validator = Box::new(DefaultValidator);
             // Use the interactive menu to select options from the completer
             let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
@@ -689,10 +493,6 @@ pub async fn new() -> Result<MarcoSparko, Error> {
                 KeyModifiers::NONE,
                 KeyCode::Tab,
                 ReedlineEvent::Menu("completion_menu".to_string()),
-                // ReedlineEvent::UntilFound(vec![
-                //     ReedlineEvent::Menu("completion_menu".to_string()),
-                //     ReedlineEvent::MenuNext,
-                // ]),
             );
             
             let edit_mode = Box::new(Emacs::new(keybindings));
@@ -749,7 +549,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
                                                 continue;
                                             }
                                         }
-                                        if self.module_registrations.contains_key(new_module) {
+                                        if self.module_registrations.0.contains_key(new_module) {
                                             if self.modules.contains_key(new_module) {
                                                 self.current_module = Some(new_module.to_string());
                                                 break;
@@ -784,7 +584,7 @@ pub async fn new() -> Result<MarcoSparko, Error> {
                                 },
                                 _ => {
 
-                                    let _result = if let Some(module_id) = &self.current_module {
+                                    let result = if let Some(module_id) = &self.current_module {
                                         let module: &mut Box<dyn Module> = self.modules.get_mut(module_id).unwrap();
                                         module.exec_repl_command(&command, arg_iterator).await
                                     }
@@ -796,12 +596,12 @@ pub async fn new() -> Result<MarcoSparko, Error> {
                                                 self.init_handler(arg_iterator).await?;
                                                 break;
                                             },
-                                            _ => Err(Error::from(format!("Invalid command '{}'", command)))
+                                            _ => Err(anyhow!(format!("Invalid command '{}'", command)))
                                         }
                                     };
-                                    // if let Err(error) = result {
-                                    //     println!("{}", error);
-                                    // }
+                                    if let Err(error) = result {
+                                        println!("\n\n\nERROR============================================================\n{}", error);
+                                    }
                                 }
                             }
 
@@ -816,211 +616,60 @@ pub async fn new() -> Result<MarcoSparko, Error> {
             }
         }
     }
-
-    // async fn summary(&mut self) -> Result<(), Error> {
-    //     for (_module_id, module) in self.modules.iter_mut() {
-    //         println!("Summary {}", _module_id);
-    //         module.summary().await?;
-    //     }
-
-    //     Ok(())
-    // }
-
-    // async fn bill(&mut self) -> Result<(), Error> {
-    //     for (_module_id, module) in self.modules.iter_mut() {
-    //         println!("Bill {}", _module_id);
-    //         module.bill().await?;
-    //     }
-
-    //     Ok(())
-    // }
-
-    // async fn test(&mut self) -> Result<(), Error> {
-    //     for (_module_id, module) in self.modules.iter_mut() {
-    //         println!("Test {}", _module_id);
-    //         module.test().await?;
-    //     }
-
-    //     Ok(())
-    // }
     
-    async fn initialize(&mut self, module_id: &String, init: bool) -> Result<(), Error> {
-        if let Some(module_registration) = self.module_registrations.get(module_id) {
-            let constructor = module_registration.as_ref();
-            let profile = if let Some(value) = self.context.active_profile.modules.get(module_id) {
+    async fn initialize(&mut self, module_id: &String) -> anyhow::Result<()> {
+        let module = Self::do_initialize(module_id, &self.module_registrations, &self.context).await?;
+
+        self.modules.insert(module_id.clone(),module);
+
+        if self.current_module.is_none() {
+            self.current_module = Some(module_id.clone());
+        }
+
+        Ok(())
+    }
+
+    pub async fn do_initialize(module_id: &str, module_registrations: &ModuleRegistrations, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Box<dyn Module + Send>> {
+        if let Some(module_registration) = module_registrations.0.get(module_id) {
+            let constructor = module_registration.constructor.as_ref();
+            let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
                 Some(value.clone())
             }
             else {
                 None
             };
-            let builder = constructor(self.context.clone(), profile)?;
-            let module = builder.build(init).await?;
-            self.modules.insert(module_id.clone(),module);
 
-            if self.current_module.is_none() {
-                self.current_module = Some(module_id.clone());
-            }
+            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            let builder = constructor(context.clone(), profile)?;
+            let module = builder.build().await?;
+            
             
             
 
-            Ok(())
+            Ok(module)
         }
         else {
-            return Err(Error::from(format!("Unknown module \"{}\"", module_id)))
+            return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
         }
     }
-}
 
-pub struct CacheManager {
-    pub dir_path: PathBuf,
-    pub verbose: bool,
-}
-
-impl CacheManager {
-    fn path_for_date(path: &mut PathBuf, date: &Date) {
-        path.push(date.year().to_string());
-        // path.push(date.month().to_string());
-    }
-
-    fn path_hash_key_for_date(path: &mut PathBuf, date: &Date, hash_key: &str) {
-        // path.push(format!("{}#{}", date.day(), hash_key));
-        path.push(format!("{}#{}", date.month(), hash_key));
-    }
-
-    pub fn write<T: Serialize>(&self, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
-        let mut path = self.dir_path.clone();
-        path.push(hash_key);
-
-        self.do_write(path, vec, cached_cnt)
-    }
-
-    pub fn write_for_date<T: Serialize>(&self, date: &Date, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
-        let mut path = self.dir_path.clone();
-
-        Self::path_for_date(&mut path, date);
-
-        fs::create_dir_all(&path)?;
-
-        Self::path_hash_key_for_date(&mut path, date, hash_key);
-
-        self.do_write(path, vec, cached_cnt)
-    }
-
-    fn do_write<T: Serialize>(&self, path: PathBuf, vec: &Vec<(String, T)>, cached_cnt: usize) -> Result<(), Error> {
-
-        if cached_cnt == 0 {
-            let mut out = fs::File::create(path)?;
-            for (key, value) in vec {
-                writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
-                if self.verbose 
-                {
-                    println!("WRITE {}", key);
-                }
+    pub async fn do_construct(module_id: &str, module_registrations: &ModuleRegistrations, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Arc<dyn ModuleFactory + Send>> {
+        if let Some(module_registration) = module_registrations.0.get(module_id) {
+            let constructor = module_registration.constructor.as_ref();
+            let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
+                Some(value.clone())
             }
-        }
-        else {
-            let mut out = OpenOptions::new().append(true).open(path)?;
-
-            let mut i = cached_cnt;
-            while i < vec.len() {
-                let (key, value) = vec.get(i).unwrap();
-                writeln!(out, "{}\t{}", key, serde_json::to_string(&value)?)?;
-                i += 1;
-            }
-        }
-
-        Ok(())
-    }
-
-    // The output is wrapped in a Result to allow matching on errors.
-    // Returns an Iterator to the Reader of the lines of the file.
-    fn read_lines<P>(filename: P) -> std::io::Result<Lines<BufReader<File>>>
-    where P: AsRef<Path>, {
-        let file = File::open(filename)?;
-        Ok(BufReader::new(file).lines())
-    }
-
-    pub fn read<T: DeserializeOwned>(&self, hash_key: &str, vec: &mut Vec<(String, T)>) -> Result<(), Error> {
-        let mut path = self.dir_path.clone();
-        path.push(hash_key);
-
-        self.do_read(path, vec)
-    }
-
-    pub fn read_for_date<T: DeserializeOwned>(&self, date: &Date, hash_key: &str, vec: &mut Vec<(String, T)>) -> Result<(Date, Date), Error> {
-        let start_date = Date::from_calendar_date(date.year(), date.month(), 1)?;
-        let end_date = if date.month() == Month::December {
-            Date::from_calendar_date(date.year() + 1, Month::January, 1)?
-        }
-        else {
-            Date::from_calendar_date(date.year(), date.month().next(), 1)?
-        };
-        let mut path = self.dir_path.clone();
-
-        Self::path_for_date(&mut path, date);
-        Self::path_hash_key_for_date(&mut path, date, hash_key);
-
-        self.do_read(path, vec)?;
-
-        Ok((start_date, end_date))
-    }
-
-    fn do_read<T: DeserializeOwned>(&self, path: PathBuf, vec: &mut Vec<(String, T)>) -> Result<(), Error> {
-        match Self::read_lines(path) {
-            Ok(lines) => {
-                // Consumes the iterator, returns an (Optional) String
-                for line in lines.map_while(Result::ok) {
-                    if self.verbose 
-                    {
-                        println!("READ {}", line);
-                    }
-
-                    match line.split_once('\t') {
-                        Some((key, value)) => vec.push((key.to_string(), serde_json::from_str(value)?)),
-                        None => return Err(Error::from(format!("Invalid cached object <{}>", line))),
-                    }
-                }
-            },
-
-            Err(error) => {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    println!("ERROR {:?}", error);
-                    return Err(Error::from(error))
-                }
-                
-            },
-        }
-
-        Ok(())
-    }
-
-
-    pub fn write_one<T: Serialize>(&self, hash_key: &str, value: &T) -> Result<(), Error> {
-        let mut path = self.dir_path.clone();
-        path.push(hash_key);
-
-        let mut out = fs::File::create(path)?;
-        writeln!(out, "{}", serde_json::to_string(&value)?)?;
-
-        Ok(())
-    }
-
-    pub fn read_one<T: DeserializeOwned>(&self, hash_key: &str) -> Result<Option<T>, Error> {
-        let mut path = self.dir_path.clone();
-        path.push(hash_key);
-
-        Ok(match File::open(path) {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                Some(serde_json::from_reader(reader)?)
-            },
-            Err(error) => {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    println!("ERROR {:?}", error);
-                    return Err(Error::from(error))
-                }
+            else {
                 None
-            },
-        })
+            };
+
+            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            let builder = constructor(context.clone(), profile)?;
+
+            Ok(builder)
+        }
+        else {
+            return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
+        }
     }
 }

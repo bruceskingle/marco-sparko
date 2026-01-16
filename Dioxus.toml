@@ -1,0 +1,36 @@
+[application]
+name = "Marco Sparko"
+
+[bundle]
+icon = ["assets/MarcoSparko.icns"]
+identifier = "org.skingle"
+publisher = "BruceSkingle"
+
+# chat gpt imagined this...
+# [bundle.macos]
+# minimum_system_version = "11.0"
+# 
+# [bundle.macos.dmg]
+# background = "assets/dmg-background.png"
+# window_size = [885, 430]
+# icon_positions = {     "MarcoSparko.app" = [100, 100],     "Applications" = [375, 100] }
+
+[web.app]
+
+# HTML title tag content
+title = "marco-sparko-dioxus"
+
+# include `assets` in web platform
+[web.resource]
+
+# Additional CSS style files
+style = []
+
+# Additional JavaScript files
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []
