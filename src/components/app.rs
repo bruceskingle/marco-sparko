@@ -4,7 +4,7 @@ use std::sync::Arc;
 use dioxus::prelude::*;
 
 use crate::{MarcoSparkoContext, ModuleRegistrations, views::*};
-
+use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
 
@@ -53,6 +53,12 @@ pub fn App() -> Element {
     // Store the init signal in context so it can be accessed and reset from anywhere
     use_context_provider::<Signal<bool>>(move || init_signal);
     
+    let window = use_window();
+    // let window_icon = dioxus_desktop::muda::Icon::from_file(&std::path::Path::new("icons/icon.ico")).unwrap();
+    window.set_inner_size(LogicalSize::new(1400, 768));
+    window.set_title("Marco Sparko");
+    // window.set_window_icon(window_icon);
+
     if init {
         let marco_sparko_context = MarcoSparkoContext::new()?;
         context_signal.set(Some(marco_sparko_context));

@@ -36,7 +36,7 @@ indexmap = "2.7.1"
 time-tz = "2.0.0"
 #tzdb = "0.7.2"
 #tz-rs = "0.7.0"
-dioxus = { version = "0.7.0", features = ["router", "desktop"] }
+dioxus = { version = "0.7.3", features = ["router", "desktop"] }
 dioxus-desktop = "0.7"
 anyhow = "1.0.100"
 wasm-bindgen = "0.2.105"
