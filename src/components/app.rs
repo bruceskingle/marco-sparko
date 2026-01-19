@@ -4,7 +4,7 @@ use std::sync::Arc;
 use dioxus::prelude::*;
 
 use crate::{MarcoSparkoContext, ModuleRegistrations, views::*};
-
+use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
 
@@ -34,7 +34,7 @@ pub enum Route {
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.
 // The macro returns an `Asset` type that will display as the path to the asset in the browser or a local path in desktop bundles.
-const FAVICON: Asset = asset!("/assets/favicon.ico");
+const FAVICON: Asset = asset!("/icons/icon.ico");
 // The asset macro also minifies some assets like CSS and JS to make bundled smaller
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
@@ -53,6 +53,13 @@ pub fn App() -> Element {
     // Store the init signal in context so it can be accessed and reset from anywhere
     use_context_provider::<Signal<bool>>(move || init_signal);
     
+    let window = use_window();
+    window.set_inner_size(LogicalSize::new(1400, 768));
+    window.set_title("Marco Sparko");
+
+    // let window_icon =dioxus_desktop::tao::window::Icon::from_file(&std::path::Path::new("icons/icon.ico")).unwrap();
+    // window.set_window_icon(window_icon);
+
     if init {
         let marco_sparko_context = MarcoSparkoContext::new()?;
         context_signal.set(Some(marco_sparko_context));
