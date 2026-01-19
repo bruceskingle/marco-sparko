@@ -2,7 +2,7 @@
 name = "Marco Sparko"
 
 [bundle]
-icon = ["assets/MarcoSparko.icns"]
+icon = ["icons/icon.ico"]
 identifier = "org.skingle"
 publisher = "BruceSkingle"
 
@@ -18,7 +18,7 @@ publisher = "BruceSkingle"
 [web.app]
 
 # HTML title tag content
-title = "marco-sparko-dioxus"
+title = "Marco Sparko"
 
 # include `assets` in web platform
 [web.resource]
