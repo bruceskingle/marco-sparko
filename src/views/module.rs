@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 
 use crate::{Cli, MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
 
-const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
+// const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
 
 // Simple HTML escaper
 fn escape_html(input: &str) -> String {
@@ -141,51 +141,52 @@ pub fn Module(module_id: String) -> Element {
                     };
 
                     rsx! {
-                        document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
-                        div { class: "layout-root",
-                            // Main container
-                            div { class: "container",
-                                // Sidebar
-                                nav {
-                                    class: format_args!("sidebar {}", if *sidebar_open.read() { "open" } else { "closed" }),
-                                    style: "width: 240px;", // fixed width
-                                    aria_label: "secondary navigation",
+                        // document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
+                        // div { class: "layout-root",
+                        // Main container
+                        div { class: "container",
+                            // Sidebar
+                            nav {
+                                class: format_args!("sidebar {}", if *sidebar_open.read() { "open" } else { "closed" }),
+                                style: "width: 240px;", // fixed width
+                                aria_label: "secondary navigation",
 
-                                    div { class: "sidebar-inner",
-                                        if *sidebar_open.read() {
-                                            button {
-                                                class: "hamburger",
-                                                onclick: toggle_sidebar,
-                                                "<<"
-                                            }
-                                        }
-                                        for page_info in page_list.clone() {
-                                            div {
-                                                class: format_args!(
-                                                    "sidebar-item {}",
-                                                    if active_page_id == page_info.path { "active" } else { "inactive" },
-                                                ),
-                                                onclick: move |_| { path_signal.set(vec![String::from(page_info.path)]) },
-                                                "{page_info.label}"
-                                            }
-                                        }
-                                                                        // }
-                                    }
-                                }
-
-                                // Main content
-                                main { class: "main",
-                                    if !*sidebar_open.read() {
+                                div { class: "sidebar-inner",
+                                    if *sidebar_open.read() {
                                         button {
                                             class: "hamburger",
                                             onclick: toggle_sidebar,
-                                            ">>"
+                                            "<<"
                                         }
                                     }
-                                    {body}
+                                    for page_info in page_list.clone() {
+                                        div {
+                                            class: format_args!(
+                                                "sidebar-item {}",
+                                                if active_page_id == page_info.path { "active" } else { "inactive" },
+                                            ),
+                                            onclick: move |_| { path_signal.set(vec![String::from(page_info.path)]) },
+                                            "{page_info.label}"
+                                        }
+                                    }
+                                                                // }
                                 }
                             }
+
+                            // Main content
+                            main { class: "content",
+                                if !*sidebar_open.read() {
+                                    button {
+                                        class: "hamburger",
+                                        onclick: toggle_sidebar,
+                                        ">>"
+                                    }
+                                }
+                                {body}
+                            }
                         }
+                        // div { class: "bottombar" }
+                        // }
                     }
                 }
                 else {

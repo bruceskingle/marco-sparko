@@ -18,6 +18,7 @@ git checkout releaseX.X.X
 cd ~/git/marco-sparko
 git checkout releaseX.X.X
 dx bundle --release
+cargo clean
 ls -l target/dx/marco-sparko/bundle/macos/bundle/dmg
 ```
 

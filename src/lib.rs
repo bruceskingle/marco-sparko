@@ -28,6 +28,9 @@ use {
     reedline::{DefaultValidator, DefaultHinter},
   };
 
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
 pub const CHECK_FOR_UPDATES: bool = true;
 pub struct ReplCommand {
     pub command: &'static str,
@@ -240,7 +243,7 @@ impl MarcoSparkoContext {
         let path = self.get_cache_file_path(module_id)?;
 
         serde_json::to_writer_pretty(fs::File::create(path)?, &profile)?;
-            
+        // fs::File::options()
 
         Ok(())
     }

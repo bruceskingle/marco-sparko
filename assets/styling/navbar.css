@@ -46,6 +46,7 @@ body{
   align-items:center;
   gap:var(--gap);
   background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  /* background-color: green; */
   padding:0.5rem 1rem;
   border-radius:var(--radius);
   box-shadow:0 6px 18px rgba(2,6,23,0.6);
