@@ -54,9 +54,10 @@ pub fn App() -> Element {
     use_context_provider::<Signal<bool>>(move || init_signal);
     
     let window = use_window();
-    // let window_icon = dioxus_desktop::muda::Icon::from_file(&std::path::Path::new("icons/icon.ico")).unwrap();
     window.set_inner_size(LogicalSize::new(1400, 768));
     window.set_title("Marco Sparko");
+
+    // let window_icon =dioxus_desktop::tao::window::Icon::from_file(&std::path::Path::new("icons/icon.ico")).unwrap();
     // window.set_window_icon(window_icon);
 
     if init {
