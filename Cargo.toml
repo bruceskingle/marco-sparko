@@ -9,6 +9,7 @@ default-run = "marco-sparko"
 
 [build-dependencies]
 sparko_graphql_builder = { path = "../sparko_graphql/sparko_graphql_builder" }
+time = { version = "0.3", features = ["serde", "parsing", "formatting"] }
 
 [dependencies]
 time = { version = "0.3", features = ["serde", "parsing", "formatting"] }

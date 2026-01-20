@@ -3,6 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{MarcoSparkoContext, ModuleRegistrations, components::app::Route};
 use dioxus::prelude::*;
 
+
+include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
+
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]
 pub fn Home(
@@ -35,6 +38,21 @@ pub fn Home(
     //  for (module_id, active) in &modules {
     //         println!("ZZ3 module {}", module_id);
     //     }
+
+    
+    let branch = if create_info::GIT_BRANCH.is_empty() {
+        "N/A".to_string()
+    } else {
+        let mut s = create_info::GIT_BRANCH.to_string();
+        if create_info::GIT_DIRTY  {
+            
+            s.push_str("-dirty");
+        }
+        if create_info::GIT_STAGED {
+             s.push_str("-staged");
+        }
+        s
+    };
     rsx! {
         div {
             // h1 { "This is Home #{xid}!" }
@@ -49,53 +67,45 @@ pub fn Home(
                 }
                 " [{active}]"
             }
+            h2 { "Build Info" }
+            table {
+                // tr {
+                //     td { "Package Name:" }
+                //     td { "{create_info::PACKAGE_NAME}" }
+                // }
+                // tr {
+                //     td { "Package Version:" }
+                //     td { "{create_info::PACKAGE_VERSION}" }
+                // }
+                // tr {
+                //     td { "User Agent:" }
+                //     td { "{create_info::USER_AGENT}" }
+                // }
+                tr {
+                    td { "Build Timestamp (UTC):" }
+                    td { "{create_info::BUILD_TIMESTAMP}" }
+                }
+                // tr {
+                //     td { "Git Repository:" }
+                //     td { "{create_info::GIT_REPOSITORY}" }
+                // }
+                tr {
+                    td { "Git Branch:" }
+                    td { "{branch}" }
+                }
+                        // tr {
+            //     td { "Git Dirty:" }
+            //     td { "{create_info::GIT_DIRTY}" }
+            // }
+            // tr {
+            //     td { "Git Staged:" }
+            //     td { "{create_info::GIT_STAGED}" }
+            // }
+            // tr {
+            //     td { "Git Stash:" }
+            //     td { "{create_info::GIT_STASH}" }
+            // }
+            }
         }
     }
 }
-
-
-
-// pub fn Home(
-//     modules_signal: Signal<ModuleRegistrations>
-// ) -> Element {
-//     let mut modules = HashMap::new();
-
-//     println!("ZZ2 start");
-//     for module_id in ((*modules_signal.read()).0.keys()) {
-//         println!("ZZ2 module {}", module_id);
-//         modules.insert(module_id.clone(), "Inactive");
-//     }
-//      for (module_id, active) in &modules {
-//             println!("ZZ3 module {}", module_id);
-//         }
-//     rsx! {
-//         "Modules"
-//         for (module_id, active) in modules {
-//             "{module_id} [{active}]"
-//         }
-
-//     }
-// }
-
-
-
-// pub fn Home(mut resource: Resource<Result<MarcoSparko, Error>>) -> Element {
-//     let x = &*resource.read();
-//     match x {
-//         Some(ms) => {
-//             match ms {
-//                 Ok(mms) => todo!(),
-//                 Err(_) => todo!(),
-//             }
-//         },
-//         None => todo!(),
-//     }
-//     rsx! {
-//         match &mut *resou.read() {
-//             Some(ms) => todo!(),
-//             None => "Loading...",
-//         }
-//         //Hero {}
-
-//     }
-// }
