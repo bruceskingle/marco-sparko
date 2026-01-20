@@ -5,6 +5,8 @@ pub mod views;
 pub mod components;
 pub mod profile;
 
+mod private_file;
+
 mod cache_manager;
 pub use cache_manager::CacheManager;
 
@@ -28,10 +30,9 @@ use {
     reedline::{DefaultValidator, DefaultHinter},
   };
 
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
-
 pub const CHECK_FOR_UPDATES: bool = true;
+const CACHE_DIRECTORY_NAME: &'static str = ".marco-sparko-cache";
+
 pub struct ReplCommand {
     pub command: &'static str,
     pub description: &'static str,
@@ -163,6 +164,9 @@ impl PartialEq for MarcoSparkoContext {
 
 impl MarcoSparkoContext {
     pub fn new() -> anyhow::Result<Arc<MarcoSparkoContext>> {
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
+        path.push(CACHE_DIRECTORY_NAME);
+        private_file::create_private_dir(&path)?;
 
         let args = Args::parse();
         let profile = crate::profile::fetch_active_profile(&args.profile)?;
@@ -184,7 +188,7 @@ impl MarcoSparkoContext {
     fn get_cache_file_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
         let profile_name = &self.profile.active_profile.name;
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(".marco-sparko-cache");
+        path.push(CACHE_DIRECTORY_NAME);
         path.push(format!("{}-{}.json", profile_name, module_id));
                 Ok(path)
     }
@@ -192,7 +196,7 @@ impl MarcoSparkoContext {
     fn get_history_file_path(&self, module_id: &Option<String>) -> anyhow::Result<PathBuf> {
         let profile_name =&self.profile.active_profile.name;
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(".marco-sparko-cache");
+        path.push(CACHE_DIRECTORY_NAME);
         if let Some(module_id) = module_id {
             path.push(format!("{}-{}-history.txt", profile_name, module_id));
         }
@@ -206,14 +210,15 @@ impl MarcoSparkoContext {
         let profile_name =&self.profile.active_profile.name;
 
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(".marco-sparko-cache");
+        path.push(CACHE_DIRECTORY_NAME);
         path.push(format!("{}-{}", profile_name, module_id));
         Ok(path)
     }
       
     fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheManager>> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
-        fs::create_dir_all(&dir_path)?;
+        // fs::create_dir_all(&dir_path)?;
+        private_file::create_private_dir(&dir_path)?;
 
         Ok(Arc::new(CacheManager {
             dir_path,
@@ -241,8 +246,9 @@ impl MarcoSparkoContext {
         T: Serialize
     {
         let path = self.get_cache_file_path(module_id)?;
+        // let file = fs::File::create(path)?;
 
-        serde_json::to_writer_pretty(fs::File::create(path)?, &profile)?;
+        serde_json::to_writer_pretty(private_file::create_private_file(path)?, &profile)?;
         // fs::File::options()
 
         Ok(())
