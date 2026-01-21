@@ -5,7 +5,7 @@ pub mod views;
 pub mod components;
 pub mod profile;
 
-mod private_file;
+pub mod private_file;
 
 mod cache_manager;
 pub use cache_manager::CacheManager;
