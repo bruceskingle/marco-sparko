@@ -217,7 +217,6 @@ impl MarcoSparkoContext {
       
     fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheManager>> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
-        // fs::create_dir_all(&dir_path)?;
         private_file::create_private_dir(&dir_path)?;
 
         Ok(Arc::new(CacheManager {
@@ -246,10 +245,8 @@ impl MarcoSparkoContext {
         T: Serialize
     {
         let path = self.get_cache_file_path(module_id)?;
-        // let file = fs::File::create(path)?;
 
         serde_json::to_writer_pretty(private_file::create_private_file(path)?, &profile)?;
-        // fs::File::options()
 
         Ok(())
     }

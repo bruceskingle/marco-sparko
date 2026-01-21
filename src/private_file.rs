@@ -3,8 +3,12 @@ use std::io;
 use std::path::Path;
 
 
+#[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
+
+#[cfg(windows)]
 use std::ptr::null_mut;
+
 
 #[cfg(windows)]
 use windows::Win32::Security::Authorization::*;
@@ -36,34 +40,10 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
     options.open(path)
 }
 
-
-#[cfg(unix)]
 pub fn create_private_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
     use std::fs::DirBuilder;
 
-    match DirBuilder::new()
-        .mode(0o700)
-        .create(path)
-        {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                if e.kind() == io::ErrorKind::AlreadyExists {
-                    Ok(())
-                } else {
-                    Err(e)
-                }
-            }
-        }
-    // let mut builder = DirBuilder::new();
-    // builder.mode(0o700);
-    // builder.create(path)
-}
-
-#[cfg(windows)]
-pub fn create_private_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
-    use std::fs::DirBuilder;
-
-    let builder = DirBuilder::new();
+    let mut builder = DirBuilder::new();
 #[cfg(unix)]
     builder.mode(0o700);
     
@@ -81,9 +61,6 @@ pub fn create_private_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
                 }
             }
         }
-    // let mut builder = DirBuilder::new();
-    // builder.mode(0o700);
-    // builder.create(path)
 }
 
 #[cfg(windows)]
