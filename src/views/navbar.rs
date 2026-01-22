@@ -114,7 +114,7 @@ pub fn Navbar() -> Element {
 
                                     menu_open.set(false);
                                     let new_context = Arc::new(MarcoSparkoContext {
-                                        args: crate::Args::parse(),
+                                        args: crate::Args::ms_parse(),
                                         profile: crate::profile::set_active_profile(&name)?,
                                     });
 

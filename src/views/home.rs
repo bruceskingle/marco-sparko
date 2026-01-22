@@ -53,6 +53,46 @@ pub fn Home(
         }
         s
     };
+    let args = &context.args.marco_sparko_args;
+    let debug = if args.debug {
+        rsx! {
+            h2 { "Debug" }
+            h3 { "Args" }
+            table {
+                tr {
+                    td { "--profile" }
+                    td { {format!("{:?}", args.profile)} }
+                }
+                tr {
+                    td { "--modules" }
+                    td { {format!("{:?}", args.modules)} }
+                }
+                tr {
+                    td { "--cli" }
+                    td { {format!("{:?}", args.cli)} }
+                }
+                tr {
+                    td { "--debug" }
+                    td { {format!("{:?}", args.debug)} }
+                }
+                tr {
+                    td { "--verbose" }
+                    td { {format!("{:?}", args.verbose)} }
+                }
+            }
+            h3 { "Profile" }
+            table {
+                tr {
+                    td { "Active Profile:" }
+                    td { "{context.profile.active_profile.name}" }
+                }
+            }
+        }
+    }
+    else {
+        rsx!( "" )
+    }?;
+
     rsx! {
         div {
             // h1 { "This is Home #{xid}!" }
@@ -106,6 +146,7 @@ pub fn Home(
             //     td { "{create_info::GIT_STASH}" }
             // }
             }
+            {debug}
         }
     }
 }

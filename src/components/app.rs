@@ -2,8 +2,8 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-
-use crate::{MarcoSparkoContext, ModuleRegistrations, views::*};
+use clap::Parser;
+use crate::{Args, MarcoSparkoContext, ModuleRegistrations, views::*};
 use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
@@ -43,8 +43,12 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 ///
 /// Components should be annotated with `#[component]` to support props, better error messages, and autocomplete
 #[component]
-// pub fn App(profile_manager: Arc<ProfileManager>) -> Element {
 pub fn App() -> Element {
+    // let context = use_context::<Signal<Args>>();
+    // let args = (&*context.read()).clone();
+
+    let args = Args::ms_parse();
+
     println!("Rendering App component MAIN_CSS={}", MAIN_CSS);
     let mut init_signal = use_signal::<bool>(|| true);
     let init = *init_signal.read();
@@ -61,7 +65,7 @@ pub fn App() -> Element {
     // window.set_window_icon(window_icon);
 
     if init {
-        let marco_sparko_context = MarcoSparkoContext::new()?;
+        let marco_sparko_context = MarcoSparkoContext::new(args)?;
         context_signal.set(Some(marco_sparko_context));
         // let x: Signal<Arc<MarcoSparkoContext>>;
         use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
