@@ -39,6 +39,15 @@ pub struct ReplCommand {
     pub help: &'static str,
 }
 
+/*
+ * It is important that the names of all args here do not contain hypens or underscores
+ * as these are used to separate module args from main args.
+ * 
+ * For example, to pass an arg to the octopus module, use --octopus-<argname> and in the corresponding Arg struct in the octopus module
+ * all field names must begin with octopus_ so octopus_argname in this example.
+ * 
+ * Underscores in the names of fields on this struct are translated into hyphens on the command line automatically by clap.
+ */
 #[derive(Parser, Debug, Clone, PartialEq)]
 #[command(version, about, long_about = None)] // Read from `Cargo.toml`
 pub struct MarcoSparkoArgs {
@@ -74,20 +83,9 @@ impl Args {
         else {
             None
         }
-        // s.split_once('-').map(|(head, _)| head).or(Some(s))
     }
 
     pub fn ms_parse() -> Self {
-        // let args = Args::parse();
-
-        // // filter out plugin args from main
-        // let main_only_args: Vec<String> = std::env::args()
-        //     .filter(|s| !s.contains('_'))
-        //     // .cloned()
-        //     .collect();
-
-
-
         let mut main_only_args = Vec::new();
         let mut module_args: HashMap<String, Vec<String>> = HashMap::new();
         let mut module_id: Option<String> = None;
@@ -97,10 +95,8 @@ impl Args {
         main_only_args.push(arg0.clone());
         for arg in it {
             if arg.starts_with("-") {
-                println!("Processing arg: {}", arg);
                 if let Some(module) = Args::extract_module(&arg) {
                     module_id = Some(module.to_string());
-                    println!("  identified module arg for module '{}'", module);
                 }
             }
             if let Some(module) = &module_id {
@@ -113,14 +109,15 @@ impl Args {
                 main_only_args.push(arg);
             }
         }
-        println!("Main args (ignoring plugin args): {:?}", &main_only_args);
 
         let marco_sparko_args = MarcoSparkoArgs::parse_from(main_only_args);
 
-
-       
-
-        println!("Module args : {:?}", &module_args);
+        if marco_sparko_args.verbose {
+            println!("Main args: {:?}", marco_sparko_args);
+            for (module_id, args) in &module_args {
+                println!("Module '{}' args: {:?}", module_id, args);
+            }
+        }
 
         Args {
             marco_sparko_args,
@@ -202,29 +199,34 @@ impl PartialEq for ModuleRegistrations {
 }
 
 impl ModuleRegistrations {
-    fn new() -> ModuleRegistrations {
+    fn new(verbose: bool) -> ModuleRegistrations {
 
 
         let dir = std::env::current_dir().unwrap();
-        println!("Current directory is {}", dir.display());
-println!("No assertion failure here");
-        //assert!(cfg!(debug_assertions));
 
+        if verbose {
+            println!("Current directory is {}", dir.display());
+        }
+        //assert!(cfg!(debug_assertions));
 
         let mut module_registrations = HashMap::new();
 
-        Self::load_module(&mut module_registrations, octopus::OctopusModule::registration());
+        Self::load_module(&mut module_registrations, octopus::OctopusModule::registration(), verbose);
 
-        println!("Loaded {} modules", module_registrations.len());
+        if verbose {
+            println!("Loaded {} modules", module_registrations.len());
 
-        for (k, _v) in &module_registrations {
-            println!(" Module {}", k);
+            for (k, _v) in &module_registrations {
+                println!(" Module {}", k);
+            }
         }
         ModuleRegistrations(Arc::new(module_registrations))
     }
 
-    fn load_module(module_registrations: &mut HashMap<String, ModuleRegistration> , registration: ModuleRegistration) {
-        println!("Load module {}", &registration.module_id);
+    fn load_module(module_registrations: &mut HashMap<String, ModuleRegistration> , registration: ModuleRegistration, verbose: bool) {
+        if verbose {
+            println!("Load module {}", &registration.module_id);
+        }   
         module_registrations.insert(registration.module_id.clone(), registration);
     }
 }
@@ -484,9 +486,10 @@ prints more detailed help on that specific command.
     }
 
     pub async fn new(args: Args) -> anyhow::Result<Cli> {
+        let verbose = args.marco_sparko_args.verbose;
         let mut cli = Cli {
             context: MarcoSparkoContext::new(args)?,
-            module_registrations: ModuleRegistrations::new(), //Self::load_modules(),
+            module_registrations: ModuleRegistrations::new(verbose), //Self::load_modules(),
             modules: HashMap::new(),
             current_module: None,
         };
@@ -731,7 +734,9 @@ prints more detailed help on that specific command.
                 None
             };
 
-            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            if context.args.marco_sparko_args.verbose {
+                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            }
             let builder = constructor(context.clone(), profile)?;
             let module = builder.build().await?;
             
@@ -755,7 +760,9 @@ prints more detailed help on that specific command.
                 None
             };
 
-            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            if context.args.marco_sparko_args.verbose {
+                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            }
             let builder = constructor(context.clone(), profile)?;
 
             Ok(builder)

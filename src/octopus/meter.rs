@@ -852,6 +852,7 @@ impl AgreementLineItems {
 }
 
 pub struct ConsumptionList {
+    #[allow(dead_code)]
     pub account_number: String,
     pub meter_node_id: String,
     pub end_cursor: Option<String>,
@@ -860,6 +861,7 @@ pub struct ConsumptionList {
     hash_key: String,
     start_date: Date,
     end_date: Date,
+    #[allow(dead_code)]
     start_date_time: DateTime,
     end_date_time: DateTime,
 }

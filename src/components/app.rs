@@ -2,7 +2,6 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use clap::Parser;
 use crate::{Args, MarcoSparkoContext, ModuleRegistrations, views::*};
 use dioxus::desktop::{use_window, LogicalSize};
 
@@ -48,8 +47,7 @@ pub fn App() -> Element {
     // let args = (&*context.read()).clone();
 
     let args = Args::ms_parse();
-
-    println!("Rendering App component MAIN_CSS={}", MAIN_CSS);
+    let verbose = args.marco_sparko_args.verbose;
     let mut init_signal = use_signal::<bool>(|| true);
     let init = *init_signal.read();
     let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);
@@ -70,7 +68,7 @@ pub fn App() -> Element {
         // let x: Signal<Arc<MarcoSparkoContext>>;
         use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
 
-        let module_registrations = ModuleRegistrations::new();
+        let module_registrations = ModuleRegistrations::new(verbose);
         use_context_provider::<ModuleRegistrations>(move || module_registrations);
 
         init_signal.set(false);

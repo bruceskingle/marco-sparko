@@ -35,6 +35,13 @@ compile_error!("graphql built with Errors");
 
 pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
 
+
+/*
+ * It is important that the names of all args here begin with octopus_
+ * as only args beginning with octopus- on the command line are passed through to the module.
+ * 
+ * Underscores in the names of fields on this struct are translated into hyphens on the command line automatically by clap.
+ */
 #[derive(Parser, Debug, Clone, PartialEq)]
 pub struct OctopusArgs {
     /// The Octopus API_KEY to use
@@ -838,6 +845,11 @@ impl OctopusModuleFactoryBuilder {
         };
 
         let verbose = context.args.marco_sparko_args.verbose;
+
+        if verbose {
+            println!("Octopus Module Args: {:?}", octopus_args);
+            println!("Octopus Module Profile: {:?}", profile);
+        }  
 
         Ok(OctopusModuleFactoryBuilder {
             context,
