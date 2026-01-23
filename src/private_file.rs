@@ -73,8 +73,6 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
             .encode_wide()
             .chain(Some(0))
             .collect();
-
-            println!("CReate fil...");
             
         // Create file first
         let handle = CreateFileW(
@@ -88,19 +86,15 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
         )?;
 
         if handle == INVALID_HANDLE_VALUE {
-            panic!("CreateFileW failed: {}", std::io::Error::last_os_error());
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", std::io::Error::last_os_error())));
         }
 
         println!("OpenProcessToken");
         // Open process token
         let mut token = HANDLE::default();
         OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)?;
-        println!("GetTokenInformation(token, TokenUser, None, 0, &mut len)?;");
 
         // Get user SID
-        // let mut len = 0u32;
-
-        //GetTokenInformation(token, TokenUser, None, 0, &mut len)?;
         
         let mut len = 0u32;
 
@@ -110,42 +104,25 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
             Err(_) => {
                 let err = GetLastError();
                 if err != windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER {
-
-                // }
-                // if err.code().0 as u32 != windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER.0 {
-                    println!("UNEXPECTED ERROR");
                     return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)));
                 }
             },
         };
-
-        // let err = windows::core::Error::from_win32();
-
-        // println!("1st call err = {} expected err = {}", err.code().0, windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER.0);
-
-        
-
-        
-        
-        
         
         
         let mut buffer = vec![0u8; len as usize];
-        println!("GetTokenInformation(token, TokenUser, Some(buffer.as_mut_ptr() as _), len, &mut len)?;");
 
         GetTokenInformation(token, TokenUser, Some(buffer.as_mut_ptr() as _), len, &mut len)?;
         let token_user = &*(buffer.as_ptr() as *const TOKEN_USER);
         let user_sid = token_user.User.Sid;
-        println!("BuildTrusteeWithSidW");
-
+        
         // Build EXPLICIT_ACCESS allowing only the current user
         let mut ea = EXPLICIT_ACCESS_W::default();
         ea.grfAccessPermissions = GENERIC_READ.0 | GENERIC_WRITE.0;
         ea.grfAccessMode = SET_ACCESS;
         ea.grfInheritance = NO_INHERITANCE;
         BuildTrusteeWithSidW(&mut ea.Trustee, user_sid);
-        println!("SetEntriesInAclW");
-
+        
         let ea_slice = [ea];
         let mut dacl: *mut ACL = null_mut();
         let rc = SetEntriesInAclW(Some(&ea_slice), None, &mut dacl);
@@ -158,8 +135,7 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
             return Err(io::Error::from_raw_os_error(rc.0 as i32));
         }
 
-        println!("SetNamedSecurityInfoW");
-
+        
         // Apply DACL only (do NOT pass owner)
         let rc = SetNamedSecurityInfoW(
             windows::core::PCWSTR(wide.as_ptr()),
@@ -174,8 +150,6 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
         if rc.0 != 0 {
             return Err(io::Error::from_raw_os_error(rc.0 as i32));
         }
-
-        println!("Created private file");
 
         // SAFETY: we own the handle and no one else will close it
         let file = File::from_raw_handle(handle.0 as _) ;
