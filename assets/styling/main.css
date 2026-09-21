@@ -188,6 +188,16 @@ th {
     color: var(--header);
 }
 
+th.span {
+    background-color: var(--header_span_bg);
+    color: var(--header);
+    text-align: center;
+}
+
+.derived {
+    color: var(--derived);
+}
+
 th.row-header {
     text-align: right;
     padding-right: 20px;

@@ -85,6 +85,7 @@ impl BillManager {
                     let line_items = Some(self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?);
 
                     result.push(BillTransactionBreakDown{
+                        // charge,
                         transaction,
                         line_items,
                     });

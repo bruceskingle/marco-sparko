@@ -75,7 +75,7 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
               standingCharge @ms_optional
               unitRates {
                 validFrom
-                validTo
+                validTo @ms_optional
                 preVatValue
                 value
               }
@@ -90,10 +90,10 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
               displayName
               fullName
               preVatStandingCharge @ms_optional
-              preVatUnitRate
+              preVatUnitRate @ms_optional
               standingCharge @ms_optional
               tariffCode
-              unitRate
+              unitRate @ms_optional
             }
             ... on DayNightTariff @ms_required_by_default {
               id
@@ -123,6 +123,23 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
               standingCharge @ms_optional
               tariffCode
             }
+            ... on FourRateEvTariff @ms_required_by_default {
+              id
+              dayRate
+              description
+              displayName
+              fullName
+              nightRate
+              evDeviceOffPeakRate
+              evDevicePeakRate
+              preVatDayRate
+              preVatNightRate
+              preVatEvDeviceOffPeakRate
+              preVatEvDevicePeakRate
+              preVatStandingCharge @ms_optional
+              standingCharge @ms_optional
+              tariffCode
+            }
             ... on PrepayTariff @ms_required_by_default {
               id
               displayName
@@ -148,8 +165,8 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
             fullName
             tariffCode
             standingCharge @ms_optional
-            preVatUnitRate
-            unitRate
+            preVatUnitRate @ms_optional
+            unitRate @ms_optional
           }
         }
       }

@@ -33,6 +33,7 @@ impl BillType {
             BillType::Invoice => "Invoice",
             BillType::CreditNote => "CreditNote",
             BillType::PreKraken => "PreKraken",
+            BillType::Collective => "Collective",
         }
     }
 }
@@ -136,6 +137,7 @@ impl AbstractBill {
                 );
             },
             AbstractBill::PreKrakenBillType(_) => {},
+            AbstractBill::CollectiveBillType(_) => {},
             AbstractBill::PeriodBasedDocumentType(period_based_document) => {
                 print!(" {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}",
                     "",
@@ -210,6 +212,7 @@ impl AbstractBill {
                 }
             },
             AbstractBill::PreKrakenBillType(_) => rsx!{},
+            AbstractBill::CollectiveBillType(_) => rsx!{},
             AbstractBill::PeriodBasedDocumentType(period_based_document) => {
                 rsx!{
                     td {}
@@ -260,7 +263,6 @@ impl AbstractBill {
                             // println!("Id={}", id);
                             // let id = abstract_bill.id_.clone();
                             // nav_callback(id);
-
                             let mut path_signal = use_context::<Signal<Vec<String>>>();
                             let new_path = vec![String::from("bills"), id.clone()];
                             path_signal.set(new_path);
@@ -277,6 +279,10 @@ impl AbstractBill {
     }
 
     pub fn gui_display(&self, transactions: &Vec<BillTransactionBreakDown>) -> Element {
+
+
+        println!("\n AbstractBill::gui_display: transaction={:#?}", self);
+
         let abstract_bill = self.as_bill_interface();
         let mut total_charges = TotalCharges::new();
         let mut parts = Vec::new();
@@ -288,19 +294,22 @@ impl AbstractBill {
         };
 
         let totals = if total_charges.units.is_positive() {
-            let rate = Decimal::from(total_charges.charge) / total_charges.units;
+            let rate = Decimal::from(total_charges.gross_usage) / total_charges.units;
             rsx!{
                 tr {
                     td {}
                     td { "TOTALS" }
                     td { colspan: 10, "" }
                 }
-                tr {
+                tr { class: "derived",
                     td {}
                     td { "Electricity Import" }
-                    td { colspan: 3, "" }
-                    td { class: "numeric", {{ as_decimal(total_charges.charge, 2) }} }
+                    td { "" }
+                    td { class: "numeric", {{ as_decimal(total_charges.net, 2) }} }
+                    td { colspan: 2, "" }
+                    td { class: "numeric", {{ as_decimal(total_charges.gross, 2) }} }
                     td { colspan: 4, "" }
+                    td { class: "numeric", {{ as_decimal(total_charges.gross_usage, 2) }} }
                     td { class: "numeric", {{ format!("{}", total_charges.units) }} }
                     td { class: "numeric", {{ format!("{:>10.3}", rate) }} }
                 }
@@ -379,7 +388,7 @@ impl AbstractBill {
 
             if total_charges.units.is_positive() {
                 println!("\nTOTALS");
-                let rate = Decimal::from(total_charges.charge) / total_charges.units;
+                let rate = Decimal::from(total_charges.gross_usage) / total_charges.units;
 
                 print!("{:30} {:10} ", 
                     "Electricity Import",
@@ -388,7 +397,7 @@ impl AbstractBill {
                 print!("{:>10} {:>10} {:>10} {:>10} ", 
                     "",
                     "", 
-                    as_decimal(total_charges.charge, 2),
+                    as_decimal(total_charges.gross_usage, 2),
                     ""
                 );
                 print!("{:10} {:10} {:10} {:>12.4} ", 
@@ -414,14 +423,24 @@ impl AbstractBill {
 
 
 pub struct TotalCharges {
-    charge: i32,
+    gross: i32,
+    gross_usage: i32,
+    gross_supply: i32,
+    net: i32,
+    net_usage: i32,
+    net_supply: i32,
     units: Decimal,
 }
 
 impl TotalCharges {
     fn new() -> Self {
         TotalCharges{
-            charge: 0,
+            gross: 0,
+            gross_usage: 0,
+            gross_supply: 0,
+            net: 0,
+            net_usage: 0,
+            net_supply: 0,
             units: Decimal::new(0, 0),
         }
     }
@@ -454,6 +473,7 @@ impl TransactionType {
                 th { "Amount" }
                 th { "Units" }
                 th { "p/unit" }
+                th { "Settlement Unit" }
             }
         }
     }
@@ -500,7 +520,7 @@ impl TransactionType {
                     }
                     else {
                             if txn.title_.eq("Electricity") {
-                                total_charges.charge += *&txn.amounts_.gross_;
+                                total_charges.gross_usage += *&txn.amounts_.gross_;
                                 total_charges.units += consumption.quantity_;
                             }
                         }
@@ -528,18 +548,35 @@ impl TransactionType {
     pub fn gui_summary_headers() -> Element {
         rsx!{
             tr {
+                th { colspan: 11, "" }
+                th { colspan: 3, class: "span", "Net" }
+                th { colspan: 3, class: "span", "Gross" }
+            }
+            tr {
                 th { "id" }
                 th { "Description" }
                 th { "Posted" }
                 th { "Net" }
+                th { "Tax %" }
                 th { "Tax" }
                 th { "Total" }
                 th { "Balance" }
                 th { "From" }
                 th { "To" }
-                th { "Amount" }
                 th { "Units" }
-                th { "p/unit" }
+                th { "Supply" }
+                th { "Usage" }
+                th {
+                    // title: "Average cost per unit including standing charge and VAT",
+                    "p/unit"
+                }
+                th { "Supply" }
+                th { "Usage" }
+                th {
+                    // title: "Average cost per unit including standing charge and VAT",
+                    "p/unit"
+                }
+                th { "Note" }
             }
         }
     }
@@ -577,63 +614,103 @@ impl TransactionType {
                 td { "{txn.posted_date_}" }
             )?);
 
+
+            let vat_rate = if txn.amounts_.tax_ > 0 {
+                10000 *txn.amounts_.tax_ / txn.amounts_.net_ 
+            } else {
+                0
+            };
+            let net_factor = 1.0 + txn.amounts_.tax_ as f64 / txn.amounts_.net_ as f64;
+
             if let TransactionType::Charge(charge) = &self {
                  parts.push(rsx!(
                     td { class: "numeric", {as_decimal(txn.amounts_.net_, 2)} }
+                    td { class: "numeric derived", {as_decimal(vat_rate, 2)} }
                     td { class: "numeric", {as_decimal(txn.amounts_.tax_, 2)} }
                     td { class: "numeric", {as_decimal(txn.amounts_.gross_, 2)} }
                     td { class: "numeric", {as_decimal(txn.balance_carried_forward_, 2)} }
                 )?);
                 if let Some(consumption) = &charge.consumption_ {
-                    parts.push(rsx!(
-                        td { {format!("{}", consumption.start_date_)} }
-                        td { {format!("{}", consumption.end_date_)} }
-                        td { class: "numeric", {as_decimal(txn.amounts_.net_, 3)} }
-                        td { class: "numeric", {format!("{:>12.4}", consumption.quantity_)} }
-                    )?);
 
-                    let rate = if consumption.quantity_.is_non_zero() {
-                        parts.push(rsx!(
-                            td { class: "numeric",
-                                {format!("{:>12.4}", Decimal::from(txn.amounts_.gross_) / consumption.quantity_)}
-                            }
-                        )?);
+                    
+                    let net_supply_charge = (consumption.supply_charge_ as f64/ net_factor) as i32;
+                    let net_usage_cost = (consumption.usage_cost_ as f64 / net_factor) as i32;
+
+                    let (gross_unit_cost, net_unit_cost) = if consumption.quantity_.is_non_zero() {
+                        (
+                            format!("{:>12.4}", Decimal::from(txn.amounts_.gross_ - consumption.supply_charge_) / consumption.quantity_), 
+                            format!("{:>12.4}", Decimal::from(txn.amounts_.net_ - net_supply_charge) / consumption.quantity_)
+                        )
                     } else {
-                        parts.push(rsx!(
-                            td { class: "numeric", {format!("{:>12.4}", Decimal::new(0, 0))} }
-                        )?);
+                        (String::new(), String::new())
                     };
 
                     parts.push(rsx!(
-                        td { {rate} }
+                        td { {format!("{}", consumption.start_date_)} }
+                        td { {format!("{}", consumption.end_date_)} }
+                        td { class: "numeric", {format!("{:>12.4}", consumption.quantity_)} }
+
+                        td { class: "numeric derived", {as_decimal(net_supply_charge, 2)} }
+                        td { class: "numeric derived", {as_decimal(net_usage_cost, 2)} }
+                        td { class: "numeric derived", {net_unit_cost} }
+
+                        td { class: "numeric", {as_decimal(consumption.supply_charge_, 2)} }
+                        td { class: "numeric", {as_decimal(consumption.usage_cost_, 2)} }
+                        td { class: "numeric derived", {gross_unit_cost} }
                     )?);
+
+                    // let rate = if consumption.quantity_.is_non_zero() {
+                    //     parts.push(rsx!(
+                    //         td { class: "numeric derived",
+                    //             {
+                    //                 format!(
+                    //                     "{:>12.4}",
+                    //                     Decimal::from(consumption.usage_cost_) / consumption.quantity_,
+                    //                 )
+                    //             }
+                    //         }
+                    //     )?);
+                    // } else {
+                    //     parts.push(rsx!(
+                    //         td {}
+                    //     )?);
+                    // };
+
+                    // parts.push(rsx!(
+                    //     td { {rate} }
+                    // )?);
 
                     if charge.is_export_ {
                         
                     }
                     else {
                             if txn.title_.eq("Electricity") {
-                                total_charges.charge += *&txn.amounts_.gross_;
+
+                                total_charges.gross += *&txn.amounts_.gross_;
+                                total_charges.gross_supply = consumption.supply_charge_;
+                                total_charges.gross_usage += consumption.usage_cost_;
+
+                                total_charges.net += (*&txn.amounts_.gross_ as f64 / net_factor) as i32;
+                                total_charges.net_supply = (consumption.supply_charge_ as f64 / net_factor) as i32;
+                                total_charges.net_usage += (consumption.usage_cost_ as f64 / net_factor) as i32;
+
                                 total_charges.units += consumption.quantity_;
                             }
                         }
                 }
                 else {
                     parts.push(rsx!(
-                        td { "" }
-                        td { "" }
-                        td { "" }
-                        td { "" }
-                        td { "" }
+                        td { colspan: 9, "" }
                     )?);
                 }
             }
             else {
                 parts.push(rsx!(
-                    td { {as_decimal(-txn.amounts_.net_, 2)} }
-                    td { {as_decimal(-txn.amounts_.tax_, 2)} }
-                    td { {as_decimal(-txn.amounts_.gross_, 2)} }
-                    td { {as_decimal(txn.balance_carried_forward_, 2)} }
+                    td { class: "numeric", {as_decimal(-txn.amounts_.net_, 2)} }
+                    td { class: "numeric derived", {as_decimal(vat_rate, 2)} }
+                    td { class: "numeric", {as_decimal(-txn.amounts_.tax_, 2)} }
+                    td { class: "numeric", {as_decimal(-txn.amounts_.gross_, 2)} }
+                    td { class: "numeric", {as_decimal(txn.balance_carried_forward_, 2)} }
                 )?);
                 parts.push(rsx!(
                     td { "" }
@@ -664,8 +741,12 @@ impl TransactionType {
     }
 }
 
+
+#[derive(Debug)]
 pub struct BillTransactionBreakDown {
     transaction: TransactionType,
+
+    // transaction: bill::get_statement_transactions::Charge,
     line_items: Option<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>,
 }
 
@@ -690,12 +771,17 @@ impl BillTransactionBreakDown {
 
         let mut parts = Vec::new();
 
+        println!("\nBillTransactionBreakDown::gui_display: transaction={:#?}", self);
+
         if let Some(line_item_map) = &self.line_items {
             for (_agreement_id, (tariff, line_items)) in line_item_map {
 
                 let mut amount_map = IndexMap::new();
                 let mut total_amount = Decimal::new(0,0);
                 let mut total_units = Decimal::new(0,0);
+
+                let txn = self.transaction.as_transaction_type();
+                let net_factor = 1.0 + txn.amounts_.tax_ as f64 / txn.amounts_.net_ as f64;
 
                 println!();
                 parts.push(
@@ -751,7 +837,8 @@ impl BillTransactionBreakDown {
                             td { {to_time} }
                             td { class: "numeric", {format!("{:.3}", amount)} }
                             td { class: "numeric", {format!("{:.4}", item.number_of_units_)} }
-                            td { class: "numeric", {format!("{:.3}", unit_cost)} }
+                            td { class: "numeric derived", {format!("{:.3}", unit_cost)} }
+                            td { {format!("{:.4}", item.settlement_unit_)} }
                         }
                     }?);
                 }
@@ -759,10 +846,12 @@ impl BillTransactionBreakDown {
                 sub_parts.push(rsx!{
                     tr {
                         td { colspan: 4, "Total Consumption" }
-                        td { class: "numeric", {format!("{:.3}", total_amount)} }
-                        td { class: "numeric", {format!("{:.4}", total_units)} }
+                        td { class: "numeric derived", {format!("{:.3}", total_amount)} }
+                        td { class: "numeric derived", {format!("{:.4}", total_units)} }
                     }
                 }?);
+
+                let mut consumption_analysis = None;
 
                 if line_items.len() > 0 {
                     let start_date = line_items.get(0).unwrap().start_at_.date();
@@ -774,20 +863,17 @@ impl BillTransactionBreakDown {
                             td { colspan: 4,
                                 {format!("Standing charge ({} days @ {:.3})", days, tariff.standing_charge())}
                             }
-                            td { class: "numeric", {format!("{:.3}", standing_charge)} }
+                            td { class: "numeric derived", {format!("{:.3}", standing_charge)} }
                         }
                         tr {
 
                             td { colspan: 4, "Total" }
-                            td { class: "numeric",
+                            td { class: "numeric derived",
                                 {format!("{:.3}", total_amount + standing_charge)}
                             }
                         }
                     }?);
-            
-        
-                    let txn = self.transaction.as_transaction_type();
-                    
+                                
             
                     if let TransactionType::Charge(charge) = &self.transaction {
                         if let Some(consumption) = &charge.consumption_ {
@@ -798,7 +884,11 @@ impl BillTransactionBreakDown {
                                     td { colspan: 4, "As shown on bill" }
                                     td { class: "numeric", {as_decimal(txn.amounts_.net_, 2)} }
                                     td { class: "numeric", {format!("{:.4}", consumption.quantity_)} }
-                                    td { class: "numeric", {format!("{:.3}", rate)} }
+                                    td { class: "numeric derived", {format!("{:.3}", rate)} }
+                                    td { class: "numeric", {as_decimal(consumption.usage_cost_, 2)} }
+                                    td { class: "numeric",
+                                        {as_decimal(consumption.supply_charge_, 2)}
+                                    }
                                 }
                             }?);
                         }
@@ -813,7 +903,8 @@ impl BillTransactionBreakDown {
                     }
             
                     if !amount_map.is_empty() {
-                        sub_parts.push(rsx!{
+                        consumption_analysis = 
+                        Some(rsx!{
                             h4 { "Consumption Analysis" }
                             table { class: "display",
                                 tr {
@@ -829,23 +920,25 @@ impl BillTransactionBreakDown {
                                     tr {
                                         td { class: "numeric", "{key}" }
                                         td { class: "numeric", {format!("{:.2}", amount)} }
-                                        td { class: "numeric", {format!("{:.2}", units)} }
-                                        td { class: "numeric",
+                                        td { class: "numeric derived", {format!("{:.2}", units)} }
+                                        td { class: "numeric derived",
                                             {format!("{:.2}", one_hundred * amount / total_amount)}
                                         }
-                                        td { class: "numeric",
+                                        td { class: "numeric derived",
                                             {format!("{:.2}", one_hundred * units / total_units)}
                                         }
-                                        td { class: "numeric",
+                                        td { class: "numeric derived",
                                             {format!("{:.2}", one_hundred * amount / (standing_charge + total_amount))}
                                         }
                                     }
                                 }
                                 tr {
                                     th { class: "row-header", "Standing Charge" }
-                                    td { class: "numeric", {format!("{:.2}", standing_charge)} }
+                                    td { class: "numeric derived",
+                                        {format!("{:.2}", standing_charge)}
+                                    }
                                     th { colspan: 3, "" }
-                                    td { class: "numeric",
+                                    td { class: "numeric derived",
                                         {
                                             format!(
                                                 "{:.2}",
@@ -857,6 +950,7 @@ impl BillTransactionBreakDown {
                             }
                         }?);
                     }
+
                 }
 
                 parts.push(rsx!{
@@ -867,7 +961,9 @@ impl BillTransactionBreakDown {
                     }
                 }?);
 
-
+                if let Some(consumption_analysis) = consumption_analysis {
+                    parts.push(consumption_analysis);
+                }
                     
             }
         }
@@ -1053,12 +1149,12 @@ impl BillList {
             let response = match result {
                 Ok(response) => response,
                 Err(e) => {
-                    println!("Error fetching bills: {:?}", e);
+                    println!("Error fetching bills: {:#?}", e);
                     return Err(e.into());
                 }
             };
 
-            //println!("request for {} bills after {:?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
+            //println!("request for {} bills after {:#?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
 
             if let Some(start_cursor) = response.account_.bills_.page_info.start_cursor {
                 self.start_cursor = Some(start_cursor.clone());
@@ -1125,7 +1221,7 @@ impl BillList {
         };
 
         if check_for_updates {
-            println!("Checking for bill updates, result = {:?}", result);
+            println!("Checking for bill updates, result = {:#?}", result);
             result.fetch_all(request_manager).await?;
         }
 
@@ -1239,7 +1335,7 @@ impl BillTransactionList {
 
             
             if let super::graphql::bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
-                //println!("request for {} statement transactions after {:?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
+                //println!("request for {} statement transactions after {:#?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
 
                 self.start_cursor = statement.transactions_.page_info.start_cursor.clone();
                 has_previous_page = statement.transactions_.page_info.has_previous_page.clone();
@@ -1250,7 +1346,7 @@ impl BillTransactionList {
                     self.transactions.insert(key, (sort_key, edge.node));
                 }
                 
-                //println!("has_previous_page = {:?}", has_previous_page);
+                //println!("has_previous_page = {:#?}", has_previous_page);
             }
         }
         self.has_previous_page = has_previous_page;

@@ -1,0 +1,1 @@
+npx gql-sdl https://api.octopus.energy/v1/graphql/ -o octopus-schema.graphql -I
