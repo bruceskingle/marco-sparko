@@ -2,13 +2,14 @@
 name = "marco-sparko"
 description = "The Energy Explorer"
 version = "0.4.0"
-edition = "2021"
+edition = "2024"
 default-run = "marco-sparko"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
 sparko_graphql_builder = { path = "../sparko_graphql/sparko_graphql_builder" }
+time = { version = "0.3", features = ["serde", "parsing", "formatting"] }
 
 [dependencies]
 time = { version = "0.3", features = ["serde", "parsing", "formatting"] }
@@ -26,7 +27,7 @@ display_json = "0.2.1"
 rust_decimal = "1.36.0"
 rust_decimal_macros = "1.36.0"
 const_format = "0.2.32"
-sparko_graphql = {version = "0.4.0", path = "../../git/sparko_graphql" }
+sparko_graphql = {version = "0.4.2", path = "../../git/sparko_graphql" }
 #serde_with = "3.9.0"
 #reedline-repl-rs = { version = "1.2.1", features = ["async"] }
 futures = "0.3.31"
@@ -41,6 +42,14 @@ dioxus-desktop = "0.7"
 anyhow = "1.0.100"
 wasm-bindgen = "0.2.105"
 fs4 = "0.13.1"
+windows = { version = "0.54", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Threading",
+    "Win32_Storage_FileSystem"
+]}
+
 
 [dev-dependencies]
 tokio-test = "*"

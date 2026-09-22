@@ -1,5 +1,6 @@
 use std::fmt::{self, Display};
-use std::ops::{Add, AddAssign, Deref, Div, Mul, Sub};
+use std::hash::Hash;
+use std::ops::{Add, AddAssign, Deref, Div, Mul, Sub, DivAssign, MulAssign, SubAssign};
 use std::str::FromStr;
 use serde::{Deserializer, Serialize, Serializer};
 use serde::de::{self, Visitor};
@@ -38,45 +39,147 @@ impl Decimal {
   pub fn is_non_zero(&self)-> bool {
     self.0.ne(&rust_decimal::Decimal::from(0)) //.gt(&0)
   }
+
+  pub fn round_dp(&self, dp: u32) -> Decimal {
+    Decimal(self.0.round_dp(dp))
+  }
+
+  pub fn round_dp_with_strategy(&self, dp: u32, strategy: rust_decimal::RoundingStrategy) -> Decimal {
+    Decimal(self.0.round_dp_with_strategy(dp, strategy))
+  }
+}
+
+// impl Div for Decimal {
+//     type Output = Decimal;
+
+//     fn div(self, rhs: Self) -> Self::Output {
+//         Decimal(self.0.div(rhs.0))
+//     }
+// }
+
+// impl Mul for Decimal {
+//     type Output = Decimal;
+
+//     fn mul(self, rhs: Self) -> Self::Output {
+//         Decimal(self.0.mul(rhs.0))
+//     }
+// }
+
+// impl AddAssign for Decimal {
+//     fn add_assign(&mut self, rhs: Self) {
+//         self.0.add_assign(rhs.0);
+//     }
+// }
+
+// impl Add for Decimal {
+//     type Output = Decimal;
+
+//     fn add(self, rhs: Self) -> Self::Output {
+//         Decimal(self.0.add(rhs.0))
+//     }
+// }
+
+// impl Sub for Decimal {
+//     type Output = Decimal;
+
+//     fn sub(self, rhs: Self) -> Self::Output {
+//         Decimal(self.0.sub(rhs.0))
+//     }
+// }
+
+
+macro_rules! forward_ref_binop {
+    ($imp:ident, $method:ident) => {
+        impl $imp<&Decimal> for Decimal {
+            type Output = Decimal;
+            fn $method(self, rhs: &Decimal) -> Decimal {
+                $imp::$method(self, *rhs)
+            }
+        }
+        impl $imp<Decimal> for &Decimal {
+            type Output = Decimal;
+            fn $method(self, rhs: Decimal) -> Decimal {
+                $imp::$method(*self, rhs)
+            }
+        }
+        impl $imp<&Decimal> for &Decimal {
+            type Output = Decimal;
+            fn $method(self, rhs: &Decimal) -> Decimal {
+                $imp::$method(*self, *rhs)
+            }
+        }
+    };
+}
+
+macro_rules! forward_ref_assignop {
+    ($imp:ident, $method:ident) => {
+        impl $imp<&Decimal> for Decimal {
+            fn $method(&mut self, rhs: &Decimal) {
+                $imp::$method(self, *rhs)
+            }
+        }
+    };
 }
 
 impl Div for Decimal {
     type Output = Decimal;
-
     fn div(self, rhs: Self) -> Self::Output {
         Decimal(self.0.div(rhs.0))
     }
 }
+forward_ref_binop!(Div, div);
 
 impl Mul for Decimal {
     type Output = Decimal;
-
     fn mul(self, rhs: Self) -> Self::Output {
         Decimal(self.0.mul(rhs.0))
     }
 }
+forward_ref_binop!(Mul, mul);
+
+impl Add for Decimal {
+    type Output = Decimal;
+    fn add(self, rhs: Self) -> Self::Output {
+        Decimal(self.0.add(rhs.0))
+    }
+}
+forward_ref_binop!(Add, add);
+
+impl Sub for Decimal {
+    type Output = Decimal;
+    fn sub(self, rhs: Self) -> Self::Output {
+        Decimal(self.0.sub(rhs.0))
+    }
+}
+forward_ref_binop!(Sub, sub);
 
 impl AddAssign for Decimal {
     fn add_assign(&mut self, rhs: Self) {
         self.0.add_assign(rhs.0);
     }
 }
+forward_ref_assignop!(AddAssign, add_assign);
 
-impl Add for Decimal {
-    type Output = Decimal;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Decimal(self.0.add(rhs.0))
+impl SubAssign for Decimal {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0.sub_assign(rhs.0);
     }
 }
+forward_ref_assignop!(SubAssign, sub_assign);
 
-impl Sub for Decimal {
-    type Output = Decimal;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Decimal(self.0.sub(rhs.0))
+impl MulAssign for Decimal {
+    fn mul_assign(&mut self, rhs: Self) {
+        self.0.mul_assign(rhs.0);
     }
 }
+forward_ref_assignop!(MulAssign, mul_assign);
+
+impl DivAssign for Decimal {
+    fn div_assign(&mut self, rhs: Self) {
+        self.0.div_assign(rhs.0);
+    }
+}
+forward_ref_assignop!(DivAssign, div_assign);
 
 impl Display for Decimal {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -133,6 +236,32 @@ impl FromStr for Decimal {
     }
 }
 
+
+impl Eq for Decimal {}
+
+impl PartialEq for Decimal {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl PartialOrd for Decimal {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.0.cmp(&other.0))
+    }
+}
+
+impl Ord for Decimal {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl Hash for Decimal {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 struct DecimalVisitor;
 
@@ -240,5 +369,11 @@ mod tests {
       assert_eq!(serde_json::to_string(&MyStruct {
         decimal: Decimal::new(314159, 5)
       }).unwrap(), "{\"decimal\":\"3.14159\"}");
+    }
+
+    #[test]
+    fn equal_values_with_different_scales() {
+        assert_eq!(Decimal::new(1, 1), Decimal::new(10, 2));
+        assert_eq!(Decimal::new(100, 2), Decimal::new(1, 0));
     }
 }

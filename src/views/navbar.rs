@@ -1,8 +1,4 @@
-
-
-
 use std::sync::Arc;
-use clap::Parser;
 
 use crate::{ MarcoSparkoContext, components::app::Route};
 use dioxus::prelude::*;
@@ -42,9 +38,7 @@ pub fn Navbar() -> Element {
     
     // get the current route so we can mark the active nav item
     let current_route = use_route::<Route>();
-
-    println!("Current route in Navbar: {:?}", current_route);
-
+    
     rsx! {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
         nav { class: "nav",
@@ -114,7 +108,7 @@ pub fn Navbar() -> Element {
 
                                     menu_open.set(false);
                                     let new_context = Arc::new(MarcoSparkoContext {
-                                        args: crate::Args::parse(),
+                                        args: crate::Args::ms_parse(),
                                         profile: crate::profile::set_active_profile(&name)?,
                                     });
 

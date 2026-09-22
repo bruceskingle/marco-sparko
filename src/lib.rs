@@ -5,6 +5,8 @@ pub mod views;
 pub mod components;
 pub mod profile;
 
+pub mod private_file;
+
 mod cache_manager;
 pub use cache_manager::CacheManager;
 
@@ -28,31 +30,106 @@ use {
     reedline::{DefaultValidator, DefaultHinter},
   };
 
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
-
 pub const CHECK_FOR_UPDATES: bool = true;
+pub const NONE: &'static str = "None";
+pub const NULL: &'static str = "Null";
+const CACHE_DIRECTORY_NAME: &'static str = ".marco-sparko-cache";
+
 pub struct ReplCommand {
     pub command: &'static str,
     pub description: &'static str,
     pub help: &'static str,
 }
 
+/*
+ * It is important that the names of all args here do not contain hypens or underscores
+ * as these are used to separate module args from main args.
+ * 
+ * For example, to pass an arg to the octopus module, use --octopus-<argname> and in the corresponding Arg struct in the octopus module
+ * all field names must begin with octopus_ so octopus_argname in this example.
+ * 
+ * Underscores in the names of fields on this struct are translated into hyphens on the command line automatically by clap.
+ */
 #[derive(Parser, Debug, Clone, PartialEq)]
 #[command(version, about, long_about = None)] // Read from `Cargo.toml`
-pub struct Args {
+pub struct MarcoSparkoArgs {
     /// Name of the config profile to use
     #[arg(short, long)]
     profile: Option<String>,
     #[arg(short, long, value_delimiter = ',', num_args = 1..)]
     modules: Vec<String>,
     #[arg(short, long)]
+    pub cli: bool,
+    #[arg(short, long)]
     debug: bool,
     #[arg(short, long)]
     verbose: bool,
+}
 
-    #[clap(flatten)]
-    pub octopus: octopus::OctopusArgs, // TODO: remove code dependency on module octopus
+pub struct Args {
+    pub marco_sparko_args: MarcoSparkoArgs,
+    pub module_args: HashMap<String, Vec<String>>,
+}
+
+impl Args {
+    fn extract_module(s: &str) -> Option<&str> {
+        let s = s.trim_start_matches('-');
+        if let Some((module, _)) = s.split_once('-') {
+            if module.trim().is_empty() {
+                None
+            }
+            else {
+                Some(module)
+            }   
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn ms_parse() -> Self {
+        let mut main_only_args = Vec::new();
+        let mut module_args: HashMap<String, Vec<String>> = HashMap::new();
+        let mut module_id: Option<String> = None;
+
+        let mut it = std::env::args();
+        let arg0 = it.next().unwrap_or_else(|| "marco-sparko".to_string());
+        main_only_args.push(arg0.clone());
+        for arg in it {
+            if arg.starts_with("-") {
+                if let Some(module) = Args::extract_module(&arg) {
+                    module_id = Some(module.to_string());
+                }
+            }
+            if let Some(module) = &module_id {
+                    module_args
+                    .entry(module.clone())
+                    .or_insert_with(|| { let mut v = Vec::new(); v.push(arg0.clone()); v})
+                    .push(arg);
+            }
+            else {
+                main_only_args.push(arg);
+            }
+        }
+
+        let marco_sparko_args = MarcoSparkoArgs::parse_from(main_only_args);
+
+        if marco_sparko_args.verbose {
+            println!("Main args: {:?}", marco_sparko_args);
+            for (module_id, args) in &module_args {
+                println!("Module '{}' args: {:?}", module_id, args);
+            }
+        }
+
+        Args {
+            marco_sparko_args,
+            module_args,
+        }
+    }
+
+    pub fn module_args(&self, module_name: &str) ->  Option<Vec<String>> {
+        self.module_args.get(module_name).cloned()
+    }
 }
 
 
@@ -68,6 +145,7 @@ pub trait Module: CommandProvider {
     fn get_page_list(&self) -> Vec<PageInfo>;
     fn module_id(&self) -> &'static str;
     fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a>;
+    fn cli_debug(&self) -> anyhow::Result<()>;
 }
 
 #[async_trait(?Send)]
@@ -123,29 +201,34 @@ impl PartialEq for ModuleRegistrations {
 }
 
 impl ModuleRegistrations {
-    fn new() -> ModuleRegistrations {
+    fn new(verbose: bool) -> ModuleRegistrations {
 
 
         let dir = std::env::current_dir().unwrap();
-        println!("Current directory is {}", dir.display());
-println!("No assertion failure here");
-        //assert!(cfg!(debug_assertions));
 
+        if verbose {
+            println!("Current directory is {}", dir.display());
+        }
+        //assert!(cfg!(debug_assertions));
 
         let mut module_registrations = HashMap::new();
 
-        Self::load_module(&mut module_registrations, octopus::OctopusModule::registration());
+        Self::load_module(&mut module_registrations, octopus::OctopusModule::registration(), verbose);
 
-        println!("Loaded {} modules", module_registrations.len());
+        if verbose {
+            println!("Loaded {} modules", module_registrations.len());
 
-        for (k, _v) in &module_registrations {
-            println!(" Module {}", k);
+            for (k, _v) in &module_registrations {
+                println!(" Module {}", k);
+            }
         }
         ModuleRegistrations(Arc::new(module_registrations))
     }
 
-    fn load_module(module_registrations: &mut HashMap<String, ModuleRegistration> , registration: ModuleRegistration) {
-        println!("Load module {}", &registration.module_id);
+    fn load_module(module_registrations: &mut HashMap<String, ModuleRegistration> , registration: ModuleRegistration, verbose: bool) {
+        if verbose {
+            println!("Load module {}", &registration.module_id);
+        }   
         module_registrations.insert(registration.module_id.clone(), registration);
     }
 }
@@ -155,17 +238,20 @@ println!("No assertion failure here");
     pub profile: ActiveProfile,
 }
 
-impl PartialEq for MarcoSparkoContext {
-    fn eq(&self, other: &Self) -> bool {
-        self.args == other.args && self.profile == other.profile
-    }
-}
+// impl PartialEq for MarcoSparkoContext {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.args == other.args && self.profile == other.profile
+//     }
+// }
 
 impl MarcoSparkoContext {
-    pub fn new() -> anyhow::Result<Arc<MarcoSparkoContext>> {
+    pub fn new(args: Args) -> anyhow::Result<Arc<MarcoSparkoContext>> {
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
+        path.push(CACHE_DIRECTORY_NAME);
+        private_file::create_private_dir(&path)?;
 
-        let args = Args::parse();
-        let profile = crate::profile::fetch_active_profile(&args.profile)?;
+       
+        let profile = crate::profile::fetch_active_profile(&args.marco_sparko_args.profile)?;
         
 
         Ok(Arc::new(MarcoSparkoContext {
@@ -174,17 +260,17 @@ impl MarcoSparkoContext {
        }))
     }
 
-    pub fn with_profile(&self, profile_name: &String) -> anyhow::Result<Arc<MarcoSparkoContext>> {
-        Ok(Arc::new(MarcoSparkoContext {
-            args: self.args.clone(),
-            profile: crate::profile::set_active_profile(profile_name)?,
-       }))
-    }
+    // pub fn with_profile(&self, profile_name: &String) -> anyhow::Result<Arc<MarcoSparkoContext>> {
+    //     Ok(Arc::new(MarcoSparkoContext {
+    //         args: self.args.clone(),
+    //         profile: crate::profile::set_active_profile(profile_name)?,
+    //    }))
+    // }
 
     fn get_cache_file_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
         let profile_name = &self.profile.active_profile.name;
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(".marco-sparko-cache");
+        path.push(CACHE_DIRECTORY_NAME);
         path.push(format!("{}-{}.json", profile_name, module_id));
                 Ok(path)
     }
@@ -192,7 +278,7 @@ impl MarcoSparkoContext {
     fn get_history_file_path(&self, module_id: &Option<String>) -> anyhow::Result<PathBuf> {
         let profile_name =&self.profile.active_profile.name;
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(".marco-sparko-cache");
+        path.push(CACHE_DIRECTORY_NAME);
         if let Some(module_id) = module_id {
             path.push(format!("{}-{}-history.txt", profile_name, module_id));
         }
@@ -206,14 +292,14 @@ impl MarcoSparkoContext {
         let profile_name =&self.profile.active_profile.name;
 
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(".marco-sparko-cache");
+        path.push(CACHE_DIRECTORY_NAME);
         path.push(format!("{}-{}", profile_name, module_id));
         Ok(path)
     }
       
     fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheManager>> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
-        fs::create_dir_all(&dir_path)?;
+        private_file::create_private_dir(&dir_path)?;
 
         Ok(Arc::new(CacheManager {
             dir_path,
@@ -242,8 +328,7 @@ impl MarcoSparkoContext {
     {
         let path = self.get_cache_file_path(module_id)?;
 
-        serde_json::to_writer_pretty(fs::File::create(path)?, &profile)?;
-        // fs::File::options()
+        serde_json::to_writer_pretty(private_file::create_private_file(path)?, &profile)?;
 
         Ok(())
     }
@@ -402,37 +487,37 @@ prints more detailed help on that specific command.
         Ok(())
     }
 
-    pub async fn new() -> anyhow::Result<Cli> {
-
-        let mut marco_sparko_manager = Cli {
-            context: MarcoSparkoContext::new()?,
-            module_registrations: ModuleRegistrations::new(), //Self::load_modules(),
+    pub async fn new(args: Args) -> anyhow::Result<Cli> {
+        let verbose = args.marco_sparko_args.verbose;
+        let mut cli = Cli {
+            context: MarcoSparkoContext::new(args)?,
+            module_registrations: ModuleRegistrations::new(verbose), //Self::load_modules(),
             modules: HashMap::new(),
             current_module: None,
         };
 
-        let list = marco_sparko_manager.get_module_list();
+        let list = cli.get_module_list();
 
         if list.is_empty() {
             let mut keys = Vec::new();
-            for module_id in marco_sparko_manager.context.profile.active_profile.modules.keys() {
+            for module_id in cli.context.profile.active_profile.modules.keys() {
                 keys.push(module_id.to_string());
             }
             for module_id in &keys {
-                marco_sparko_manager.initialize(module_id).await?;
+                cli.initialize(module_id).await?;
             }
         }
         else {
             for module_id in &list {
-                marco_sparko_manager.initialize(module_id).await?;
+                cli.initialize(module_id).await?;
             }
         }
 
-        Ok(marco_sparko_manager)
+        Ok(cli)
     }
 
     fn get_module_list(&self) -> Vec<String> {
-        self.context.args.modules.clone()
+        self.context.args.marco_sparko_args.modules.clone()
     }
 
     pub fn args(&self) -> &Args {
@@ -442,6 +527,15 @@ prints more detailed help on that specific command.
 
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
+
+
+        if self.context.args.marco_sparko_args.debug {
+            println!("Args: {:?}", self.context.args.marco_sparko_args);
+            for (module_id, module) in &self.modules {
+                println!("Module '{}':", module_id);
+                module.cli_debug()?;
+            }
+        }
         self.repl().await?;
 
         return Ok(())
@@ -642,7 +736,9 @@ prints more detailed help on that specific command.
                 None
             };
 
-            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            if context.args.marco_sparko_args.verbose {
+                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            }
             let builder = constructor(context.clone(), profile)?;
             let module = builder.build().await?;
             
@@ -666,7 +762,9 @@ prints more detailed help on that specific command.
                 None
             };
 
-            println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            if context.args.marco_sparko_args.verbose {
+                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            }
             let builder = constructor(context.clone(), profile)?;
 
             Ok(builder)

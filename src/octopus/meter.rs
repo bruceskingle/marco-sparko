@@ -11,7 +11,7 @@ use sparko_graphql::types::{Date, DateRange, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
 use tokio::time::sleep;
 
-use crate::CacheManager;
+use crate::{CacheManager, NULL};
 
 use super::graphql::meter;
 use super::RequestManager;
@@ -313,24 +313,81 @@ impl PropertyList {
     }
 }
 
+
+#[derive(Debug)]
 pub enum Tariff {
     Electricity(meter::meter_agreements::ElectricityTariffType),
     Gas(meter::meter_agreements::GasTariffType)
 }
 
+fn format_rate(rate: f64) -> String {
+    format!("{:7.4}", rate)
+}
+
+
+fn format_opt_rate(rate: Option<f64>) -> String {
+    if let Some(rate) = rate {
+        format_rate(rate)
+    }
+    else {
+        "UNKNOWN".to_string()
+    }
+}
+
+fn gui_rate(rate: f64) -> Element {
+    rsx!{
+        td { class: "numeric", {format_rate(rate)} }
+    }
+}
+
+fn gui_opt_rate(rate: Option<f64>) -> Element {
+    if let Some(rate) = rate {
+        gui_rate(rate)
+    }
+    else {
+        rsx!{
+            td { class: "numeric invalid", {NULL} }
+        }
+    }
+}
+
+
+fn format_opt_str<T: ToString>(str: &Option<T>) -> String {
+    if let Some(str) = str {
+        str.to_string()
+    }
+    else {
+        "UNKNOWN".to_string()
+    }
+}
+
+fn gui_opt_str<T: ToString>(str: &Option<T>) -> Element {
+    if let Some(str) = str {
+        rsx!{
+            td { {str.to_string()} }
+        }
+    }
+    else {
+        rsx!{
+            td { class: "invalid", {NULL} }
+        }
+    }
+}
+
 impl Tariff {
-    pub fn standing_charge(&self) -> f64 {
+    pub fn standing_charge(&self) -> Option<f64> {
         match self {
             Tariff::Electricity(electricity_tariff_type) => {
                 match electricity_tariff_type {
-                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
+                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::FourRateEvTariff(tariff) => {tariff.pre_vat_standing_charge_},
                 }
             },
-            Tariff::Gas(tariff) => { tariff.standing_charge_.unwrap_or(0.0) / 1.05},
+            Tariff::Gas(tariff) => { tariff.pre_vat_standing_charge_},
         }
     }
 
@@ -353,21 +410,19 @@ impl Tariff {
                                     }
                                     tr {
                                         th { class: "row-header", "Pre-VAT Standing Charge" }
-                                        td {
-                                            {tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}
-                                        }
+                                        {gui_opt_rate(tariff.pre_vat_standing_charge_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Standing Charge" }
-                                        td { {tariff.standing_charge_.unwrap_or(0.0).to_string()} }
+                                        {gui_opt_rate(tariff.standing_charge_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Pre-VAT Unit Rate" }
-                                        td { {tariff.pre_vat_unit_rate_.to_string()} }
+                                        {gui_opt_rate(tariff.pre_vat_unit_rate_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Unit Rate" }
-                                        td { {tariff.unit_rate_.to_string()} }
+                                        {gui_opt_rate(tariff.unit_rate_)}
                                     }
                                 }
                             }
@@ -378,35 +433,57 @@ impl Tariff {
                     meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => {
                         rsx!{
                             div {
-                                h3 { "Electricity Tariff: {tariff.display_name_}" }
+                                h3 { "Electricity Tariff: {format_opt_str(&tariff.display_name_)}" }
                                 table { class: "display",
                                     tr {
                                         th { class: "row-header", "Full Name" }
-                                        td { {tariff.full_name_.as_str()} }
+                                        {gui_opt_str(&tariff.full_name_)}
                                     }
                                     tr {
-                                        th { class: "row-header", "Code" }
-                                        td { {tariff.tariff_code_.as_str()} }
+                                        th { class: "row-header", "Display Name" }
+                                        {gui_opt_str(&tariff.display_name_)}
+                                    }
+                                    tr {
+                                        th { class: "row-header", "Tariff Code" }
+                                        {gui_opt_str(&tariff.tariff_code_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Product Code" }
-                                        td { {tariff.product_code_.as_str()} }
+                                        {gui_opt_str(&tariff.product_code_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Pre-VAT Standing Charge" }
-                                        td {
-                                            {tariff.pre_vat_standing_charge_.unwrap_or(0.0).to_string()}
-                                        }
+                                        {gui_opt_rate(tariff.pre_vat_standing_charge_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Standing Charge" }
-                                        td { {tariff.standing_charge_.unwrap_or(0.0).to_string()} }
+                                        {gui_opt_rate(tariff.standing_charge_)}
                                     }
+                                
                                 }
+                            
+                            // h4 { "Unit Rates" }
+                            // table { class: "display",
+                            //     tr {
+                            //         th { "Valid From" }
+                            //         th { "Valid To" }
+                            //         th { "Pre-VAT Unit Rate" }
+                            //         th { "Unit Rate" }
+                            //     }
+                            //     for rate in &tariff.unit_rates_ {
+                            //         tr {
+                            //             {gui_opt_str(&rate.valid_from_)}
+                            //             {gui_opt_str(&rate.valid_to_)}
+                            //             {gui_opt_rate(rate.pre_vat_value_)}
+                            //             {gui_opt_rate(rate.value_)}
+                            //         }
+                            //     }
+                            // }
                             }
                         }
                     },
                     meter::meter_agreements::ElectricityTariffType::PrepayTariff(_tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::FourRateEvTariff(_tariff) => todo!(),
                 }
             },
             Tariff::Gas(gas_tariff_type) => {
@@ -420,15 +497,15 @@ impl Tariff {
                             }
                             tr {
                                 th { class: "row-header", "Standing Charge" }
-                                td { {gas_tariff_type.standing_charge_.unwrap_or(0.0).to_string()} }
+                                {gui_opt_rate(gas_tariff_type.standing_charge_)}
                             }
                             tr {
                                 th { class: "row-header", "Pre-VAT Unit Rate" }
-                                td { {gas_tariff_type.pre_vat_unit_rate_.to_string()} }
+                                {gui_opt_rate(gas_tariff_type.pre_vat_unit_rate_)}
                             }
                             tr {
                                 th { class: "row-header", "Unit Rate" }
-                                td { {gas_tariff_type.unit_rate_.to_string()} }
+                                {gui_opt_rate(gas_tariff_type.unit_rate_)}
                             }
                         }
                     }
@@ -448,35 +525,36 @@ impl Tariff {
                         println!("Code               {}", tariff.tariff_code_);
                         // println!("Product Code       {}", tariff.product_code_);
                         // println!("Description        {}", half_hourly_tariff.description_);
-                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_.unwrap_or(0.0));
-                        println!("Standing Charge    {:7.4}", tariff.standing_charge_.unwrap_or(0.0));
-                        println!("Pre-VAT Unit Rate  {:7.4}", tariff.pre_vat_unit_rate_);
-                        println!("Unit Rate          {:7.4}", tariff.unit_rate_);
+                        println!("Pre-VAT Standing   {}", format_opt_rate(tariff.pre_vat_standing_charge_));
+                        println!("Standing Charge    {}", format_opt_rate(tariff.standing_charge_));
+                        println!("Pre-VAT Unit Rate  {}", format_opt_rate(tariff.pre_vat_unit_rate_));
+                        println!("Unit Rate          {}", format_opt_rate(tariff.unit_rate_));
                     },
                     meter::meter_agreements::ElectricityTariffType::DayNightTariff(_tariff) => todo!(),
                     meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(_tariff) => todo!(),
                     meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => {
-                        println!("Electricity Tariff {}", tariff.display_name_);
-                        println!("Full Name          {}", tariff.full_name_);
-                        println!("Code               {}", tariff.tariff_code_);
-                        println!("Product Code       {}", tariff.product_code_);
+                        println!("Electricity Tariff {}", format_opt_str(&tariff.display_name_));
+                        println!("Full Name          {}", format_opt_str(&tariff.full_name_));
+                        println!("Code               {}", format_opt_str(&tariff.tariff_code_));
+                        println!("Product Code       {}", format_opt_str(&tariff.product_code_));
                         // println!("Description        {}", half_hourly_tariff.description_);
-                        println!("Pre-VAT Standing   {:7.4}", tariff.pre_vat_standing_charge_.unwrap_or(0.0));
-                        println!("Standing Charge    {:7.4}", tariff.standing_charge_.unwrap_or(0.0));
+                        println!("Pre-VAT Standing   {}", format_opt_rate(tariff.pre_vat_standing_charge_));
+                        println!("Standing Charge    {}", format_opt_rate(tariff.standing_charge_));
                         // println!("Unit Rates");
                         // for rate in &half_hourly_tariff.unit_rates_ {
                         //     println!("{:?} {:?} {:10.4} {:10.4}", rate.valid_from_, rate.valid_to_, rate.pre_vat_value_, rate.value_);
                         // }
                     },
                     meter::meter_agreements::ElectricityTariffType::PrepayTariff(_tariff) => todo!(),
+                    meter::meter_agreements::ElectricityTariffType::FourRateEvTariff(_tariff) => todo!(),
                 }
             },
             Tariff::Gas(gas_tariff_type) => {
                 println!("Gas Tariff         {}", gas_tariff_type.full_name_);
                 println!("Code               {}", gas_tariff_type.tariff_code_);
-                println!("Standing Charge    {:7.4}", gas_tariff_type.standing_charge_.unwrap_or(0.0));
-                println!("Pre-VAT Unit Rate  {:7.4}", gas_tariff_type.pre_vat_unit_rate_);
-                println!("Unit Rate          {:7.4}", gas_tariff_type.unit_rate_);
+                println!("Standing Charge    {}", format_opt_rate(gas_tariff_type.standing_charge_));
+                println!("Pre-VAT Unit Rate  {}", format_opt_rate(gas_tariff_type.pre_vat_unit_rate_));
+                println!("Unit Rate          {}", format_opt_rate(gas_tariff_type.unit_rate_));
             },
         }
     }
@@ -852,6 +930,7 @@ impl AgreementLineItems {
 }
 
 pub struct ConsumptionList {
+    #[allow(dead_code)]
     pub account_number: String,
     pub meter_node_id: String,
     pub end_cursor: Option<String>,
@@ -860,6 +939,7 @@ pub struct ConsumptionList {
     hash_key: String,
     start_date: Date,
     end_date: Date,
+    #[allow(dead_code)]
     start_date_time: DateTime,
     end_date_time: DateTime,
 }

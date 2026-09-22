@@ -234,14 +234,6 @@ pub mod login {
         use super::super::ObtainJsonWebTokenInput;
         use super::super::GenericScalar;
         // Start dependencies
-        // generate name=Response id=1, selection.name=Response
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Response {
-            #[serde(rename = "obtainKrakenToken")]
-            pub obtain_kraken_token_: ObtainKrakenJsonWebToken, // T1
-        }
-        
         // generate name=ObtainKrakenJsonWebToken id=0, selection.name=ObtainKrakenJsonWebToken
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -255,6 +247,14 @@ pub mod login {
             pub payload_: GenericScalar, // T1
             #[serde(rename = "token")]
             pub token_: String, // T1
+        }
+        
+        // generate name=Response id=1, selection.name=Response
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Response {
+            #[serde(rename = "obtainKrakenToken")]
+            pub obtain_kraken_token_: ObtainKrakenJsonWebToken, // T1
         }
         
         // End dependencies
@@ -364,6 +364,25 @@ pub mod account {
         
         use super::super::Date;
         // Start dependencies
+        // generate name=AccountInterface id=2, selection.name=AccountInterface
+        // implemented_by ["AccountType"]
+        /* <2 variant */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct AccountInterface {
+            #[serde(rename = "number")]
+            pub number_: String, // T1
+            #[serde(rename = "brand")]
+            pub brand_: String, // T1
+            #[serde(rename = "overdueBalance")]
+            pub overdue_balance_: i32, // T1
+            #[serde(rename = "billingName")]
+            pub billing_name_: String, // T1
+            #[serde(rename = "billingSubName")]
+            pub billing_sub_name_: Option<String>, // T1
+            #[serde(rename = "billingEmail")]
+            pub billing_email_: Option<String>, // T1
+        }
+        
         // generate name=AccountUserType id=3, selection.name=AccountUserType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -412,25 +431,6 @@ pub mod account {
         pub struct Response {
             #[serde(rename = "viewer")]
             pub viewer_: AccountUserType, // T1
-        }
-        
-        // generate name=AccountInterface id=2, selection.name=AccountInterface
-        // implemented_by ["AccountType"]
-        /* <2 variant */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct AccountInterface {
-            #[serde(rename = "number")]
-            pub number_: String, // T1
-            #[serde(rename = "brand")]
-            pub brand_: String, // T1
-            #[serde(rename = "overdueBalance")]
-            pub overdue_balance_: i32, // T1
-            #[serde(rename = "billingName")]
-            pub billing_name_: String, // T1
-            #[serde(rename = "billingSubName")]
-            pub billing_sub_name_: Option<String>, // T1
-            #[serde(rename = "billingEmail")]
-            pub billing_email_: Option<String>, // T1
         }
         
         // End dependencies
@@ -508,30 +508,73 @@ pub mod meter {
         use super::super::Date;
         use super::super::DeviceType;
         // Start dependencies
-        // generate name=SmartMeterDeviceType id=12, selection.name=SmartMeterDeviceType
+        // generate name=OccupancyPeriodType id=5, selection.name=OccupancyPeriodType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct SmartMeterDeviceType {
-            #[serde(rename = "deviceId")]
-            pub device_id_: String, // T1
-            #[serde(rename = "type")]
-            pub type_: DeviceType, // T1
+        pub struct OccupancyPeriodType {
+            #[serde(rename = "id")]
+            pub id_: String, // T1
+            #[serde(rename = "effectiveFrom")]
+            pub effective_from_: DateTime, // T1
+            #[serde(rename = "effectiveTo")]
+            pub effective_to_: Option<DateTime>, // T1
+            #[serde(rename = "isOccupier")]
+            pub is_occupier_: bool, // T1
         }
         
-        // generate name=Response id=16, selection.name=Response
+        // generate name=CoordinatesType id=6, selection.name=CoordinatesType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Response {
-            #[serde(rename = "account")]
-            pub account_: AccountType, // T1
+        pub struct CoordinatesType {
+            #[serde(rename = "latitude")]
+            pub latitude_: f64, // T1
+            #[serde(rename = "longitude")]
+            pub longitude_: f64, // T1
         }
         
-        // generate name=AccountType id=15, selection.name=AccountType
+        // generate name=ElectricityMeterType id=7, selection.name=ElectricityMeterType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct AccountType {
-            #[serde(rename = "properties")]
-            pub properties_: Vec<PropertyType>, // T1
+        pub struct ElectricityMeterType {
+            #[serde(rename = "id")]
+            pub id_: String, // T1
+            #[serde(rename = "nodeId")]
+            pub node_id_: String, // T1
+            #[serde(rename = "serialNumber")]
+            pub serial_number_: String, // T1
+        }
+        
+        // generate name=ElectricityMeterType2 id=8, selection.name=ElectricityMeterType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        #[serde(rename = "ElectricityMeterType")]
+        pub struct ElectricityMeterType2 {
+            #[serde(rename = "nodeId")]
+            pub node_id_: String, // T1
+            #[serde(rename = "serialNumber")]
+            pub serial_number_: String, // T1
+            #[serde(rename = "consumptionUnits")]
+            pub consumption_units_: String, // T1
+            #[serde(rename = "hasAndAllowsHhReadings")]
+            pub has_and_allows_hh_readings_: bool, // T1
+            #[serde(rename = "importMeter")]
+            pub import_meter_: Option<ElectricityMeterType>, // T1
+        }
+        
+        // generate name=ElectricityMeterPointType id=9, selection.name=ElectricityMeterPointType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct ElectricityMeterPointType {
+            #[serde(rename = "id")]
+            pub id_: String, // T1
+            #[serde(rename = "supplyEndDate")]
+            pub supply_end_date_: Option<Date>, // T1
+            #[serde(rename = "mpan")]
+            pub mpan_: String, // T1
+            #[serde(rename = "status")]
+            pub status_: String, // T1
+            #[serde(rename = "meters")]
+            pub meters_: Vec<ElectricityMeterType2>, // T1
         }
         
         // generate name=GasMeterType id=10, selection.name=GasMeterType
@@ -564,81 +607,22 @@ pub mod meter {
             pub meters_: Vec<GasMeterType>, // T1
         }
         
+        // generate name=SmartMeterDeviceType id=12, selection.name=SmartMeterDeviceType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct SmartMeterDeviceType {
+            #[serde(rename = "deviceId")]
+            pub device_id_: String, // T1
+            #[serde(rename = "type")]
+            pub type_: DeviceType, // T1
+        }
+        
         // generate name=SmartMeterDeviceNetworkType id=13, selection.name=SmartMeterDeviceNetworkType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
         pub struct SmartMeterDeviceNetworkType {
             #[serde(rename = "smartDevices")]
             pub smart_devices_: Vec<SmartMeterDeviceType>, // T1
-        }
-        
-        // generate name=ElectricityMeterType id=8, selection.name=ElectricityMeterType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct ElectricityMeterType {
-            #[serde(rename = "nodeId")]
-            pub node_id_: String, // T1
-            #[serde(rename = "serialNumber")]
-            pub serial_number_: String, // T1
-            #[serde(rename = "consumptionUnits")]
-            pub consumption_units_: String, // T1
-            #[serde(rename = "hasAndAllowsHhReadings")]
-            pub has_and_allows_hh_readings_: bool, // T1
-            #[serde(rename = "importMeter")]
-            pub import_meter_: Option<ElectricityMeterType2>, // T1
-        }
-        
-        // generate name=ElectricityMeterPointType id=9, selection.name=ElectricityMeterPointType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct ElectricityMeterPointType {
-            #[serde(rename = "id")]
-            pub id_: String, // T1
-            #[serde(rename = "supplyEndDate")]
-            pub supply_end_date_: Option<Date>, // T1
-            #[serde(rename = "mpan")]
-            pub mpan_: String, // T1
-            #[serde(rename = "status")]
-            pub status_: String, // T1
-            #[serde(rename = "meters")]
-            pub meters_: Vec<ElectricityMeterType>, // T1
-        }
-        
-        // generate name=ElectricityMeterType2 id=7, selection.name=ElectricityMeterType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(rename = "ElectricityMeterType")]
-        pub struct ElectricityMeterType2 {
-            #[serde(rename = "id")]
-            pub id_: String, // T1
-            #[serde(rename = "nodeId")]
-            pub node_id_: String, // T1
-            #[serde(rename = "serialNumber")]
-            pub serial_number_: String, // T1
-        }
-        
-        // generate name=OccupancyPeriodType id=5, selection.name=OccupancyPeriodType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct OccupancyPeriodType {
-            #[serde(rename = "id")]
-            pub id_: String, // T1
-            #[serde(rename = "effectiveFrom")]
-            pub effective_from_: DateTime, // T1
-            #[serde(rename = "effectiveTo")]
-            pub effective_to_: Option<DateTime>, // T1
-            #[serde(rename = "isOccupier")]
-            pub is_occupier_: bool, // T1
-        }
-        
-        // generate name=CoordinatesType id=6, selection.name=CoordinatesType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct CoordinatesType {
-            #[serde(rename = "latitude")]
-            pub latitude_: f64, // T1
-            #[serde(rename = "longitude")]
-            pub longitude_: f64, // T1
         }
         
         // generate name=PropertyType id=14, selection.name=PropertyType
@@ -661,6 +645,22 @@ pub mod meter {
             pub gas_meter_points_: Vec<GasMeterPointType>, // T1
             #[serde(rename = "smartDeviceNetworks")]
             pub smart_device_networks_: Vec<SmartMeterDeviceNetworkType>, // T1
+        }
+        
+        // generate name=AccountType id=15, selection.name=AccountType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct AccountType {
+            #[serde(rename = "properties")]
+            pub properties_: Vec<PropertyType>, // T1
+        }
+        
+        // generate name=Response id=16, selection.name=Response
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Response {
+            #[serde(rename = "account")]
+            pub account_: AccountType, // T1
         }
         
         // End dependencies
@@ -830,97 +830,33 @@ pub mod meter {
             pub mpan_: String, // T1
         }
         
-        // generate name=StandardTariff id=21, selection.name=StandardTariff
-        // generate name=GasTariffType id=28, selection.name=GasTariffType
+        // generate name=ElectricityMeterType id=18, selection.name=ElectricityMeterType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct GasTariffType {
-            #[serde(rename = "fullName")]
-            pub full_name_: String, // T1
-            #[serde(rename = "tariffCode")]
-            pub tariff_code_: String, // T1
-            #[serde(rename = "standingCharge")]
-            pub standing_charge_: f64, // T1
-            #[serde(rename = "preVatUnitRate")]
-            pub pre_vat_unit_rate_: f64, // T1
-            #[serde(rename = "unitRate")]
-            pub unit_rate_: f64, // T1
-        }
-        
-        // generate name=ElectricityMeterType id=31, selection.name=ElectricityMeterType
-        // generate name=ElectricityMeterType2 id=18, selection.name=ElectricityMeterType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(rename = "ElectricityMeterType")]
-        pub struct ElectricityMeterType2 {
+        pub struct ElectricityMeterType {
             #[serde(rename = "meterPoint")]
             pub meter_point_: ElectricityMeterPointType, // T1
         }
         
-        // generate name=Node id=33, selection.name=Node
-        // implemented_by ["InkTag", "InkGenericMessage", "InkBucket", "ElectricityMeterType", "GasMeterType", "EmailEventType", "PrintEventType", "PrintMessageType", "AccountFileAttachment", "RestrictedElectricityAgreement", "RestrictedGasAgreement"]
-        /* 2 variants 11 implementors */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(tag = "__typename")]
-        pub enum Node {
-        /* variants
-        ElectricityMeterType Variant { index: 31, name: "ElectricityMeterType", fields: {"importMeter": SelectionField { name: "importMeter", selection_type: Selection(18), force_nonnull: false }, "meterPoint": SelectionField { name: "meterPoint", selection_type: Required(Selection(27)), force_nonnull: true }}, type_condition: "ElectricityMeterType" }
-        GasMeterType Variant { index: 32, name: "GasMeterType", fields: {"meterPoint": SelectionField { name: "meterPoint", selection_type: Required(Selection(30)), force_nonnull: true }}, type_condition: "GasMeterType" }
-        */
-            InkTag(AbstractNode),
-            InkGenericMessage(AbstractNode),
-            InkBucket(AbstractNode),
-            ElectricityMeterType(ElectricityMeterType),
-            GasMeterType(GasMeterType),
-            EmailEventType(AbstractNode),
-            PrintEventType(AbstractNode),
-            PrintMessageType(AbstractNode),
-            AccountFileAttachment(AbstractNode),
-            RestrictedElectricityAgreement(AbstractNode),
-            RestrictedGasAgreement(AbstractNode),
-        }
-        
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct AbstractNode {
-        }
-        
-        impl AbstractNode {
-            pub fn as_node(&self) -> &AbstractNode {
-                self
-            }
-        }
-        
-        // Variant names "ElectricityMeterType"
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(rename = "ElectricityMeterType")]
-        pub struct ElectricityMeterType {
-            #[serde(rename = "importMeter")]
-            pub import_meter_: Option<ElectricityMeterType2>, // T1
-            #[serde(rename = "meterPoint")]
-            pub meter_point_: ElectricityMeterPointType2, // T1
-        }
-        
-        // Variant names "GasMeterType"
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(rename = "GasMeterType")]
-        pub struct GasMeterType {
-            #[serde(rename = "meterPoint")]
-            pub meter_point_: GasMeterPointType, // T1
-        }
-        
-        // generate name=PrepayTariff id=24, selection.name=PrepayTariff
-        // generate name=ElectricityMeterPointType2 id=27, selection.name=ElectricityMeterPointType
+        // generate name=UnitRate id=19, selection.name=UnitRate
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(rename = "ElectricityMeterPointType")]
-        pub struct ElectricityMeterPointType2 {
-            #[serde(rename = "mpan")]
-            pub mpan_: String, // T1
-            #[serde(rename = "agreements")]
-            pub agreements_: Vec<ElectricityAgreementType>, // T1
+        pub struct UnitRate {
+            #[serde(rename = "validFrom")]
+            pub valid_from_: DateTime, // T1
+            #[serde(rename = "validTo")]
+            pub valid_to_: DateTime, // T1
+            #[serde(rename = "preVatValue")]
+            pub pre_vat_value_: f64, // T1
+            #[serde(rename = "value")]
+            pub value_: f64, // T1
         }
         
-        // generate name=GasMeterType id=32, selection.name=GasMeterType
+        // generate name=HalfHourlyTariff id=20, selection.name=HalfHourlyTariff
+        // generate name=StandardTariff id=21, selection.name=StandardTariff
+        // generate name=DayNightTariff id=22, selection.name=DayNightTariff
+        // generate name=ThreeRateTariff id=23, selection.name=ThreeRateTariff
+        // generate name=PrepayTariff id=24, selection.name=PrepayTariff
         // generate name=ElectricityTariffType id=25, selection.name=ElectricityTariffType
         // implemented_by ["StandardTariff", "DayNightTariff", "ThreeRateTariff", "HalfHourlyTariff", "PrepayTariff"]
         /* 5 variants 5 implementors */
@@ -928,11 +864,11 @@ pub mod meter {
         #[serde(tag = "__typename")]
         pub enum ElectricityTariffType {
         /* variants
-        HalfHourlyTariff Variant { index: 20, name: "HalfHourlyTariff", fields: {"displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "unitRates": SelectionField { name: "unitRates", selection_type: Array(Selection(19)), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "productCode": SelectionField { name: "productCode", selection_type: BuiltinType(String), force_nonnull: true }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }}, type_condition: "HalfHourlyTariff" }
-        StandardTariff Variant { index: 21, name: "StandardTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatUnitRate": SelectionField { name: "preVatUnitRate", selection_type: BuiltinType(Float), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }, "unitRate": SelectionField { name: "unitRate", selection_type: BuiltinType(Float), force_nonnull: true }}, type_condition: "StandardTariff" }
-        DayNightTariff Variant { index: 22, name: "DayNightTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "dayRate": SelectionField { name: "dayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "nightRate": SelectionField { name: "nightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatDayRate": SelectionField { name: "preVatDayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatNightRate": SelectionField { name: "preVatNightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }}, type_condition: "DayNightTariff" }
-        ThreeRateTariff Variant { index: 23, name: "ThreeRateTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "dayRate": SelectionField { name: "dayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "nightRate": SelectionField { name: "nightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "offPeakRate": SelectionField { name: "offPeakRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatDayRate": SelectionField { name: "preVatDayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatNightRate": SelectionField { name: "preVatNightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatOffPeakRate": SelectionField { name: "preVatOffPeakRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }}, type_condition: "ThreeRateTariff" }
-        PrepayTariff Variant { index: 24, name: "PrepayTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatUnitRate": SelectionField { name: "preVatUnitRate", selection_type: BuiltinType(Float), force_nonnull: true }, "productCode": SelectionField { name: "productCode", selection_type: BuiltinType(String), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: true }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }, "unitRate": SelectionField { name: "unitRate", selection_type: BuiltinType(Float), force_nonnull: true }}, type_condition: "PrepayTariff" }
+        HalfHourlyTariff Variant { index: 20, name: "HalfHourlyTariff", fields: {"displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "unitRates": SelectionField { name: "unitRates", selection_type: Array(Selection(19)), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "productCode": SelectionField { name: "productCode", selection_type: BuiltinType(String), force_nonnull: true }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }}, type_condition: "HalfHourlyTariff" }
+        StandardTariff Variant { index: 21, name: "StandardTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "preVatUnitRate": SelectionField { name: "preVatUnitRate", selection_type: BuiltinType(Float), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }, "unitRate": SelectionField { name: "unitRate", selection_type: BuiltinType(Float), force_nonnull: true }}, type_condition: "StandardTariff" }
+        DayNightTariff Variant { index: 22, name: "DayNightTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "dayRate": SelectionField { name: "dayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "nightRate": SelectionField { name: "nightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatDayRate": SelectionField { name: "preVatDayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatNightRate": SelectionField { name: "preVatNightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }}, type_condition: "DayNightTariff" }
+        ThreeRateTariff Variant { index: 23, name: "ThreeRateTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "dayRate": SelectionField { name: "dayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "description": SelectionField { name: "description", selection_type: BuiltinType(String), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "nightRate": SelectionField { name: "nightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "offPeakRate": SelectionField { name: "offPeakRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatDayRate": SelectionField { name: "preVatDayRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatNightRate": SelectionField { name: "preVatNightRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatOffPeakRate": SelectionField { name: "preVatOffPeakRate", selection_type: BuiltinType(Float), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }}, type_condition: "ThreeRateTariff" }
+        PrepayTariff Variant { index: 24, name: "PrepayTariff", fields: {"id": SelectionField { name: "id", selection_type: BuiltinType(ID), force_nonnull: true }, "displayName": SelectionField { name: "displayName", selection_type: BuiltinType(String), force_nonnull: true }, "fullName": SelectionField { name: "fullName", selection_type: BuiltinType(String), force_nonnull: true }, "preVatStandingCharge": SelectionField { name: "preVatStandingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "preVatUnitRate": SelectionField { name: "preVatUnitRate", selection_type: BuiltinType(Float), force_nonnull: true }, "productCode": SelectionField { name: "productCode", selection_type: BuiltinType(String), force_nonnull: true }, "standingCharge": SelectionField { name: "standingCharge", selection_type: BuiltinType(Float), force_nonnull: false }, "tariffCode": SelectionField { name: "tariffCode", selection_type: BuiltinType(String), force_nonnull: true }, "unitRate": SelectionField { name: "unitRate", selection_type: BuiltinType(Float), force_nonnull: true }}, type_condition: "PrepayTariff" }
         */
             StandardTariff(StandardTariff),
             DayNightTariff(DayNightTariff),
@@ -960,13 +896,13 @@ pub mod meter {
             #[serde(rename = "fullName")]
             pub full_name_: String, // T1
             #[serde(rename = "standingCharge")]
-            pub standing_charge_: f64, // T1
+            pub standing_charge_: Option<f64>, // T1
             #[serde(rename = "unitRates")]
             pub unit_rates_: Vec<UnitRate>, // T1
             #[serde(rename = "description")]
             pub description_: String, // T1
             #[serde(rename = "preVatStandingCharge")]
-            pub pre_vat_standing_charge_: f64, // T1
+            pub pre_vat_standing_charge_: Option<f64>, // T1
             #[serde(rename = "productCode")]
             pub product_code_: String, // T1
             #[serde(rename = "tariffCode")]
@@ -986,11 +922,11 @@ pub mod meter {
             #[serde(rename = "fullName")]
             pub full_name_: String, // T1
             #[serde(rename = "preVatStandingCharge")]
-            pub pre_vat_standing_charge_: f64, // T1
+            pub pre_vat_standing_charge_: Option<f64>, // T1
             #[serde(rename = "preVatUnitRate")]
             pub pre_vat_unit_rate_: f64, // T1
             #[serde(rename = "standingCharge")]
-            pub standing_charge_: f64, // T1
+            pub standing_charge_: Option<f64>, // T1
             #[serde(rename = "tariffCode")]
             pub tariff_code_: String, // T1
             #[serde(rename = "unitRate")]
@@ -1018,9 +954,9 @@ pub mod meter {
             #[serde(rename = "preVatNightRate")]
             pub pre_vat_night_rate_: f64, // T1
             #[serde(rename = "preVatStandingCharge")]
-            pub pre_vat_standing_charge_: f64, // T1
+            pub pre_vat_standing_charge_: Option<f64>, // T1
             #[serde(rename = "standingCharge")]
-            pub standing_charge_: f64, // T1
+            pub standing_charge_: Option<f64>, // T1
             #[serde(rename = "tariffCode")]
             pub tariff_code_: String, // T1
         }
@@ -1050,9 +986,9 @@ pub mod meter {
             #[serde(rename = "preVatOffPeakRate")]
             pub pre_vat_off_peak_rate_: f64, // T1
             #[serde(rename = "preVatStandingCharge")]
-            pub pre_vat_standing_charge_: f64, // T1
+            pub pre_vat_standing_charge_: Option<f64>, // T1
             #[serde(rename = "standingCharge")]
-            pub standing_charge_: f64, // T1
+            pub standing_charge_: Option<f64>, // T1
             #[serde(rename = "tariffCode")]
             pub tariff_code_: String, // T1
         }
@@ -1068,13 +1004,13 @@ pub mod meter {
             #[serde(rename = "fullName")]
             pub full_name_: String, // T1
             #[serde(rename = "preVatStandingCharge")]
-            pub pre_vat_standing_charge_: f64, // T1
+            pub pre_vat_standing_charge_: Option<f64>, // T1
             #[serde(rename = "preVatUnitRate")]
             pub pre_vat_unit_rate_: f64, // T1
             #[serde(rename = "productCode")]
             pub product_code_: String, // T1
             #[serde(rename = "standingCharge")]
-            pub standing_charge_: f64, // T1
+            pub standing_charge_: Option<f64>, // T1
             #[serde(rename = "tariffCode")]
             pub tariff_code_: String, // T1
             #[serde(rename = "unitRate")]
@@ -1095,15 +1031,33 @@ pub mod meter {
             pub tariff_: ElectricityTariffType, // T1
         }
         
-        // generate name=Response id=34, selection.name=Response
+        // generate name=ElectricityMeterPointType2 id=27, selection.name=ElectricityMeterPointType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Response {
-            #[serde(rename = "node")]
-            pub node_: Node, // T1
+        #[serde(rename = "ElectricityMeterPointType")]
+        pub struct ElectricityMeterPointType2 {
+            #[serde(rename = "mpan")]
+            pub mpan_: String, // T1
+            #[serde(rename = "agreements")]
+            pub agreements_: Vec<ElectricityAgreementType>, // T1
         }
         
-        // generate name=DayNightTariff id=22, selection.name=DayNightTariff
+        // generate name=GasTariffType id=28, selection.name=GasTariffType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct GasTariffType {
+            #[serde(rename = "fullName")]
+            pub full_name_: String, // T1
+            #[serde(rename = "tariffCode")]
+            pub tariff_code_: String, // T1
+            #[serde(rename = "standingCharge")]
+            pub standing_charge_: Option<f64>, // T1
+            #[serde(rename = "preVatUnitRate")]
+            pub pre_vat_unit_rate_: f64, // T1
+            #[serde(rename = "unitRate")]
+            pub unit_rate_: f64, // T1
+        }
+        
         // generate name=GasAgreementType id=29, selection.name=GasAgreementType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -1118,7 +1072,6 @@ pub mod meter {
             pub tariff_: GasTariffType, // T1
         }
         
-        // generate name=HalfHourlyTariff id=20, selection.name=HalfHourlyTariff
         // generate name=GasMeterPointType id=30, selection.name=GasMeterPointType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -1127,19 +1080,65 @@ pub mod meter {
             pub agreements_: Vec<GasAgreementType>, // T1
         }
         
-        // generate name=ThreeRateTariff id=23, selection.name=ThreeRateTariff
-        // generate name=UnitRate id=19, selection.name=UnitRate
+        // generate name=ElectricityMeterType2 id=31, selection.name=ElectricityMeterType
+        // generate name=GasMeterType id=32, selection.name=GasMeterType
+        // generate name=Node id=33, selection.name=Node
+        // implemented_by ["InkTag", "InkGenericMessage", "InkBucket", "ElectricityMeterType", "GasMeterType", "EmailEventType", "PrintEventType", "PrintMessageType", "AccountFileAttachment", "RestrictedElectricityAgreement", "RestrictedGasAgreement"]
+        /* 2 variants 11 implementors */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        #[serde(tag = "__typename")]
+        pub enum Node {
+        /* variants
+        ElectricityMeterType Variant { index: 31, name: "ElectricityMeterType", fields: {"importMeter": SelectionField { name: "importMeter", selection_type: Selection(18), force_nonnull: false }, "meterPoint": SelectionField { name: "meterPoint", selection_type: Required(Selection(27)), force_nonnull: true }}, type_condition: "ElectricityMeterType" }
+        GasMeterType Variant { index: 32, name: "GasMeterType", fields: {"meterPoint": SelectionField { name: "meterPoint", selection_type: Required(Selection(30)), force_nonnull: true }}, type_condition: "GasMeterType" }
+        */
+            InkTag(AbstractNode),
+            InkGenericMessage(AbstractNode),
+            InkBucket(AbstractNode),
+            ElectricityMeterType(ElectricityMeterType2),
+            GasMeterType(GasMeterType),
+            EmailEventType(AbstractNode),
+            PrintEventType(AbstractNode),
+            PrintMessageType(AbstractNode),
+            AccountFileAttachment(AbstractNode),
+            RestrictedElectricityAgreement(AbstractNode),
+            RestrictedGasAgreement(AbstractNode),
+        }
+        
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct AbstractNode {
+        }
+        
+        impl AbstractNode {
+            pub fn as_node(&self) -> &AbstractNode {
+                self
+            }
+        }
+        
+        // Variant names "ElectricityMeterType"
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        #[serde(rename = "ElectricityMeterType2")]
+        pub struct ElectricityMeterType2 {
+            #[serde(rename = "importMeter")]
+            pub import_meter_: Option<ElectricityMeterType>, // T1
+            #[serde(rename = "meterPoint")]
+            pub meter_point_: ElectricityMeterPointType2, // T1
+        }
+        
+        // Variant names "GasMeterType"
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        #[serde(rename = "GasMeterType")]
+        pub struct GasMeterType {
+            #[serde(rename = "meterPoint")]
+            pub meter_point_: GasMeterPointType, // T1
+        }
+        
+        // generate name=Response id=34, selection.name=Response
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct UnitRate {
-            #[serde(rename = "validFrom")]
-            pub valid_from_: DateTime, // T1
-            #[serde(rename = "validTo")]
-            pub valid_to_: DateTime, // T1
-            #[serde(rename = "preVatValue")]
-            pub pre_vat_value_: f64, // T1
-            #[serde(rename = "value")]
-            pub value_: f64, // T1
+        pub struct Response {
+            #[serde(rename = "node")]
+            pub node_: Node, // T1
         }
         
         // End dependencies
@@ -1390,6 +1389,23 @@ pub mod meter {
             pub mpan_: String, // T1
         }
         
+        // generate name=LineItemType id=35, selection.name=LineItemType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct LineItemType {
+            #[serde(rename = "startAt")]
+            pub start_at_: DateTime, // T1
+            #[serde(rename = "endAt")]
+            pub end_at_: DateTime, // T1
+            #[serde(rename = "netAmount")]
+            pub net_amount_: Decimal, // T1
+            #[serde(rename = "numberOfUnits")]
+            pub number_of_units_: Decimal, // T1
+            #[serde(rename = "settlementUnit")]
+            pub settlement_unit_: String, // T1
+        }
+        
+        // generate name=ElectricityAgreementType id=36, selection.name=ElectricityAgreementType
         // generate name=AgreementInterface id=37, selection.name=AgreementInterface
         // implemented_by ["ElectricityAgreementType", "GasAgreementType"]
         /* 1 variants 2 implementors */
@@ -1423,29 +1439,12 @@ pub mod meter {
             pub line_items_: sparko_graphql::types::PageOf<LineItemType>, // T1
         }
         
-        // generate name=ElectricityAgreementType id=36, selection.name=ElectricityAgreementType
         // generate name=Response id=38, selection.name=Response
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
         pub struct Response {
             #[serde(rename = "electricityAgreement")]
             pub electricity_agreement_: AgreementInterface, // T1
-        }
-        
-        // generate name=LineItemType id=35, selection.name=LineItemType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct LineItemType {
-            #[serde(rename = "startAt")]
-            pub start_at_: DateTime, // T1
-            #[serde(rename = "endAt")]
-            pub end_at_: DateTime, // T1
-            #[serde(rename = "netAmount")]
-            pub net_amount_: Decimal, // T1
-            #[serde(rename = "numberOfUnits")]
-            pub number_of_units_: Decimal, // T1
-            #[serde(rename = "settlementUnit")]
-            pub settlement_unit_: String, // T1
         }
         
         // End dependencies
@@ -1693,14 +1692,6 @@ pub mod meter {
         use super::super::LineItemGroupingOptions;
         use super::super::Decimal;
         // Start dependencies
-        // generate name=Response id=42, selection.name=Response
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Response {
-            #[serde(rename = "gasAgreement")]
-            pub gas_agreement_: AgreementInterface, // T1
-        }
-        
         // generate name=GasMeterPointType id=39, selection.name=GasMeterPointType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -1709,7 +1700,6 @@ pub mod meter {
             pub mprn_: String, // T1
         }
         
-        // generate name=GasAgreementType id=40, selection.name=GasAgreementType
         // generate name=LineItemType id=35, selection.name=LineItemType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -1726,6 +1716,7 @@ pub mod meter {
             pub settlement_unit_: String, // T1
         }
         
+        // generate name=GasAgreementType id=40, selection.name=GasAgreementType
         // generate name=AgreementInterface id=41, selection.name=AgreementInterface
         // implemented_by ["ElectricityAgreementType", "GasAgreementType"]
         /* 1 variants 2 implementors */
@@ -1757,6 +1748,14 @@ pub mod meter {
             pub meter_point_: GasMeterPointType, // T1
             #[serde(rename = "lineItems")]
             pub line_items_: sparko_graphql::types::PageOf<LineItemType>, // T1
+        }
+        
+        // generate name=Response id=42, selection.name=Response
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Response {
+            #[serde(rename = "gasAgreement")]
+            pub gas_agreement_: AgreementInterface, // T1
         }
         
         // End dependencies
@@ -2181,14 +2180,6 @@ pub mod meter {
         use super::super::DateTime;
         use super::super::Decimal;
         // Start dependencies
-        // generate name=Response id=50, selection.name=Response
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Response {
-            #[serde(rename = "node")]
-            pub node_: Node, // T1
-        }
-        
         // generate name=ConsumptionType id=45, selection.name=ConsumptionType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -2210,6 +2201,8 @@ pub mod meter {
             pub id_: String, // T1
         }
         
+        // generate name=ElectricityMeterType id=47, selection.name=ElectricityMeterType
+        // generate name=GasMeterType id=48, selection.name=GasMeterType
         // generate name=Node id=49, selection.name=Node
         // implemented_by ["InkTag", "InkGenericMessage", "InkBucket", "ElectricityMeterType", "GasMeterType", "EmailEventType", "PrintEventType", "PrintMessageType", "AccountFileAttachment", "RestrictedElectricityAgreement", "RestrictedGasAgreement"]
         /* 2 variants 11 implementors */
@@ -2269,8 +2262,14 @@ pub mod meter {
             pub serial_number_: String, // T1
         }
         
-        // generate name=ElectricityMeterType id=47, selection.name=ElectricityMeterType
-        // generate name=GasMeterType id=48, selection.name=GasMeterType
+        // generate name=Response id=50, selection.name=Response
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Response {
+            #[serde(rename = "node")]
+            pub node_: Node, // T1
+        }
+        
         // End dependencies
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
         pub struct Variables {
@@ -2511,15 +2510,6 @@ pub mod bill {
         use super::super::StatementReversalsAfterClose;
         use super::super::AccountStatementStatus;
         // Start dependencies
-        // generate name=AccountType id=57, selection.name=AccountType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct AccountType {
-            #[serde(rename = "bills")]
-            pub bills_: sparko_graphql::types::ReversePageOf<BillInterface>, // T1
-        }
-        
-        // generate name=InvoiceType id=55, selection.name=InvoiceType
         // generate name=HeldStatus id=51, selection.name=HeldStatus
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -2530,6 +2520,21 @@ pub mod bill {
             pub reason_: Option<String>, // T1
         }
         
+        // generate name=StatementTotalType id=52, selection.name=StatementTotalType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct StatementTotalType {
+            #[serde(rename = "netTotal")]
+            pub net_total_: i32, // T1
+            #[serde(rename = "taxTotal")]
+            pub tax_total_: i32, // T1
+            #[serde(rename = "grossTotal")]
+            pub gross_total_: i32, // T1
+        }
+        
+        // generate name=StatementType id=53, selection.name=StatementType
+        // generate name=PeriodBasedDocumentType id=54, selection.name=PeriodBasedDocumentType
+        // generate name=InvoiceType id=55, selection.name=InvoiceType
         // generate name=BillInterface id=56, selection.name=BillInterface
         // implemented_by ["StatementType", "PreKrakenBillType", "PeriodBasedDocumentType", "InvoiceType"]
         /* 3 variants 4 implementors */
@@ -2651,26 +2656,20 @@ pub mod bill {
             }
         }
         
-        // generate name=StatementType id=53, selection.name=StatementType
+        // generate name=AccountType id=57, selection.name=AccountType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct AccountType {
+            #[serde(rename = "bills")]
+            pub bills_: sparko_graphql::types::ReversePageOf<BillInterface>, // T1
+        }
+        
         // generate name=Response id=58, selection.name=Response
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
         pub struct Response {
             #[serde(rename = "account")]
             pub account_: AccountType, // T1
-        }
-        
-        // generate name=PeriodBasedDocumentType id=54, selection.name=PeriodBasedDocumentType
-        // generate name=StatementTotalType id=52, selection.name=StatementTotalType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct StatementTotalType {
-            #[serde(rename = "netTotal")]
-            pub net_total_: i32, // T1
-            #[serde(rename = "taxTotal")]
-            pub tax_total_: i32, // T1
-            #[serde(rename = "grossTotal")]
-            pub gross_total_: i32, // T1
         }
         
         // End dependencies
@@ -3118,14 +3117,6 @@ pub mod bill {
         use super::super::Decimal;
         use super::super::ConsumptionUnit;
         // Start dependencies
-        // generate name=AccountType id=65, selection.name=AccountType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct AccountType {
-            #[serde(rename = "bill")]
-            pub bill_: BillInterface, // T1
-        }
-        
         // generate name=TransactionAmountType id=59, selection.name=TransactionAmountType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -3138,6 +3129,25 @@ pub mod bill {
             pub gross_: i32, // T1
         }
         
+        // generate name=Consumption id=60, selection.name=Consumption
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Consumption {
+            #[serde(rename = "startDate")]
+            pub start_date_: Date, // T1
+            #[serde(rename = "endDate")]
+            pub end_date_: Date, // T1
+            #[serde(rename = "quantity")]
+            pub quantity_: Decimal, // T1
+            #[serde(rename = "unit")]
+            pub unit_: ConsumptionUnit, // T1
+            #[serde(rename = "usageCost")]
+            pub usage_cost_: i32, // T1
+            #[serde(rename = "supplyCharge")]
+            pub supply_charge_: i32, // T1
+        }
+        
+        // generate name=Charge id=61, selection.name=Charge
         // generate name=TransactionType id=62, selection.name=TransactionType
         // implemented_by ["Charge", "Payment", "Refund", "Credit"]
         /* 1 variants 4 implementors */
@@ -3219,32 +3229,7 @@ pub mod bill {
             }
         }
         
-        // generate name=Consumption id=60, selection.name=Consumption
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Consumption {
-            #[serde(rename = "startDate")]
-            pub start_date_: Date, // T1
-            #[serde(rename = "endDate")]
-            pub end_date_: Date, // T1
-            #[serde(rename = "quantity")]
-            pub quantity_: Decimal, // T1
-            #[serde(rename = "unit")]
-            pub unit_: ConsumptionUnit, // T1
-            #[serde(rename = "usageCost")]
-            pub usage_cost_: i32, // T1
-            #[serde(rename = "supplyCharge")]
-            pub supply_charge_: i32, // T1
-        }
-        
-        // generate name=Response id=66, selection.name=Response
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Response {
-            #[serde(rename = "account")]
-            pub account_: AccountType, // T1
-        }
-        
+        // generate name=StatementType id=63, selection.name=StatementType
         // generate name=BillInterface id=64, selection.name=BillInterface
         // implemented_by ["StatementType", "PreKrakenBillType", "PeriodBasedDocumentType", "InvoiceType"]
         /* 1 variants 4 implementors */
@@ -3278,8 +3263,22 @@ pub mod bill {
             pub transactions_: sparko_graphql::types::ReversePageOf<TransactionType>, // T1
         }
         
-        // generate name=Charge id=61, selection.name=Charge
-        // generate name=StatementType id=63, selection.name=StatementType
+        // generate name=AccountType id=65, selection.name=AccountType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct AccountType {
+            #[serde(rename = "bill")]
+            pub bill_: BillInterface, // T1
+        }
+        
+        // generate name=Response id=66, selection.name=Response
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Response {
+            #[serde(rename = "account")]
+            pub account_: AccountType, // T1
+        }
+        
         // End dependencies
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
         pub struct Variables {
@@ -3551,7 +3550,133 @@ pub mod bill {
             pub reason_: Option<String>, // T1
         }
         
+        // generate name=StatementTotalType id=52, selection.name=StatementTotalType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct StatementTotalType {
+            #[serde(rename = "netTotal")]
+            pub net_total_: i32, // T1
+            #[serde(rename = "taxTotal")]
+            pub tax_total_: i32, // T1
+            #[serde(rename = "grossTotal")]
+            pub gross_total_: i32, // T1
+        }
+        
+        // generate name=TransactionAmountType id=59, selection.name=TransactionAmountType
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct TransactionAmountType {
+            #[serde(rename = "net")]
+            pub net_: i32, // T1
+            #[serde(rename = "tax")]
+            pub tax_: i32, // T1
+            #[serde(rename = "gross")]
+            pub gross_: i32, // T1
+        }
+        
+        // generate name=Consumption id=60, selection.name=Consumption
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Consumption {
+            #[serde(rename = "startDate")]
+            pub start_date_: Date, // T1
+            #[serde(rename = "endDate")]
+            pub end_date_: Date, // T1
+            #[serde(rename = "quantity")]
+            pub quantity_: Decimal, // T1
+            #[serde(rename = "unit")]
+            pub unit_: ConsumptionUnit, // T1
+            #[serde(rename = "usageCost")]
+            pub usage_cost_: i32, // T1
+            #[serde(rename = "supplyCharge")]
+            pub supply_charge_: i32, // T1
+        }
+        
+        // generate name=Charge id=67, selection.name=Charge
+        // generate name=TransactionType id=68, selection.name=TransactionType
+        // implemented_by ["Charge", "Payment", "Refund", "Credit"]
+        /* 1 variants 4 implementors */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        #[serde(tag = "__typename")]
+        pub enum TransactionType {
+        /* variants
+        Charge Variant { index: 67, name: "Charge", fields: {"consumption": SelectionField { name: "consumption", selection_type: Selection(60), force_nonnull: false }, "isExport": SelectionField { name: "isExport", selection_type: BuiltinType(Boolean), force_nonnull: true }}, type_condition: "Charge" }
+        */
+            Charge(Charge),
+            Payment(AbstractTransactionType),
+            Refund(AbstractTransactionType),
+            Credit(AbstractTransactionType),
+        }
+        
+        impl TransactionType {
+            pub fn as_transaction_type(&self) -> &AbstractTransactionType {
+                match self {
+                    TransactionType::Charge(content) => content.as_transaction_type(),
+                    TransactionType::Payment(content) => content,
+                    TransactionType::Refund(content) => content,
+                    TransactionType::Credit(content) => content,
+                }
+            }
+            
+        }
+        
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct AbstractTransactionType {
+            #[serde(rename = "id")]
+            pub id_: String, // T1
+            #[serde(rename = "postedDate")]
+            pub posted_date_: Date, // T1
+            #[serde(rename = "createdAt")]
+            pub created_at_: DateTime, // T1
+            #[serde(rename = "accountNumber")]
+            pub account_number_: String, // T1
+            #[serde(rename = "amounts")]
+            pub amounts_: TransactionAmountType, // T1
+            #[serde(rename = "balanceCarriedForward")]
+            pub balance_carried_forward_: i32, // T1
+            #[serde(rename = "isHeld")]
+            pub is_held_: bool, // T1
+            #[serde(rename = "isIssued")]
+            pub is_issued_: bool, // T1
+            #[serde(rename = "title")]
+            pub title_: String, // T1
+            #[serde(rename = "billingDocumentIdentifier")]
+            pub billing_document_identifier_: String, // T1
+            #[serde(rename = "isReversed")]
+            pub is_reversed_: bool, // T1
+            #[serde(rename = "hasStatement")]
+            pub has_statement_: bool, // T1
+            #[serde(rename = "note")]
+            pub note_: Option<String>, // T1
+        }
+        
+        impl AbstractTransactionType {
+            pub fn as_transaction_type(&self) -> &AbstractTransactionType {
+                self
+            }
+        }
+        
+        // Variant names "Charge"
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        #[serde(rename = "Charge")]
+        pub struct Charge {
+            #[serde(flatten)]
+            pub transaction_type_: AbstractTransactionType,
+            #[serde(rename = "consumption")]
+            pub consumption_: Option<Consumption>, // T1
+            #[serde(rename = "isExport")]
+            pub is_export_: bool, // T1
+        }
+        
+        impl Charge {
+            pub fn as_transaction_type(&self) -> &AbstractTransactionType {
+                &self.transaction_type_
+            }
+        }
+        
+        // generate name=StatementType id=69, selection.name=StatementType
         // generate name=PeriodBasedDocumentType id=70, selection.name=PeriodBasedDocumentType
+        // generate name=InvoiceType id=71, selection.name=InvoiceType
         // generate name=BillInterface id=72, selection.name=BillInterface
         // implemented_by ["StatementType", "PreKrakenBillType", "PeriodBasedDocumentType", "InvoiceType"]
         /* 3 variants 4 implementors */
@@ -3675,139 +3800,6 @@ pub mod bill {
             }
         }
         
-        // generate name=Response id=74, selection.name=Response
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Response {
-            #[serde(rename = "account")]
-            pub account_: AccountType, // T1
-        }
-        
-        // generate name=TransactionType id=68, selection.name=TransactionType
-        // implemented_by ["Charge", "Payment", "Refund", "Credit"]
-        /* 1 variants 4 implementors */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(tag = "__typename")]
-        pub enum TransactionType {
-        /* variants
-        Charge Variant { index: 67, name: "Charge", fields: {"consumption": SelectionField { name: "consumption", selection_type: Selection(60), force_nonnull: false }, "isExport": SelectionField { name: "isExport", selection_type: BuiltinType(Boolean), force_nonnull: true }}, type_condition: "Charge" }
-        */
-            Charge(Charge),
-            Payment(AbstractTransactionType),
-            Refund(AbstractTransactionType),
-            Credit(AbstractTransactionType),
-        }
-        
-        impl TransactionType {
-            pub fn as_transaction_type(&self) -> &AbstractTransactionType {
-                match self {
-                    TransactionType::Charge(content) => content.as_transaction_type(),
-                    TransactionType::Payment(content) => content,
-                    TransactionType::Refund(content) => content,
-                    TransactionType::Credit(content) => content,
-                }
-            }
-            
-        }
-        
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct AbstractTransactionType {
-            #[serde(rename = "id")]
-            pub id_: String, // T1
-            #[serde(rename = "postedDate")]
-            pub posted_date_: Date, // T1
-            #[serde(rename = "createdAt")]
-            pub created_at_: DateTime, // T1
-            #[serde(rename = "accountNumber")]
-            pub account_number_: String, // T1
-            #[serde(rename = "amounts")]
-            pub amounts_: TransactionAmountType, // T1
-            #[serde(rename = "balanceCarriedForward")]
-            pub balance_carried_forward_: i32, // T1
-            #[serde(rename = "isHeld")]
-            pub is_held_: bool, // T1
-            #[serde(rename = "isIssued")]
-            pub is_issued_: bool, // T1
-            #[serde(rename = "title")]
-            pub title_: String, // T1
-            #[serde(rename = "billingDocumentIdentifier")]
-            pub billing_document_identifier_: String, // T1
-            #[serde(rename = "isReversed")]
-            pub is_reversed_: bool, // T1
-            #[serde(rename = "hasStatement")]
-            pub has_statement_: bool, // T1
-            #[serde(rename = "note")]
-            pub note_: Option<String>, // T1
-        }
-        
-        impl AbstractTransactionType {
-            pub fn as_transaction_type(&self) -> &AbstractTransactionType {
-                self
-            }
-        }
-        
-        // Variant names "Charge"
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        #[serde(rename = "Charge")]
-        pub struct Charge {
-            #[serde(flatten)]
-            pub transaction_type_: AbstractTransactionType,
-            #[serde(rename = "consumption")]
-            pub consumption_: Option<Consumption>, // T1
-            #[serde(rename = "isExport")]
-            pub is_export_: bool, // T1
-        }
-        
-        impl Charge {
-            pub fn as_transaction_type(&self) -> &AbstractTransactionType {
-                &self.transaction_type_
-            }
-        }
-        
-        // generate name=Consumption id=60, selection.name=Consumption
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct Consumption {
-            #[serde(rename = "startDate")]
-            pub start_date_: Date, // T1
-            #[serde(rename = "endDate")]
-            pub end_date_: Date, // T1
-            #[serde(rename = "quantity")]
-            pub quantity_: Decimal, // T1
-            #[serde(rename = "unit")]
-            pub unit_: ConsumptionUnit, // T1
-            #[serde(rename = "usageCost")]
-            pub usage_cost_: i32, // T1
-            #[serde(rename = "supplyCharge")]
-            pub supply_charge_: i32, // T1
-        }
-        
-        // generate name=InvoiceType id=71, selection.name=InvoiceType
-        // generate name=Charge id=67, selection.name=Charge
-        // generate name=StatementTotalType id=52, selection.name=StatementTotalType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct StatementTotalType {
-            #[serde(rename = "netTotal")]
-            pub net_total_: i32, // T1
-            #[serde(rename = "taxTotal")]
-            pub tax_total_: i32, // T1
-            #[serde(rename = "grossTotal")]
-            pub gross_total_: i32, // T1
-        }
-        
-        // generate name=TransactionAmountType id=59, selection.name=TransactionAmountType
-        /* No variants */
-        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
-        pub struct TransactionAmountType {
-            #[serde(rename = "net")]
-            pub net_: i32, // T1
-            #[serde(rename = "tax")]
-            pub tax_: i32, // T1
-            #[serde(rename = "gross")]
-            pub gross_: i32, // T1
-        }
-        
         // generate name=AccountType id=73, selection.name=AccountType
         /* No variants */
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
@@ -3816,7 +3808,14 @@ pub mod bill {
             pub bills_: sparko_graphql::types::ForwardPageOf<BillInterface>, // T1
         }
         
-        // generate name=StatementType id=69, selection.name=StatementType
+        // generate name=Response id=74, selection.name=Response
+        /* No variants */
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct Response {
+            #[serde(rename = "account")]
+            pub account_: AccountType, // T1
+        }
+        
         // End dependencies
         #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
         pub struct Variables {

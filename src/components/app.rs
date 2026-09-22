@@ -2,8 +2,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-
-use crate::{MarcoSparkoContext, ModuleRegistrations, views::*};
+use crate::{Args, MarcoSparkoContext, ModuleRegistrations, views::*};
 use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
@@ -25,9 +24,9 @@ pub enum Route {
         #[route("/")]
         Home {},
         // The route attribute can include dynamic parameters that implement [`std::str::FromStr`] and [`std::fmt::Display`] with the `:` syntax.
-        // In this case, id will match any integer like `/blog/123` or `/blog/-456`.
-        #[route("/blog/:module_id")]
-        // Fields of the route variant will be passed to the component as props. In this case, the blog component must accept
+        // In this case, id will match any integer like `/module/123` or `/module/-456`.
+        #[route("/module/:module_id")]
+        // Fields of the route variant will be passed to the component as props. In this case, the module component must accept
         // an `id` prop of type `i32`.
         Module { module_id: String },
 }
@@ -43,9 +42,12 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 ///
 /// Components should be annotated with `#[component]` to support props, better error messages, and autocomplete
 #[component]
-// pub fn App(profile_manager: Arc<ProfileManager>) -> Element {
 pub fn App() -> Element {
-    println!("Rendering App component MAIN_CSS={}", MAIN_CSS);
+    // let context = use_context::<Signal<Args>>();
+    // let args = (&*context.read()).clone();
+
+    let args = Args::ms_parse();
+    let verbose = args.marco_sparko_args.verbose;
     let mut init_signal = use_signal::<bool>(|| true);
     let init = *init_signal.read();
     let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);
@@ -61,12 +63,12 @@ pub fn App() -> Element {
     // window.set_window_icon(window_icon);
 
     if init {
-        let marco_sparko_context = MarcoSparkoContext::new()?;
+        let marco_sparko_context = MarcoSparkoContext::new(args)?;
         context_signal.set(Some(marco_sparko_context));
         // let x: Signal<Arc<MarcoSparkoContext>>;
         use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
 
-        let module_registrations = ModuleRegistrations::new();
+        let module_registrations = ModuleRegistrations::new(verbose);
         use_context_provider::<ModuleRegistrations>(move || module_registrations);
 
         init_signal.set(false);

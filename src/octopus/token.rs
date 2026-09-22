@@ -147,11 +147,13 @@ impl OctopusTokenManager {
             None
         };
 
-        if let Some(token) = &token {
-            println!("Loaded token from cache: {:?}", token.token);
-        }
-        else {
-            println!("No cached token found");
+        if context.args.marco_sparko_args.verbose {
+            if let Some(token) = &token {
+                println!("Loaded token from cache: {:?}", token.token);
+            }
+            else {
+                println!("No cached token found");
+            }
         }
 
         OctopusTokenManager {
@@ -197,7 +199,9 @@ impl TokenManager for OctopusTokenManager {
         }
         else {
             if let Some(refresh_token) = refresh_token {
-                println!("Refreshing Octopus token using refresh token...");
+                if self.context.args.marco_sparko_args.verbose {
+                    println!("Refreshing Octopus token using refresh token...");
+                }
 
                 let input = ObtainJsonWebTokenInput::builder()
                     .with_refresh_token(refresh_token.as_ref().clone())
@@ -208,8 +212,10 @@ impl TokenManager for OctopusTokenManager {
         
                 let token = OctopusToken::from(response.obtain_kraken_token_);
 
-                println!("Obtained new Octopus token via refresh: {:?}", token.token);
-        
+                if self.context.args.marco_sparko_args.verbose {
+                    println!("Obtained new Octopus token via refresh: {:?}", token.token);
+                }
+
                 if let Err(error) = self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token)) {
                     return Err(sparko_graphql::Error::InternalError(format!("Failed to update cache {}", error)))
                 }
@@ -226,7 +232,10 @@ impl TokenManager for OctopusTokenManager {
                     
                     let input = authenticator.to_obtain_json_web_token_input()?;
 
-                    println!("Obtaining new Octopus token...{:?}", input);
+                    
+                    if self.context.args.marco_sparko_args.verbose {
+                        println!("Obtaining new Octopus token...{:?}", input);
+                    }
 
                     let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
                     let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call(&mutation, None).await?;

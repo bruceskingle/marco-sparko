@@ -69,16 +69,16 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
           validFrom
           validTo @ms_optional
           tariff {
-            ... on HalfHourlyTariff @ms_required_by_default {
+            ... on HalfHourlyTariff {
               displayName
               fullName
-              standingCharge @ms_optional
-              unitRates {
-                validFrom
-                validTo
-                preVatValue
-                value
-              }
+              standingCharge
+#              unitRates {
+#                validFrom
+#                validTo
+#                preVatValue
+#                value
+#              }
               description
               preVatStandingCharge @ms_optional
               productCode
@@ -90,10 +90,10 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
               displayName
               fullName
               preVatStandingCharge @ms_optional
-              preVatUnitRate
+              preVatUnitRate @ms_optional
               standingCharge @ms_optional
               tariffCode
-              unitRate
+              unitRate @ms_optional
             }
             ... on DayNightTariff @ms_required_by_default {
               id
@@ -123,6 +123,23 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
               standingCharge @ms_optional
               tariffCode
             }
+            ... on FourRateEvTariff @ms_required_by_default {
+              id
+              dayRate
+              description
+              displayName
+              fullName
+              nightRate
+              evDeviceOffPeakRate
+              evDevicePeakRate
+              preVatDayRate
+              preVatNightRate
+              preVatEvDeviceOffPeakRate
+              preVatEvDevicePeakRate
+              preVatStandingCharge @ms_optional
+              standingCharge @ms_optional
+              tariffCode
+            }
             ... on PrepayTariff @ms_required_by_default {
               id
               displayName
@@ -145,11 +162,18 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
           validFrom
           validTo @ms_optional
           tariff {
+            id
+            description
+            displayName
             fullName
-            tariffCode
+            preVatStandingCharge @ms_optional
+            preVatUnitRate @ms_optional
             standingCharge @ms_optional
-            preVatUnitRate
-            unitRate
+            unitRate @ms_optional
+            productCode @ms_optional
+            tags @ms_optional
+            tariffCode
+            unitRateEpgApplied @ms_optional
           }
         }
       }

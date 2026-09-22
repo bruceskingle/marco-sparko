@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use anyhow::anyhow;
 
-use crate::{Cli};
+use crate::{Cli, private_file};
 
 const DEFAULT_PROFILE: &str = "default";
 
@@ -69,8 +69,11 @@ pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<Act
 
         profiles.push(&active_profile.active_profile);
 
-        serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profiles)?;
+        let f = private_file::create_private_file(&Cli::get_file_path()?)?;
+        println!("About to write to private file {:?}...", f);
+        serde_json::to_writer_pretty(f, &profiles)?;
 
+        println!("Done");
         active_profile
     }
     else {
@@ -109,7 +112,7 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
         profiles.push(&active_profile);
         profiles.extend(map.values());
 
-        serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profiles)?;
+        serde_json::to_writer_pretty(private_file::create_private_file(&Cli::get_file_path()?)?, &profiles)?;
 
         Ok(ActiveProfile {
             all_profiles,
@@ -149,7 +152,7 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
 
          println!("saving profiles <{:?}>", &profile_file);
 
-            serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profile_file)?;
+            serde_json::to_writer_pretty(private_file::create_private_file(&Cli::get_file_path()?)?, &profile_file)?;
 
         Ok(())
     }
@@ -417,7 +420,7 @@ impl ProfileManager {
             // };
 
            
-            serde_json::to_writer_pretty(fs::File::create(&Cli::get_file_path()?)?, &profiles)?;
+            serde_json::to_writer_pretty(private_file::create_private_file(&Cli::get_file_path()?)?, &profiles)?;
             
             return Ok(())
         }
@@ -458,7 +461,7 @@ impl ProfileManager {
         //     profiles.push(&updated_profile);
         //     profiles.extend(&self.after_profiles);
             
-        //     serde_json::to_writer_pretty(fs::File::create(&MarcoSparko::get_file_path()?)?, &profiles)?;
+        //     serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparko::get_file_path()?)?, &profiles)?;
             
         //     return Ok(())
         // }
