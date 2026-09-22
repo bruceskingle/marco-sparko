@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use std::collections::BTreeMap;
 use std::fmt;
 
 use indexmap::IndexMap;
@@ -298,8 +299,8 @@ impl AbstractBill {
 
         println!("\n AbstractBill::gui_display: total_charges={:#?}", total_charges);
 
-        let totals = if total_charges.units.is_positive() {
-            let rate = Decimal::from(total_charges.gross_usage) / total_charges.units;
+        let totals = if total_charges.inputs() > 1 {
+            let rate = Decimal::from(total_charges.gross_usage()) / total_charges.units();
             rsx!{
                 tr {
                     td {}
@@ -310,12 +311,12 @@ impl AbstractBill {
                     td {}
                     td { "Electricity Import" }
                     td { "" }
-                    td { class: "numeric", {{ as_decimal(total_charges.net, 2) }} }
+                    td { class: "numeric", {{ as_decimal(total_charges.net(), 2) }} }
                     td { colspan: 2, "" }
-                    td { class: "numeric", {{ as_decimal(total_charges.gross, 2) }} }
+                    td { class: "numeric", {{ as_decimal(total_charges.gross(), 2) }} }
                     td { colspan: 4, "" }
-                    td { class: "numeric", {{ as_decimal(total_charges.gross_usage, 2) }} }
-                    td { class: "numeric", {{ format!("{}", total_charges.units) }} }
+                    td { class: "numeric", {{ as_decimal(total_charges.gross_usage(), 2) }} }
+                    td { class: "numeric", {{ format!("{}", total_charges.units()) }} }
                     td { class: "numeric", {{ format!("{:>10.3}", rate) }} }
                 }
             }
@@ -353,7 +354,7 @@ impl AbstractBill {
                 {totals}
             }
 
-            if total_charges.units.is_positive() {
+            if total_charges.units().is_positive() {
                 h2 { "Detailed Breakdown (excluding VAT)" }
                 for transaction in transactions {
                     {transaction.gui_display()}
@@ -391,9 +392,9 @@ impl AbstractBill {
                 transaction.print_summary_line(&mut total_charges);
             }
 
-            if total_charges.units.is_positive() {
+            if total_charges.units().is_positive() {
                 println!("\nTOTALS");
-                let rate = Decimal::from(total_charges.gross_usage) / total_charges.units;
+                let rate = Decimal::from(total_charges.gross_usage()) / total_charges.units();
 
                 print!("{:30} {:10} ", 
                     "Electricity Import",
@@ -402,14 +403,14 @@ impl AbstractBill {
                 print!("{:>10} {:>10} {:>10} {:>10} ", 
                     "",
                     "", 
-                    as_decimal(total_charges.gross_usage, 2),
+                    as_decimal(total_charges.gross_usage(), 2),
                     ""
                 );
                 print!("{:10} {:10} {:10} {:>12.4} ", 
                     "",
                     "",
                     "",
-                    total_charges.units
+                    total_charges.units()
                 );
                 print!("{:>10.3}", rate);
                 println!();
@@ -426,30 +427,97 @@ impl AbstractBill {
     }
 }
 
-#[derive(Debug)]
-pub struct TotalCharges {
-    gross: i32,
-    gross_usage: i32,
-    gross_supply: i32,
-    net: i32,
-    net_usage: i32,
-    net_supply: i32,
-    units: Decimal,
-}
 
-impl TotalCharges {
-    fn new() -> Self {
-        TotalCharges{
-            gross: 0,
-            gross_usage: 0,
-            gross_supply: 0,
-            net: 0,
-            net_usage: 0,
-            net_supply: 0,
-            units: Decimal::new(0, 0),
+mod TotalChargesModule {
+    use crate::octopus::decimal::Decimal;
+
+    
+    #[derive(Debug)]
+    pub struct TotalCharges {
+        gross: i32,
+        gross_usage: i32,
+        gross_supply: i32,
+        net: i32,
+        net_usage: i32,
+        net_supply: i32,
+        units: Decimal,
+        inputs: i32,
+    }
+
+    impl TotalCharges {
+        pub fn new() -> Self {
+            TotalCharges{
+                gross: 0,
+                gross_usage: 0,
+                gross_supply: 0,
+                net: 0,
+                net_usage: 0,
+                net_supply: 0,
+                units: Decimal::new(0, 0),
+                inputs: 0,
+            }
+        }
+
+        pub fn gross(&self) -> i32 {
+            self.gross
+        }
+
+        pub fn gross_usage(&self) -> i32 {
+            self.gross_usage
+        }
+
+        pub fn gross_supply(&self) -> i32 {
+            self.gross_supply
+        }
+
+        pub fn net(&self) -> i32 {
+            self.net
+        }
+
+        pub fn net_usage(&self) -> i32 {
+            self.net_usage
+        }
+
+        pub fn net_supply(&self) -> i32 {
+            self.net_supply
+        }
+
+        pub fn units(&self) -> &Decimal {
+            &self.units
+        }
+
+        pub fn inputs(&self) -> i32 {
+            self.inputs
+        }
+        
+        pub fn accumulate_line_item(&mut self, 
+            transaction: &crate::octopus::graphql::bill::get_statement_transactions::AbstractTransactionType, 
+            consumption: &crate::octopus::graphql::bill::get_statement_transactions::Consumption, 
+            net_factor: f64) {
+            
+            self.gross += *&transaction.amounts_.gross_;
+            self.gross_supply = consumption.supply_charge_;
+            self.gross_usage += consumption.usage_cost_;
+
+            self.net += (*&transaction.amounts_.gross_ as f64 / net_factor) as i32;
+            self.net_supply = (consumption.supply_charge_ as f64 / net_factor) as i32;
+            self.net_usage += (consumption.usage_cost_ as f64 / net_factor) as i32;
+
+            self.units += consumption.quantity_;
+            self.inputs += 1;
+        }
+        
+        pub fn accumulate_summary(&mut self, 
+            transaction: &crate::octopus::graphql::bill::get_statement_transactions::AbstractTransactionType,
+            consumption: &crate::octopus::graphql::bill::get_statement_transactions::Consumption) {
+            self.gross_usage += *&transaction.amounts_.gross_;
+            self.units += consumption.quantity_;
+            self.inputs += 1;
         }
     }
 }
+
+use TotalChargesModule::TotalCharges;
 
 impl AbstractTransactionType {
     pub fn print_summary_line(&self, total_charges: &mut TotalCharges) {
@@ -573,8 +641,9 @@ impl Charge {
             }
             else {
                     if txn.title_.eq("Electricity") {
-                        total_charges.gross_usage += *&txn.amounts_.gross_;
-                        total_charges.units += consumption.quantity_;
+                        total_charges.accumulate_summary(txn, consumption);
+                        // total_charges.gross_usage += *&txn.amounts_.gross_;
+                        // total_charges.units += consumption.quantity_;
                     }
                 }
         }
@@ -1168,15 +1237,16 @@ impl BillTransactionBreakDown {
                     else {
                             if transaction.title_.eq("Electricity") {
 
-                                total_charges.gross += *&transaction.amounts_.gross_;
-                                total_charges.gross_supply = consumption.supply_charge_;
-                                total_charges.gross_usage += consumption.usage_cost_;
+                                total_charges.accumulate_line_item(transaction, consumption, net_factor);
+                                // total_charges.gross += *&transaction.amounts_.gross_;
+                                // total_charges.gross_supply = consumption.supply_charge_;
+                                // total_charges.gross_usage += consumption.usage_cost_;
 
-                                total_charges.net += (*&transaction.amounts_.gross_ as f64 / net_factor) as i32;
-                                total_charges.net_supply = (consumption.supply_charge_ as f64 / net_factor) as i32;
-                                total_charges.net_usage += (consumption.usage_cost_ as f64 / net_factor) as i32;
+                                // total_charges.net += (*&transaction.amounts_.gross_ as f64 / net_factor) as i32;
+                                // total_charges.net_supply = (consumption.supply_charge_ as f64 / net_factor) as i32;
+                                // total_charges.net_usage += (consumption.usage_cost_ as f64 / net_factor) as i32;
 
-                                total_charges.units += consumption.quantity_;
+                                // total_charges.units += consumption.quantity_;
                             }
                         }
 
@@ -1283,7 +1353,7 @@ impl BillTransactionBreakDown {
                 
                 for (_agreement_id, (tariff, line_items)) in line_item_map {
 
-                    let mut amount_map = IndexMap::new();
+                    let mut amount_map = BTreeMap::new();
                     let mut total_amount = Decimal::new(0,0);
                     let mut total_units = Decimal::new(0,0);
 
@@ -1308,7 +1378,7 @@ impl BillTransactionBreakDown {
                         total_amount += amount;
                         total_units += item.number_of_units_;
 
-                        let unit_cost = if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ };
+                        let unit_cost = (if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ }).round_dp(2);
 
                         let (from_date, from_time) = if let Some(prev) = prev {
                             if prev == item.start_at_.date() {
@@ -1325,12 +1395,15 @@ impl BillTransactionBreakDown {
                         
 
                         if item.number_of_units_.is_positive() {
-                            let key = format!("{:.2}", unit_cost);
-                            if let Some((total_amount, total_units)) = amount_map.get(&key) {
-                                amount_map.insert(key, (amount + *total_amount, item.number_of_units_ + *total_units));
+
+                            let key = unit_cost.round_dp(2);
+                            let formatted_key = key.to_string();
+                            // println!("TRACEA key={} {:?} formatted{}", key, key, formatted_key);
+                            if let Some((_,total_amount, total_units)) = amount_map.get(&key) {
+                                amount_map.insert(key, (formatted_key, amount + *total_amount, item.number_of_units_ + *total_units));
                             }
                             else {
-                                amount_map.insert(key, (amount, item.number_of_units_));
+                                amount_map.insert(key, (formatted_key, amount, item.number_of_units_));
                             }
                         }
                         
@@ -1342,9 +1415,27 @@ impl BillTransactionBreakDown {
                                 td { {from_time} }
                                 td { {to_date} }
                                 td { {to_time} }
-                                td { class: "numeric", {format!("{:.3}", amount)} }
-                                td { class: "numeric", {format!("{:.4}", item.number_of_units_)} }
-                                td { class: "numeric derived", {format!("{:.3}", unit_cost)} }
+                                td { class: "numeric",
+                                    // {format!("{:.3}", amount)}
+                                    // "=>"
+                                    {amount.round_dp(3).to_string()}
+                                                                // "=>"
+                                // {amount.to_string()}
+                                }
+                                td { class: "numeric",
+                                    // {format!("{:.4}", item.number_of_units_)}
+                                    // "=>"
+                                    {item.number_of_units_.round_dp(4).to_string()}
+                                                                // "=>"
+                                // {item.number_of_units_.to_string()}
+                                }
+                                td { class: "numeric derived",
+                                    // {format!("{:.3}", unit_cost)}
+                                    // "=>"
+                                    {unit_cost.round_dp(2).to_string()}
+                                                                // "=>"
+                                // {unit_cost.to_string()}
+                                }
                                 td { {format!("{:.4}", item.settlement_unit_)} }
                             }
                         }?);
@@ -1461,9 +1552,9 @@ impl BillTransactionBreakDown {
                                         th { "% Bill" }
                                     }
 
-                                    for (key , (amount , units)) in amount_map {
+                                    for (_key , (formatted_key , amount , units)) in amount_map {
                                         tr {
-                                            td { class: "numeric", "{key}" }
+                                            td { class: "numeric", "{formatted_key}" }
                                             td { class: "numeric", {format!("{:.2}", amount)} }
                                             td { class: "numeric derived", {format!("{:.2}", units)} }
                                             td { class: "numeric derived",
@@ -1553,7 +1644,7 @@ impl BillTransactionBreakDown {
 
                 for (_agreement_id, (tariff, line_items)) in line_item_map {
 
-                    let mut amount_map = IndexMap::new();
+                    let mut amount_map: IndexMap<Decimal, (String, Decimal, Decimal)> = IndexMap::new();
                     let mut total_amount = Decimal::new(0,0);
                     let mut total_units = Decimal::new(0,0);
 
@@ -1572,7 +1663,7 @@ impl BillTransactionBreakDown {
                         total_amount += amount;
                         total_units += item.number_of_units_;
 
-                        let unit_cost = if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ };
+                        let unit_cost = (if item.number_of_units_.is_non_zero() {item.net_amount_ / item.number_of_units_} else { item.net_amount_ }).round_dp(2);
 
 
                         println!("{:20} {:20} {:10.3} {:12.4} {:10.3}", 
@@ -1590,12 +1681,13 @@ impl BillTransactionBreakDown {
                             &unit_cost  );
                         
                         if item.number_of_units_.is_positive() {
-                            let key = format!("{:.2}", unit_cost);
-                            if let Some((total_amount, total_units)) = amount_map.get(&key) {
-                                amount_map.insert(key, (amount + *total_amount, item.number_of_units_ + *total_units));
+                            let key = unit_cost.round_dp(3); 
+                            let formatted_key = unit_cost.round_dp(2).to_string();
+                            if let Some((_, total_amount, total_units)) = amount_map.get(&key) {
+                                amount_map.insert(key, (formatted_key, amount + *total_amount, item.number_of_units_ + *total_units));
                             }
                             else {
-                                amount_map.insert(key, (amount, item.number_of_units_));
+                                amount_map.insert(key, (formatted_key, amount, item.number_of_units_));
                             }
                         }
                         
@@ -1632,9 +1724,9 @@ impl BillTransactionBreakDown {
             
                     if !amount_map.is_empty() {
                         println!("{:-^15} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10}", "Unit Rate", "Cost", "Units", "% Cost", "% Units", "% Bill");
-                        for (key, (amount, units)) in amount_map {
+                        for (key, (formatted_key, amount, units)) in amount_map {
                             println!("{:>15} {:10.2} {:10.2} {:10.2} {:10.2} {:10.2}",
-                                key,
+                                formatted_key,
                                 amount,
                                 units,
                                 one_hundred * amount / total_amount,
