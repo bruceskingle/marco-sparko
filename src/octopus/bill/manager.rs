@@ -71,6 +71,50 @@ impl BillManager {
 
 
         for (_key, (_cursor, transaction)) in transactions.transactions {
+            if let TransactionType::Charge(charge_ref) = &transaction && charge_ref.consumption_.is_some() {
+                        // print the line items making up this charge
+                        //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
+
+                if let TransactionType::Charge(charge) = transaction {
+                    if let Some(consumption) = &charge.consumption_ {
+                        let meter_type = match charge.as_transaction_type().title_.as_str() {
+                            "Gas" => MeterType::Gas,
+                            "Electricity" => MeterType::Electricity,
+                            _ => panic!("Unknown consumption type")
+                        };
+
+                        let line_items = self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?;
+
+                        result.push(BillTransactionBreakDown::from_charge(charge, line_items));
+                    }
+                }
+            }
+            else  {
+                result.push(BillTransactionBreakDown::from_abstract(transaction));
+            }
+
+            /*
+            match transaction {
+                TransactionType::Charge(charge) => {
+                    if let Some(consumption) = &charge.consumption_ {
+                        // print the line items making up this charge
+                        //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
+
+                        let meter_type = match transaction.as_transaction_type().title_.as_str() {
+                            "Gas" => MeterType::Gas,
+                            "Electricity" => MeterType::Electricity,
+                            _ => panic!("Unknown consumption type")
+                        };
+
+                        let line_items = self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?;
+
+                        result.push(BillTransactionBreakDown::from_charge(charge, line_items));
+                    }
+                },
+                TransactionType::Payment(abstract_transaction_type) => todo!(),
+                TransactionType::Refund(abstract_transaction_type) => todo!(),
+                TransactionType::Credit(abstract_transaction_type) => todo!(),
+            }
             if let TransactionType::Charge(charge) = &transaction {
                 if let Some(consumption) = &charge.consumption_ {
                     // print the line items making up this charge
@@ -82,13 +126,9 @@ impl BillManager {
                         _ => panic!("Unknown consumption type")
                     };
 
-                    let line_items = Some(self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?);
+                    let line_items = self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?;
 
-                    result.push(BillTransactionBreakDown{
-                        // charge,
-                        transaction,
-                        line_items,
-                    });
+                    result.push(BillTransactionBreakDown::from_charge(charge, line_items));
                     continue;
                 }
             }
@@ -96,6 +136,7 @@ impl BillManager {
                 transaction,
                 line_items: None,
             });
+            */
         }
 
         Ok(result)

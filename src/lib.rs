@@ -31,6 +31,8 @@ use {
   };
 
 pub const CHECK_FOR_UPDATES: bool = true;
+pub const NONE: &'static str = "None";
+pub const NULL: &'static str = "Null";
 const CACHE_DIRECTORY_NAME: &'static str = ".marco-sparko-cache";
 
 pub struct ReplCommand {

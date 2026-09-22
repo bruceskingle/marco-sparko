@@ -162,11 +162,18 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
           validFrom
           validTo @ms_optional
           tariff {
+            id
+            description
+            displayName
             fullName
-            tariffCode
-            standingCharge @ms_optional
+            preVatStandingCharge @ms_optional
             preVatUnitRate @ms_optional
+            standingCharge @ms_optional
             unitRate @ms_optional
+            productCode @ms_optional
+            tags @ms_optional
+            tariffCode
+            unitRateEpgApplied @ms_optional
           }
         }
       }

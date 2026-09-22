@@ -11,7 +11,7 @@ use sparko_graphql::types::{Date, DateRange, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
 use tokio::time::sleep;
 
-use crate::CacheManager;
+use crate::{CacheManager, NULL};
 
 use super::graphql::meter;
 use super::RequestManager;
@@ -331,20 +331,33 @@ fn format_rate(rate: Option<f64>) -> String {
     }
 }
 
+fn gui_rate(rate: Option<f64>) -> Element {
+    if rate.is_some() {
+        rsx!{
+            td { class: "numeric", {format_rate(rate)} }
+        }
+    }
+    else {
+        rsx!{
+            td { class: "numeric invalid", {NULL} }
+        }
+    }
+}
+
 impl Tariff {
-    pub fn standing_charge(&self) -> f64 {
+    pub fn standing_charge(&self) -> Option<f64> {
         match self {
             Tariff::Electricity(electricity_tariff_type) => {
                 match electricity_tariff_type {
-                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => { tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
-                    meter::meter_agreements::ElectricityTariffType::FourRateEvTariff(tariff) => {tariff.pre_vat_standing_charge_.unwrap_or(0.0)},
+                    meter::meter_agreements::ElectricityTariffType::StandardTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::DayNightTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::ThreeRateTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::HalfHourlyTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::PrepayTariff(tariff) => { tariff.pre_vat_standing_charge_},
+                    meter::meter_agreements::ElectricityTariffType::FourRateEvTariff(tariff) => {tariff.pre_vat_standing_charge_},
                 }
             },
-            Tariff::Gas(tariff) => { tariff.standing_charge_.unwrap_or(0.0) / 1.05},
+            Tariff::Gas(tariff) => { tariff.pre_vat_standing_charge_},
         }
     }
 
@@ -367,19 +380,19 @@ impl Tariff {
                                     }
                                     tr {
                                         th { class: "row-header", "Pre-VAT Standing Charge" }
-                                        td { {format_rate(tariff.pre_vat_standing_charge_)} }
+                                        {gui_rate(tariff.pre_vat_standing_charge_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Standing Charge" }
-                                        td { {format_rate(tariff.standing_charge_)} }
+                                        {gui_rate(tariff.standing_charge_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Pre-VAT Unit Rate" }
-                                        td { {format_rate(tariff.pre_vat_unit_rate_)} }
+                                        {gui_rate(tariff.pre_vat_unit_rate_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Unit Rate" }
-                                        td { {format_rate(tariff.unit_rate_)} }
+                                        {gui_rate(tariff.unit_rate_)}
                                     }
                                 }
                             }
@@ -406,11 +419,11 @@ impl Tariff {
                                     }
                                     tr {
                                         th { class: "row-header", "Pre-VAT Standing Charge" }
-                                        td { {format_rate(tariff.pre_vat_standing_charge_)} }
+                                        {gui_rate(tariff.pre_vat_standing_charge_)}
                                     }
                                     tr {
                                         th { class: "row-header", "Standing Charge" }
-                                        td { {format_rate(tariff.standing_charge_)} }
+                                        {gui_rate(tariff.standing_charge_)}
                                     }
                                 }
                             }
@@ -431,15 +444,15 @@ impl Tariff {
                             }
                             tr {
                                 th { class: "row-header", "Standing Charge" }
-                                td { {format_rate(gas_tariff_type.standing_charge_)} }
+                                {gui_rate(gas_tariff_type.standing_charge_)}
                             }
                             tr {
                                 th { class: "row-header", "Pre-VAT Unit Rate" }
-                                td { {format_rate(gas_tariff_type.pre_vat_unit_rate_)} }
+                                {gui_rate(gas_tariff_type.pre_vat_unit_rate_)}
                             }
                             tr {
                                 th { class: "row-header", "Unit Rate" }
-                                td { {format_rate(gas_tariff_type.unit_rate_)} }
+                                {gui_rate(gas_tariff_type.unit_rate_)}
                             }
                         }
                     }
