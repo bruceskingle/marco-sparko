@@ -1,32 +1,20 @@
 [< Documentation Home](../index.md)
+# Installation
+There are separate pages containing step by step instructions to install the application on [MacOS](osx/index,md) and [Windows](windows/index.md).
+
+<b>NOTE that the release binaries are NOT SIGNED and additional steps are required on both platforms to complete the installation, please take a look at the instructions even if you are familiar with installing applications.
 
 # Getting Started
 
-The first time you run Marco Sparko you will find yourself at the home command line. The ```Marco Sparko``` prompt indicates that this is the home command line. In addition to the home command line each module has its own command line and the prompt will then be the name of the module.
+The first time you run Marco Sparko you will see a window like this:
 
-There are a few universal commands which work at any command line, the ```help``` command will display a list of all teh valid commands at the current command line:
 
-![Help Command](help.png)
+<img src="Screenshot1.png" width="1024">
 
-For each command you will see the name of the command and a short one line description of what tht command does. You can also get more detailed information about a command (including the help command) by typing ```help <COMMAND>``` where <COMMAND> is the command you want more information about:
+This is the ```Home``` screen which lists all the available Modules (there is ony Octopus at the moment) as well as displaying the timestamp when the release was created and the name of the Git branch it was built from. ```(detached)``` just means that this executable was built from a release tag in the source code repository which is normal for a formal release. You can ignore this information. Notice that the Octopus module shows as ```[inactive]``` because we have not logged in yet.
 
-![Help Help Command](helpHelp.png)
+Clickable links in the user interface will highlight if you hover the mouse over them. In this case the ```Home``` item on the menu bar at the top (which brings you back to this page) and the names of modules in the list (just ```octopus``` at the moment) are clickable.
 
-The universal commands are:
+The first step is to rectify this.
 
-* help - Display information about other commands
-* home - Switch to the Home command line
-* module - Switch to the command line of the named module
-* quit - Terminate the application (you can also type the End of File character ```Ctrl-D``` to do this)
-
-The command line supports command history and tab completion, if you type the start of a command previously executed then you will see a possible completion offered in italics like this:
-
-![History Completion](historyCompletion.png)
-
-If you press the ```Right Arrow``` key then the command will be completed, you can then edit the command if necessary, and press ```Return``` to execute it. You can also use the ```Up Arrow``` and ```Down Arrow``` keys to scroll through the command history.
-
-If you type a partial command and press the ```Tab``` key then you will be offered a menu of possible commands which begin with the given input:
-
-![Tab Completion](tabCompletion.png)
-
-[Initialize Octopus>](initOctopus.md)]
+[Initialize Octopus>](../octopus/initOctopus.md)]
