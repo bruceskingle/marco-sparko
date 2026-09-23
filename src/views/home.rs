@@ -109,18 +109,18 @@ pub fn Home(
             }
             h2 { "Build Info" }
             table {
-                // tr {
-                //     td { "Package Name:" }
-                //     td { "{create_info::PACKAGE_NAME}" }
-                // }
-                // tr {
-                //     td { "Package Version:" }
-                //     td { "{create_info::PACKAGE_VERSION}" }
-                // }
-                // tr {
-                //     td { "User Agent:" }
-                //     td { "{create_info::USER_AGENT}" }
-                // }
+                tr {
+                    td { "Package Name:" }
+                    td { "{create_info::PACKAGE_NAME}" }
+                }
+                tr {
+                    td { "Package Version:" }
+                    td { "{create_info::PACKAGE_VERSION}" }
+                }
+                tr {
+                    td { "User Agent:" }
+                    td { "{create_info::USER_AGENT}" }
+                }
                 tr {
                     td { "Build Timestamp (UTC):" }
                     td { "{create_info::BUILD_TIMESTAMP}" }
@@ -132,6 +132,10 @@ pub fn Home(
                 tr {
                     td { "Git Branch:" }
                     td { "{branch}" }
+                }
+                tr {
+                    td { "Git Tag:" }
+                    td { "{create_info::GIT_TAG}" }
                 }
                         // tr {
             //     td { "Git Dirty:" }
