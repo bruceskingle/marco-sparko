@@ -30,7 +30,8 @@ fn main() {
             dioxus::LaunchBuilder::new()
                 .with_cfg(dioxus::desktop::Config::new()
                     .with_window(window)
-                    .with_menu(None))
+                    // .with_menu(None)
+                )
                 .launch(App);
         }
 
