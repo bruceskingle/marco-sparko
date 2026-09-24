@@ -206,7 +206,13 @@ impl FromStr for Decimal {
     type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Decimal, Self::Err> {
-      Ok(Decimal(rust_decimal::Decimal::from_str(str)?))
+      // Python Decimals may be serialized in scientific notation, e.g. "0E-18"
+      if str.contains(['e', 'E']) {
+        Ok(Decimal(rust_decimal::Decimal::from_scientific(str)?))
+      }
+      else {
+        Ok(Decimal(rust_decimal::Decimal::from_str(str)?))
+      }
         // let mut int: i32 = 0;
         // let mut dec: u32 = 0;
         // let mut i = 0;
@@ -360,6 +366,13 @@ mod tests {
       expect_parse(r#"{ "decimal": "0000.444" }"#, dec!(0.444));
       
       expect_parse(r#"{ "decimal": "876.444" }"#, dec!(876.444));
+
+
+      expect_parse(r#"{ "decimal": "0E-18" }"#, dec!(0));
+      expect_parse(r#"{ "decimal": "12345E-3" }"#, dec!(12.345));
+      expect_parse(r#"{ "decimal": "-2.5e-2" }"#, dec!(-0.025));
+      expect_parse(r#"{ "decimal": "1.5E+3" }"#, dec!(1500));
+      expect_parse_error(r#"{ "decimal": "1.5E" }"#);
       
       expect_parse_error(r#"{ "decimal": "0.1.2" }"#);
     }
