@@ -428,7 +428,7 @@ impl AbstractBill {
 }
 
 
-mod TotalChargesModule {
+mod total_charges_module {
     use crate::octopus::decimal::Decimal;
 
     
@@ -517,10 +517,10 @@ mod TotalChargesModule {
     }
 }
 
-use TotalChargesModule::TotalCharges;
+use total_charges_module::TotalCharges;
 
 impl AbstractTransactionType {
-    pub fn print_summary_line(&self, total_charges: &mut TotalCharges) {
+    pub fn print_summary_line(&self, _total_charges: &mut TotalCharges) {
             print!("{:30} ", self.title_);
             
             print!("{:10} ", 
@@ -1161,7 +1161,7 @@ impl BillTransactionBreakDown {
 
 
         match self {
-            BillTransactionBreakDown::Charge{transaction, consumption, is_export, line_item_map  } => {
+            BillTransactionBreakDown::Charge{transaction, consumption, is_export, line_item_map: _  } => {
                 // transaction.gui_summary_line(total_charges)
 
                 let mut parts = Vec::new();
@@ -1349,7 +1349,7 @@ impl BillTransactionBreakDown {
         println!("\nBillTransactionBreakDown::gui_display: transaction={:#?}", self);
 
         match self{
-            BillTransactionBreakDown::Charge{transaction, consumption, is_export, line_item_map  }=> {
+            BillTransactionBreakDown::Charge{transaction, consumption, is_export: _, line_item_map  }=> {
                 
                 for (_agreement_id, (tariff, line_items)) in line_item_map {
 
@@ -1358,7 +1358,6 @@ impl BillTransactionBreakDown {
                     let mut total_units = Decimal::new(0,0);
 
                     let txn = transaction.as_transaction_type();
-                    let net_factor = 1.0 + txn.amounts_.tax_ as f64 / txn.amounts_.net_ as f64;
 
                     println!();
                     parts.push(
@@ -1415,27 +1414,11 @@ impl BillTransactionBreakDown {
                                 td { {from_time} }
                                 td { {to_date} }
                                 td { {to_time} }
+                                td { class: "numeric", {amount.round_dp(3).to_string()} }
                                 td { class: "numeric",
-                                    // {format!("{:.3}", amount)}
-                                    // "=>"
-                                    {amount.round_dp(3).to_string()}
-                                                                // "=>"
-                                // {amount.to_string()}
-                                }
-                                td { class: "numeric",
-                                    // {format!("{:.4}", item.number_of_units_)}
-                                    // "=>"
                                     {item.number_of_units_.round_dp(4).to_string()}
-                                                                // "=>"
-                                // {item.number_of_units_.to_string()}
                                 }
-                                td { class: "numeric derived",
-                                    // {format!("{:.3}", unit_cost)}
-                                    // "=>"
-                                    {unit_cost.round_dp(2).to_string()}
-                                                                // "=>"
-                                // {unit_cost.to_string()}
-                                }
+                                td { class: "numeric derived", {unit_cost.round_dp(2).to_string()} }
                                 td { {format!("{:.4}", item.settlement_unit_)} }
                             }
                         }?);
@@ -1450,13 +1433,6 @@ impl BillTransactionBreakDown {
                     }?);
 
 
-
-
-                    let vat_rate = if transaction.amounts_.tax_ > 0 {
-                        10000 *transaction.amounts_.tax_ / transaction.amounts_.net_ 
-                    } else {
-                        0
-                    };
                     let net_factor = 1.0 + transaction.amounts_.tax_ as f64 / transaction.amounts_.net_ as f64;
                     let net_supply_charge = (consumption.supply_charge_ as f64/ net_factor) as i32;
 
@@ -1470,23 +1446,6 @@ impl BillTransactionBreakDown {
                             td { class: "numeric", {format!("{:.4}", consumption.quantity_)} }
                         }
                     }?);
-
-
-
-                    // let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
-            
-                    // sub_parts.push(rsx!{
-                    //     tr {
-                    //         td { colspan: 4, "Total from Statement" }
-                    //         td { class: "numeric derived",
-                    //             {as_decimal(txn.amounts_.net_ - consumption.supply_charge_, 2)}
-                    //         }
-                    //         td { class: "numeric", {format!("{:.4}", consumption.quantity_)} }
-                    //         td { class: "numeric derived", {format!("{:.3}", rate)} }
-                    //         td { class: "numeric", {as_decimal(consumption.usage_cost_, 2)} }
-                    //         td { class: "numeric", {as_decimal(consumption.supply_charge_, 2)} }
-                    //     }
-                    // }?);
 
                     let mut consumption_analysis = None;
 
@@ -1590,9 +1549,6 @@ impl BillTransactionBreakDown {
                     }
 
 
-
-                    let rate = if consumption.quantity_.is_non_zero() {Decimal::from(txn.amounts_.gross_) / consumption.quantity_} else {Decimal::new(0, 0)};
-    
                     sub_parts.push(rsx!{
                         tr {
                             td { colspan: 4, "Standing Charge from Statement" }
@@ -1622,7 +1578,7 @@ impl BillTransactionBreakDown {
                     }
                 }
             },
-            BillTransactionBreakDown::Abstract { transaction } => {
+            BillTransactionBreakDown::Abstract { transaction: _ } => {
                 rsx! {
                     tr {}
                 }
@@ -1638,7 +1594,7 @@ impl BillTransactionBreakDown {
         let time_format = time::format_description::parse("           [hour]:[minute]:[second]").unwrap();
 
         match self{
-            BillTransactionBreakDown::Charge{transaction, consumption, is_export, line_item_map  }=> {
+            BillTransactionBreakDown::Charge{transaction, consumption, is_export: _, line_item_map  }=> {
 
 
 
@@ -1724,7 +1680,7 @@ impl BillTransactionBreakDown {
             
                     if !amount_map.is_empty() {
                         println!("{:-^15} {:-^10} {:-^10} {:-^10} {:-^10} {:-^10}", "Unit Rate", "Cost", "Units", "% Cost", "% Units", "% Bill");
-                        for (key, (formatted_key, amount, units)) in amount_map {
+                        for (_key, (formatted_key, amount, units)) in amount_map {
                             println!("{:>15} {:10.2} {:10.2} {:10.2} {:10.2} {:10.2}",
                                 formatted_key,
                                 amount,

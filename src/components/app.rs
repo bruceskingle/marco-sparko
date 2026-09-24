@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use crate::{Args, MarcoSparkoContext, ModuleRegistrations, profile::CURRENT_VERSION, views::*};
+use crate::{Args, MarcoSparkoContext, ModuleRegistrations, views::*};
 use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
