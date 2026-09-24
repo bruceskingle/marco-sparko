@@ -127,6 +127,15 @@ body{
   outline:none;
 }
 
+.profile-rename {
+  width: 12rem;
+  padding: 0.2rem 0.4rem;
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+
 .overlay {
     position: fixed;
     top: 0;
@@ -173,6 +182,18 @@ body{
 .menu-item:hover,.menu-item:focus{
   background:var(--glass);
   color:#e6f6fb;
+  outline:none;
+}
+
+.menu-item.create-new {
+  color: var(--accent);
+}
+
+
+.menu-item.create-new:hover,.menu-item.create-new:focus{
+  background:var(--glass);
+  color:#e6f6fb;
+  transform:translateY(-1px);
   outline:none;
 }
 

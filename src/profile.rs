@@ -19,6 +19,10 @@ pub struct ActiveProfile {
     pub profile_version_state: ProfileVersionState,
 }
 
+fn profile_names_equal(left: &str, right: &str) -> bool {
+    left.eq_ignore_ascii_case(right)
+}
+
 impl ActiveProfile {
     // Create empty default profile
     fn new() -> ActiveProfile {
@@ -31,21 +35,21 @@ impl ActiveProfile {
 }
 
 pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<ActiveProfile> {
-    let mut all_profiles = Vec::new();
-    let mut set = HashSet::new();
+    let mut all_profiles: Vec<String> = Vec::new();
+    let mut set: HashSet<String> = HashSet::new();
     let mut active_profile = None;
 
     if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
         let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
         for profile in profile_file {
-            if set.contains(&profile.name) {
+            if all_profiles.iter().any(|name| profile_names_equal(name, &profile.name)) {
                 return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
             }
             set.insert(profile.name.clone());
             
             let got_it = if let Some(name) = profile_name {
-                name == &profile.name
+                profile_names_equal(name, &profile.name)
             }
             else {
                 active_profile.is_none()
@@ -97,22 +101,22 @@ pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<Act
 
 pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile> {
 
-    let mut all_profiles = Vec::new();
-    let mut map = IndexMap::new();
+    let mut all_profiles: Vec<String> = Vec::new();
+    let mut map: IndexMap<String, Profile> = IndexMap::new();
     
 
     if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
         let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
         for profile in profile_file {
-            if map.contains_key(&profile.name) {
+            if map.keys().any(|name| profile_names_equal(name, &profile.name)) {
                 return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
             }
             all_profiles.push(profile.name.clone());
             map.insert(profile.name.clone(), profile);
         }
-        let active_profile = if let Some(p) = map.shift_remove(profile_name) {
-            p
+        let active_profile = if let Some(existing_name) = map.keys().find(|name| profile_names_equal(name, profile_name)).cloned() {
+            map.shift_remove(&existing_name).unwrap()
         }
         else {
             return Err(anyhow!("No such profile \"{}\"", profile_name)); 
@@ -136,7 +140,45 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
         Err(anyhow!("No such profile \"{}\" (no profiles at all, in fact)", profile_name))
     }
 }
-    
+
+pub fn create_profile(profile_name: &str) -> anyhow::Result<ActiveProfile> {
+    let profile_name = profile_name.trim();
+    if profile_name.is_empty() {
+        return Err(anyhow!("Profile name cannot be empty"));
+    }
+    if !profile_name.chars().all(char::is_alphanumeric) {
+        return Err(anyhow!("Profile name must contain only alphanumeric characters"));
+    }
+
+    let mut profiles: ProfileFile = if let Ok(file) = fs::File::open(&Cli::get_file_path()?) {
+        serde_json::from_reader(file)?
+    } else {
+        Vec::new()
+    };
+
+    if profiles.iter().any(|profile| profile_names_equal(&profile.name, profile_name)) {
+        return Err(anyhow!("A profile named \"{}\" already exists", profile_name));
+    }
+
+    let mut active_profile = Profile::new();
+    active_profile.name = profile_name.to_string();
+    profiles.insert(0, active_profile.clone());
+
+    serde_json::to_writer_pretty(
+        private_file::create_private_file(&Cli::get_file_path()?)?,
+        &profiles,
+    )?;
+
+    let all_profiles = profiles.into_iter().map(|profile| profile.name).collect();
+    let profile_version_state = ProfileVersionState::from(&active_profile.version)?;
+
+    Ok(ActiveProfile {
+        all_profiles,
+        active_profile,
+        profile_version_state,
+    })
+}
+
 pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile: &T) -> anyhow::Result<()>
     where
     T: Serialize
@@ -150,7 +192,7 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
         // let mut profiles = Vec::new();
 
         for profile in profile_file.iter_mut() {
-            if &profile.name == profile_name {
+            if profile_names_equal(&profile.name, profile_name) {
                 println!("existing profile <{:?}>", &profile);
                 profile.modules.insert(module_id.to_string(), serde_json::to_value(module_profile)?);
                 found = true;
@@ -263,14 +305,14 @@ impl PartialEq for ProfileManager {
 
 impl ProfileManager {
     pub fn new(selector: &Option<String>) -> anyhow::Result<ProfileManager>  {
-        let mut map = IndexMap::new();
-        let mut profile_names = Vec::new();
+        let mut map: IndexMap<String, Profile> = IndexMap::new();
+        let mut profile_names: Vec<String> = Vec::new();
 
         if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
             let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
             for profile in profile_file {
-                if map.contains_key(&profile.name) {
+                if map.keys().any(|name| profile_names_equal(name, &profile.name)) {
                     return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
                 }
                 profile_names.push(profile.name.clone());
