@@ -3,17 +3,20 @@ use std::{collections::HashMap};
 use std::fs;
 use std::sync::Mutex;
 use indexmap::IndexMap;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use anyhow::anyhow;
 
 use crate::{Cli, private_file};
 
 const DEFAULT_PROFILE: &str = "default";
+pub const CURRENT_VERSION: &str = "0.4.3";
 
 #[derive(PartialEq)]
 pub struct ActiveProfile {
     pub all_profiles:   Vec<String>,
     pub active_profile: Profile,
+    pub profile_version_state: ProfileVersionState,
 }
 
 impl ActiveProfile {
@@ -22,6 +25,7 @@ impl ActiveProfile {
         ActiveProfile {
             all_profiles: vec!(String::from(DEFAULT_PROFILE)),
             active_profile: Profile::new(),
+            profile_version_state: ProfileVersionState::Current,
         }
     }
 }
@@ -63,25 +67,32 @@ pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<Act
         }
     }
 
-    Ok(if active_profile.is_none() {
-        let active_profile = ActiveProfile::new();
-        let mut profiles = Vec::new();
-
-        profiles.push(&active_profile.active_profile);
-
-        let f = private_file::create_private_file(&Cli::get_file_path()?)?;
-        println!("About to write to private file {:?}...", f);
-        serde_json::to_writer_pretty(f, &profiles)?;
-
-        println!("Done");
-        active_profile
-    }
-    else {
-        ActiveProfile {
-            all_profiles,
-            active_profile: active_profile.unwrap(),
+    Ok(
+        
+        if let Some(active_profile) = active_profile
+        {
+            let profile_version_state = ProfileVersionState::from(&active_profile.version)?;
+            ActiveProfile {
+                all_profiles,
+                active_profile: active_profile,
+                profile_version_state
+            }
         }
-    })
+        else
+        {
+            let active_profile = ActiveProfile::new();
+            let mut profiles = Vec::new();
+
+            profiles.push(&active_profile.active_profile);
+
+            let f = private_file::create_private_file(&Cli::get_file_path()?)?;
+            println!("About to write to private file {:?}...", f);
+            serde_json::to_writer_pretty(f, &profiles)?;
+
+            println!("Done");
+            active_profile
+        }
+    )
 }
 
 pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile> {
@@ -113,10 +124,12 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
         profiles.extend(map.values());
 
         serde_json::to_writer_pretty(private_file::create_private_file(&Cli::get_file_path()?)?, &profiles)?;
+        let profile_version_state = ProfileVersionState::from(&active_profile.version)?;
 
         Ok(ActiveProfile {
             all_profiles,
             active_profile,
+            profile_version_state,
         })
     }
     else {
@@ -164,10 +177,53 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
 pub type ModuleProfiles = HashMap<String, serde_json::Value>;
 pub type ProfileFile = Vec<Profile>;
 
+#[derive(PartialEq)]
+pub enum ProfileVersionState {
+    OlderThanCurrent,
+    Current,
+    NewerThanCurrent,
+    Invalid
+}
+
+impl ProfileVersionState {
+    pub fn from(version: &str) -> anyhow::Result<ProfileVersionState> {
+        let version = version.trim();
+
+        if version.len() == 0 {
+            return Ok(ProfileVersionState::OlderThanCurrent);
+        }
+
+
+        let current_version = Version::parse(CURRENT_VERSION).unwrap();
+        Ok(if let Ok(version) = Version::parse(version) {
+            match version.cmp(&current_version) {
+                std::cmp::Ordering::Less => Self::OlderThanCurrent,
+                std::cmp::Ordering::Equal => Self::Current,
+                std::cmp::Ordering::Greater => Self::NewerThanCurrent,
+            }
+        }
+        else {
+            Self::Invalid
+        })
+        // if CURRENT_VERSION.eq(version) {
+        //     return Self::Current;
+        // }
+
+        // let c = CURRENT_VERSION
+        // ProfileVersionState::OlderThanCurrent
+    }
+}
+
+fn default_profile_version() ->String {
+    "0.0.0".to_string()
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub name: String,
+    #[serde(default = "default_profile_version")]
+    pub version: String,
     pub modules: ModuleProfiles
 }
 
@@ -175,6 +231,7 @@ impl Profile {
     pub fn new() -> Profile {
         Profile {
             name: DEFAULT_PROFILE.to_string(),
+            version: CURRENT_VERSION.to_string(),
             modules: ModuleProfiles::new(),
         }
     }
@@ -291,8 +348,7 @@ impl ProfileManager {
         //             return Err(anyhow!("No such profile \"{}\"", name));
         //         }
         //     }
-        // }
-        
+        // }        
 
         Ok(ProfileManager {
             profile_map: Mutex::new(ProfileMap {

@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use crate::{Args, MarcoSparkoContext, ModuleRegistrations, views::*};
+use crate::{Args, MarcoSparkoContext, ModuleRegistrations, profile::CURRENT_VERSION, views::*};
 use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
@@ -75,15 +75,50 @@ pub fn App() -> Element {
         
         return rsx!{ "Loading..." };
     }
+
+
+    // let opt_context = &*context_signal.read();
+    // let context = opt_context.as_ref().unwrap();
+    // let profile = &context.profile.active_profile;
+
+
+    // if !profile.version.eq(CURRENT_VERSION) {
+        
+    //     let profile_version = if profile.version.len() == 0 {"0.0.0"} else { &profile.version };
+
+    //     return rsx! {
+    //         ErrorBoundary {
+    //             handle_error: |errors: ErrorContext| {
+    //                 rsx! {
+
+    //                     div { "Oops, we encountered an error. Please report this to the developer of this application" }
+
+    //                     pre { "{errors:?}" }
+    //                 }
+    //             },
+
+    //             // In addition to element and text (which we will see later), rsx can contain other components. In this case,
+    //             // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
+    //             document::Link { rel: "icon", href: FAVICON }
+    //             document::Link { rel: "stylesheet", href: MAIN_CSS }
+
+    //             div { class: "dialog",
+    //                 p {
+    //                     "Profile {profile.name} is version {profile_version} but the current version is {CURRENT_VERSION}"
+    //                 }
+    //                 p { "Do you want to upgrade it to the current version?" }
+    //             }
+    //         }
+    //     }
+    // }
+   
     rsx! {
         ErrorBoundary {
             handle_error: |errors: ErrorContext| {
                 rsx! {
 
-        
-
                     div { "Oops, we encountered an error. Please report this to the developer of this application" }
-        
+
                     pre { "{errors:?}" }
                 }
             },

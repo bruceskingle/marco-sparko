@@ -2602,6 +2602,7 @@ dependencies = [
  "rpassword",
  "rust_decimal",
  "rust_decimal_macros",
+ "semver",
  "serde",
  "serde_json",
  "sparko_graphql",

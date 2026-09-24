@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{MarcoSparkoContext, ModuleRegistrations, components::app::Route};
+use crate::{MarcoSparkoContext, ModuleRegistrations, components::app::Route, profile::CURRENT_VERSION};
 use dioxus::prelude::*;
 
 
@@ -19,138 +19,184 @@ pub fn Home(
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
     let mut modules = HashMap::new();
+    let mut upgrade_requested = use_context::<Signal<bool>>();
 
     println!("TRace Home 2");
 
-    // println!("ZZ2 start id={} ", xid);
-    // println!("ZZ2 start i={} {:?}", xid, modules_signal);
-    for module_id in module_registrations.0.keys() {
-        println!("ZZ2 module {}", module_id);
-        let active = if context.profile.active_profile.modules.contains_key(module_id) {
-            "Active"
-        }
-        else {
-            "inactive"
-        };
+    let profile = &context.profile.active_profile;
+    let profile_version = &context.profile.active_profile.version.to_string();
 
-        modules.insert(module_id.clone(),active);
-    }
-    //  for (module_id, active) in &modules {
-    //         println!("ZZ3 module {}", module_id);
-    //     }
+    match &context.profile.profile_version_state {
+        crate::profile::ProfileVersionState::Invalid => {
+            rsx! {
 
-    
-    let branch = if create_info::GIT_BRANCH.is_empty() {
-        "N/A".to_string()
-    } else {
-        let mut s = create_info::GIT_BRANCH.to_string();
-        if create_info::GIT_DIRTY  {
+                div { class: "dialog",
+                    p { "Profile {profile.name} is version \"{profile_version}\" which is invalid" }
+                }
+            }
+        },
+        crate::profile::ProfileVersionState::NewerThanCurrent => {
+            rsx! {
+
+                div { class: "dialog",
+                    p {
+                        "Profile {profile.name} is version \"{profile_version}\" but the current version is {CURRENT_VERSION}"
+                    }
+                    p { "Thi profile is for a newer version of the program" }
+                }
+            }
+        },
+        crate::profile::ProfileVersionState::OlderThanCurrent => {
+            if *upgrade_requested.read() {
+                rsx! {
+                    p { "Upgrade requested" }
+                }
+            } else {
+                rsx! {
+
+                    div { class: "dialog",
+                        p {
+                            "Profile {profile.name} is version \"{profile_version}\" but the current version is {CURRENT_VERSION}"
+                        }
+                        p { "Do you want to upgrade it to the current version?" }
+
+                        button { onclick: move |_| upgrade_requested.set(true), "OK" }
+                    }
+                }
+            }
+        },
+        crate::profile::ProfileVersionState::Current => {
+            // println!("ZZ2 start id={} ", xid);
+            // println!("ZZ2 start i={} {:?}", xid, modules_signal);
+            for module_id in module_registrations.0.keys() {
+                println!("ZZ2 module {}", module_id);
+                let active = if context.profile.active_profile.modules.contains_key(module_id) {
+                    "Active"
+                }
+                else {
+                    "inactive"
+                };
+
+                modules.insert(module_id.clone(),active);
+            }
+            //  for (module_id, active) in &modules {
+            //         println!("ZZ3 module {}", module_id);
+            //     }
+
             
-            s.push_str("-dirty");
-        }
-        if create_info::GIT_STAGED {
-             s.push_str("-staged");
-        }
-        s
-    };
-    let args = &context.args.marco_sparko_args;
-    let debug = if args.debug {
-        rsx! {
-            h2 { "Debug" }
-            h3 { "Args" }
-            table {
-                tr {
-                    td { "--profile" }
-                    td { {format!("{:?}", args.profile)} }
+            let branch = if create_info::GIT_BRANCH.is_empty() {
+                "N/A".to_string()
+            } else {
+                let mut s = create_info::GIT_BRANCH.to_string();
+                if create_info::GIT_DIRTY  {
+                    
+                    s.push_str("-dirty");
                 }
-                tr {
-                    td { "--modules" }
-                    td { {format!("{:?}", args.modules)} }
+                if create_info::GIT_STAGED {
+                    s.push_str("-staged");
                 }
-                tr {
-                    td { "--cli" }
-                    td { {format!("{:?}", args.cli)} }
-                }
-                tr {
-                    td { "--debug" }
-                    td { {format!("{:?}", args.debug)} }
-                }
-                tr {
-                    td { "--verbose" }
-                    td { {format!("{:?}", args.verbose)} }
+                s
+            };
+            let args = &context.args.marco_sparko_args;
+            let debug = if args.debug {
+                rsx! {
+                    h2 { "Debug" }
+                    h3 { "Args" }
+                    table {
+                        tr {
+                            td { "--profile" }
+                            td { {format!("{:?}", args.profile)} }
+                        }
+                        tr {
+                            td { "--modules" }
+                            td { {format!("{:?}", args.modules)} }
+                        }
+                        tr {
+                            td { "--cli" }
+                            td { {format!("{:?}", args.cli)} }
+                        }
+                        tr {
+                            td { "--debug" }
+                            td { {format!("{:?}", args.debug)} }
+                        }
+                        tr {
+                            td { "--verbose" }
+                            td { {format!("{:?}", args.verbose)} }
+                        }
+                    }
+                    h3 { "Profile" }
+                    table {
+                        tr {
+                            td { "Active Profile:" }
+                            td { "{context.profile.active_profile.name}" }
+                        }
+                    }
                 }
             }
-            h3 { "Profile" }
-            table {
-                tr {
-                    td { "Active Profile:" }
-                    td { "{context.profile.active_profile.name}" }
-                }
-            }
-        }
-    }
-    else {
-        rsx!( "" )
-    }?;
+            else {
+                rsx!( "" )
+            }?;
 
-    rsx! {
-        div {
-            // h1 { "This is Home #{xid}!" }
-            h1 { "Modules" }
-            for (module_id , active) in modules {
-                Link {
-                    class: "nav-item",
-                    to: Route::Module {
-                        module_id: module_id.clone(),
-                    },
-                    "{module_id}"
-                }
-                " [{active}]"
-            }
-            h2 { "Build Info" }
-            table {
-                tr {
-                    td { "Package Name:" }
-                    td { "{create_info::PACKAGE_NAME}" }
-                }
-                tr {
-                    td { "Package Version:" }
-                    td { "{create_info::PACKAGE_VERSION}" }
-                }
-                tr {
-                    td { "User Agent:" }
-                    td { "{create_info::USER_AGENT}" }
-                }
-                tr {
-                    td { "Build Timestamp (UTC):" }
-                    td { "{create_info::BUILD_TIMESTAMP}" }
-                }
-                // tr {
-                //     td { "Git Repository:" }
-                //     td { "{create_info::GIT_REPOSITORY}" }
-                // }
-                tr {
-                    td { "Git Branch:" }
-                    td { "{branch}" }
-                }
-                tr {
-                    td { "Git Tag:" }
-                    td { "{create_info::GIT_TAG}" }
-                }
+            rsx! {
+                div {
+                    // h1 { "This is Home #{xid}!" }
+                    h1 { "Modules" }
+                    for (module_id , active) in modules {
+                        Link {
+                            class: "nav-item",
+                            to: Route::Module {
+                                module_id: module_id.clone(),
+                            },
+                            "{module_id}"
+                        }
+                        " [{active}]"
+                    }
+                    h2 { "Build Info" }
+                    table {
+                        tr {
+                            td { "Package Name:" }
+                            td { "{create_info::PACKAGE_NAME}" }
+                        }
+                        tr {
+                            td { "Package Version:" }
+                            td { "{create_info::PACKAGE_VERSION}" }
+                        }
+                        tr {
+                            td { "User Agent:" }
+                            td { "{create_info::USER_AGENT}" }
+                        }
+                        tr {
+                            td { "Build Timestamp (UTC):" }
+                            td { "{create_info::BUILD_TIMESTAMP}" }
+                        }
                         // tr {
-            //     td { "Git Dirty:" }
-            //     td { "{create_info::GIT_DIRTY}" }
-            // }
-            // tr {
-            //     td { "Git Staged:" }
-            //     td { "{create_info::GIT_STAGED}" }
-            // }
-            // tr {
-            //     td { "Git Stash:" }
-            //     td { "{create_info::GIT_STASH}" }
-            // }
+                        //     td { "Git Repository:" }
+                        //     td { "{create_info::GIT_REPOSITORY}" }
+                        // }
+                        tr {
+                            td { "Git Branch:" }
+                            td { "{branch}" }
+                        }
+                        tr {
+                            td { "Git Tag:" }
+                            td { "{create_info::GIT_TAG}" }
+                        }
+                                        // tr {
+                    //     td { "Git Dirty:" }
+                    //     td { "{create_info::GIT_DIRTY}" }
+                    // }
+                    // tr {
+                    //     td { "Git Staged:" }
+                    //     td { "{create_info::GIT_STAGED}" }
+                    // }
+                    // tr {
+                    //     td { "Git Stash:" }
+                    //     td { "{create_info::GIT_STASH}" }
+                    // }
+                    }
+                    {debug}
+                }
             }
-            {debug}
         }
     }
 }

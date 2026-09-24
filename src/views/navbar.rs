@@ -17,6 +17,7 @@ const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
 /// Designed for Dioxus Desktop (but works for web too).
 pub fn Navbar() -> Element {
     let mut context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
+    let mut upgrade_requested = use_context_provider::<Signal<bool>>(|| Signal::new(false));
     let opt_context = &*context_signal.read();
     let context = opt_context.as_ref().unwrap();
 
@@ -38,6 +39,7 @@ pub fn Navbar() -> Element {
     
     // get the current route so we can mark the active nav item
     let current_route = use_route::<Route>();
+    let navigator = use_navigator();
     
     rsx! {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
@@ -113,6 +115,8 @@ pub fn Navbar() -> Element {
                                     });
 
                                     context_signal.set(Some(new_context));
+                                    upgrade_requested.set(false);
+                                    navigator.replace(Route::Home {});
                                     Ok(())
                                 },
                                 "{&name}"
