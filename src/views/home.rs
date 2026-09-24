@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{MarcoSparkoContext, ModuleRegistrations, components::app::Route, profile::CURRENT_VERSION};
+use crate::{MarcoSparkoContext, ModuleRegistrations, UpgradeRequested, components::app::Route, profile::CURRENT_VERSION};
 use dioxus::prelude::*;
 
 
@@ -19,7 +19,7 @@ pub fn Home(
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
     let mut modules = HashMap::new();
-    let mut upgrade_requested = use_context::<Signal<bool>>();
+    let mut upgrade_requested = use_context::<Signal<UpgradeRequested>>();
 
     println!("TRace Home 2");
 
@@ -47,7 +47,7 @@ pub fn Home(
             }
         },
         crate::profile::ProfileVersionState::OlderThanCurrent => {
-            if *upgrade_requested.read() {
+            if upgrade_requested.read().0 {
                 rsx! {
                     p { "Upgrade requested" }
                 }
@@ -60,7 +60,9 @@ pub fn Home(
                         }
                         p { "Do you want to upgrade it to the current version?" }
 
-                        button { onclick: move |_| upgrade_requested.set(true), "OK" }
+                        button { onclick: move |_| upgrade_requested.set(UpgradeRequested(true)),
+                            "OK"
+                        }
                     }
                 }
             }

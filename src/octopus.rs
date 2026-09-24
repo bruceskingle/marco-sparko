@@ -23,7 +23,7 @@ use token::{OctopusTokenManager};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CacheManager, CommandProvider, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, ReplCommand, octopus::{bill::{AbstractBill, BillList}, token::OctopusAuthenticator}};
+use crate::{CacheManager, CommandProvider, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, ReplCommand, octopus::{bill::{AbstractBill, BillList}, token::OctopusAuthenticator}};
 
 // include!("octopus/graphql.rs");
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -602,13 +602,13 @@ impl OctopusModuleFactory {
                     OctopusAuthenticator::from_email_password(email.clone(), password.clone())
                 ).await;
 
-                let _ = Self::login(&mut errors, &token_manager).await;
-
-                // Reset the app initialization to reload context with new profile
-                let init_signal = try_consume_context::<Signal<bool>>();
-                if let Some(mut init_sig) = init_signal {
-                    init_sig.set(true);
+                if let Ok(_) =  Self::login(&mut errors, &token_manager).await {
+                    let init_signal = try_consume_context::<Signal<InitRequested>>();
+                    if let Some(mut init_sig) = init_signal {
+                        init_sig.set(InitRequested(true));
+                    }
                 }
+
             }
         } else if login_method == "api_key" {
             let api_key = values.api_key.as_ref().unwrap_or(&String::new()).trim().to_string();
@@ -622,26 +622,20 @@ impl OctopusModuleFactory {
                 token_manager.set_authenticator(
                     OctopusAuthenticator::from_api_key(api_key.clone())
                 ).await;
-                // match token_manager.get_authenticator(true).await {
-                match Self::login(&mut errors, &token_manager).await {
-                    Ok(_authenticator) => {
-                        println!("Login successful!");
-                        // Store the api_key into the profile
-                        let new_profile = Profile {
-                            api_key: Some(values.api_key.as_ref().unwrap_or(&String::new()).trim().to_string()),
-                            ..profile.clone()
-                        };
+                if let Ok(_) = Self::login(&mut errors, &token_manager).await {
+                    println!("Login successful!");
+                    // Store the api_key into the profile
+                    let new_profile = Profile {
+                        api_key: Some(values.api_key.as_ref().unwrap_or(&String::new()).trim().to_string()),
+                        ..profile.clone()
+                    };
 
-                        crate::profile::update_profile(&context.profile.active_profile.name, MODULE_ID, &new_profile).unwrap_or_else(|e| println!("profile update failed: {}", e));
+                    crate::profile::update_profile(&context.profile.active_profile.name, MODULE_ID, &new_profile).unwrap_or_else(|e| println!("profile update failed: {}", e));
 
-                        // Reset the app initialization to reload context with new profile
-                        let init_signal = try_consume_context::<Signal<bool>>();
-                        if let Some(mut init_sig) = init_signal {
-                            init_sig.set(true);
-                        }
-                    },
-                    Err(_) => {
-                        // Already reported to user
+                    // Reset the app initialization to reload context with new profile
+                    let init_signal = try_consume_context::<Signal<InitRequested>>();
+                    if let Some(mut init_sig) = init_signal {
+                        init_sig.set(InitRequested(true));
                     }
                 }
             }

@@ -238,6 +238,12 @@ impl ModuleRegistrations {
     pub profile: ActiveProfile,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct UpgradeRequested(pub bool);
+
+#[derive(Clone, Copy, Default)]
+pub struct InitRequested(pub bool);
+
 // impl PartialEq for MarcoSparkoContext {
 //     fn eq(&self, other: &Self) -> bool {
 //         self.args == other.args && self.profile == other.profile

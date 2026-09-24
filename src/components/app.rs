@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use crate::{Args, MarcoSparkoContext, ModuleRegistrations, views::*};
+use crate::{Args, InitRequested, MarcoSparkoContext, ModuleRegistrations, views::*};
 use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
@@ -48,12 +48,12 @@ pub fn App() -> Element {
 
     let args = Args::ms_parse();
     let verbose = args.marco_sparko_args.verbose;
-    let mut init_signal = use_signal::<bool>(|| true);
-    let init = *init_signal.read();
+    let mut init_signal = use_signal(|| InitRequested(true));
+    let init = init_signal.read().0;
     let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);
     
     // Store the init signal in context so it can be accessed and reset from anywhere
-    use_context_provider::<Signal<bool>>(move || init_signal);
+    use_context_provider::<Signal<InitRequested>>(move || init_signal);
     
     let window = use_window();
     window.set_inner_size(LogicalSize::new(1400, 768));
@@ -71,7 +71,7 @@ pub fn App() -> Element {
         let module_registrations = ModuleRegistrations::new(verbose);
         use_context_provider::<ModuleRegistrations>(move || module_registrations);
 
-        init_signal.set(false);
+        init_signal.set(InitRequested(false));
         
         return rsx!{ "Loading..." };
     }

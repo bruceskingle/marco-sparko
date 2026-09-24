@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{ MarcoSparkoContext, components::app::Route};
+use crate::{ MarcoSparkoContext, UpgradeRequested, components::app::Route};
 use dioxus::prelude::*;
 
 // use crate::PROFILE_MANAGER;
@@ -17,7 +17,7 @@ const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
 /// Designed for Dioxus Desktop (but works for web too).
 pub fn Navbar() -> Element {
     let mut context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
-    let mut upgrade_requested = use_context_provider::<Signal<bool>>(|| Signal::new(false));
+    let mut upgrade_requested = use_context_provider::<Signal<UpgradeRequested>>(|| Signal::new(UpgradeRequested(false)));
     let context = context_signal.read().as_ref().unwrap().clone();
 
 
@@ -114,7 +114,7 @@ pub fn Navbar() -> Element {
                                                     });
                                                     context_signal.set(Some(new_context));
                                                     //next
-                                                    upgrade_requested.set(false);
+                                                    upgrade_requested.set(UpgradeRequested(false));
                                                     new_profile_open.set(false);
                                                     new_profile_name.set(String::new());
                                                     new_profile_error.set(None);
@@ -172,7 +172,7 @@ pub fn Navbar() -> Element {
                                     });
 
                                     context_signal.set(Some(new_context));
-                                    upgrade_requested.set(false);
+                                    upgrade_requested.set(UpgradeRequested(false));
                                     navigator.replace(Route::Home {});
                                     Ok(())
                                 },
