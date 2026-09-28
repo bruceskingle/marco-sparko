@@ -114,10 +114,6 @@ pub fn Home(
                             td { {format!("{:?}", args.modules)} }
                         }
                         tr {
-                            td { "--cli" }
-                            td { {format!("{:?}", args.cli)} }
-                        }
-                        tr {
                             td { "--debug" }
                             td { {format!("{:?}", args.debug)} }
                         }

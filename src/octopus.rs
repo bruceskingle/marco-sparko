@@ -23,7 +23,7 @@ use token::{OctopusTokenManager};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CacheManager, CommandProvider, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, ReplCommand, octopus::{bill::{AbstractBill, BillList}, token::OctopusAuthenticator}};
+use crate::{CacheManager, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, octopus::{bill::{AbstractBill, BillList}, token::OctopusAuthenticator}};
 
 // include!("octopus/graphql.rs");
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -79,78 +79,6 @@ pub struct OctopusModule{
 }
 
 const MODULE_ID: &str = "octopus";
-
-#[async_trait(?Send)]
-impl CommandProvider for OctopusModule {
-    async fn exec_repl_command(&mut self, command: &str, args: std::str::SplitWhitespace<'_>) ->  anyhow::Result<()> {
-        let account_id = self.account_id.clone();
-        match command {
-            "bills" => {
-                Ok(self.bill_manager
-                .bills_handler(args, account_id)
-                .await?)
-            },
-            "bill" => {
-                Ok(self.bill_manager.bill_handler(args, account_id, self.billing_timezone).await?)
-            },
-            "demand" => {
-                Ok(self.meter_manager.demand_handler(args, &account_id).await?)
-            },
-            "consumption" => {
-                Ok(self.meter_manager.consumption_handler(args, &account_id, self.billing_timezone).await?)
-            },
-            _ => Err(anyhow!(format!("Invalid command '{}'", command)))
-        }
-    }
-
-    fn get_repl_commands(&self) -> Vec<ReplCommand> {
-        vec!(
-            ReplCommand {
-                command:"bills",
-                description: "Print a summary of all bills",
-                help:
-r#"
-usage: bills
-
-Print a one line summary of all bills in the account.
-"#,
-            },
-
-            ReplCommand {
-                command:"bill",
-                description: "Print details of a bill",
-                help:
-r#"
-usage: bill [bill_id]
-
-Print the contents of the bill whose id is given, or the most recent bill, if none.
-"#,
-            },
-
-            ReplCommand {
-                command:"demand",
-                description: "Print electricity demand",
-                help:
-r#"
-usage: demand
-
-Print the current electricity demand (power imported from or exported to the grid)
-"#,
-            },
-
-            ReplCommand {
-                command:"consumption",
-                description: "Print electricity consumption",
-                help:
-r#"
-usage: demand
-
-Print the current electricity consumption
-"#,
-            }
-        )
-    }
-}
 
 
 #[derive(Deserialize, Debug, Clone)]
@@ -855,27 +783,27 @@ impl OctopusModuleFactoryBuilder {
         })
     }
 
-    pub fn with_url(mut self, url: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
-        self.url = Some(url);
-        Ok(self)
-    }
+    // pub fn with_url(mut self, url: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
+    //     self.url = Some(url);
+    //     Ok(self)
+    // }
 
-    pub fn with_url_if_not_set(mut self, url: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
-        if let None = self.url {
-            self.url = Some(url);
-        }
-        Ok(self)
-    }
+    // pub fn with_url_if_not_set(mut self, url: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
+    //     if let None = self.url {
+    //         self.url = Some(url);
+    //     }
+    //     Ok(self)
+    // }
 
-    pub fn with_api_key(mut self, api_key: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
-        self.authenticator = Some(OctopusAuthenticator::from_api_key(api_key));
-        Ok(self)
-    }
+    // pub fn with_api_key(mut self, api_key: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
+    //     self.authenticator = Some(OctopusAuthenticator::from_api_key(api_key));
+    //     Ok(self)
+    // }
 
-    pub fn with_password(mut self, email: String, password: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
-        self.authenticator = Some(OctopusAuthenticator::from_email_password(email, password));
-        Ok(self)
-    }
+    // pub fn with_password(mut self, email: String, password: String) -> anyhow::Result<OctopusModuleFactoryBuilder> {
+    //     self.authenticator = Some(OctopusAuthenticator::from_email_password(email, password));
+    //     Ok(self)
+    // }
 
     pub fn build(self) -> anyhow::Result<OctopusModuleFactory> {
         let url = if let Some(url) = self.url {
