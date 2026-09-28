@@ -260,7 +260,7 @@ impl Module for OctopusModule {
                 Box::new(|| {
                     // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
                     let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
-                    let account_user = &self.account_manager.viewer.viewer.viewer_;
+                    let account_user = &self.account_manager.data_set.data.viewer_;
                     let dob = if let Some(date) = &account_user.date_of_birth_ {
                         date.format(&date_format).unwrap()
                     }
@@ -379,7 +379,7 @@ impl Module for OctopusModule {
             },
             "account" => {
                 Box::new(|| {
-                    let account_user = &self.account_manager.viewer.viewer.viewer_;
+                    let account_user = &self.account_manager.data_set.data.viewer_;
                     // let x = account_user.full_name_;
                     let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
                     rsx! {

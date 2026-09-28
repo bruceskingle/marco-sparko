@@ -7,6 +7,7 @@ pub mod profile;
 
 pub mod private_file;
 
+mod data_set;
 mod cache_manager;
 pub use cache_manager::CacheManager;
 

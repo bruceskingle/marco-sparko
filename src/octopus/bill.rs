@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 use indexmap::IndexMap;
 
@@ -9,6 +10,7 @@ use anyhow::anyhow;
 use sparko_graphql::AuthenticatedRequestManager;
 
 use crate::cache_manager::Indexer;
+use crate::data_set::OrderedListDataSet;
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::bill::get_statement_transactions::{AbstractTransactionType, Consumption};
 use crate::util::as_decimal;
@@ -1850,6 +1852,45 @@ impl BillList {
 }
 
 
+pub struct BillListDataSet {
+    data_set: OrderedListDataSet<AbstractBill>,
+}
+
+impl BillListDataSet {
+    pub async fn new(
+        account_number: &String,
+        refresh: bool,
+        config: &Arc<CacheManager>,
+        request_manager: &Arc<RequestManager>,
+    ) -> anyhow::Result<Self> {
+        let hash_key = format!("{}#Bills", account_number);
+        let query_provider = |opt_last_record: Option<&AbstractBill>| {
+            let mut builder = super::graphql::bill::get_bills::Query::builder()
+                .with_account_number(account_number.clone())
+                .with_last(20);
+
+            if let Some(last_record) = opt_last_record {
+                builder = builder.with_issued_from_date(last_record.as_bill_interface().issued_date_.clone());
+            }
+
+            builder.build()
+        };
+        let indexer: Indexer<AbstractBill> = Box::new(|bill: &AbstractBill| bill.as_bill_interface().id_.clone());
+        let response_iterator = |response: super::graphql::bill::get_bills::Response| {
+            response.account_.bills_.edges.into_iter().map(|edge| edge.node)
+        };
+
+        let data_set = OrderedListDataSet::new(
+            &hash_key,
+            refresh, 
+            query_provider,
+            response_iterator,
+            indexer, config, request_manager).await?;
+
+        Ok(Self { data_set })
+    }
+}
+
 pub struct BillTransactionList {
     pub account_number: String,
     pub statement_id: String,
@@ -1881,6 +1922,9 @@ impl BillTransactionList {
                 let bill = response.account_.bill_;
 
                 if let bill::get_statement_transactions::BillInterface::StatementType(statement) = bill {
+
+
+        let record_iterator = statement.transactions_.edges;
 
                     for edge in statement.transactions_.edges {
                         let key = indexer(&edge.node);
