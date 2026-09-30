@@ -5,7 +5,7 @@ If this is the first time you have done this there will be a slight delay while 
 
 <img src="Screenshot5.png" width="1024">
 
-Each line represents a single bill showing the total amounts and the account balance before amd after the bill. The ```Ref``` column is the bill ID as shown on your official statement. This is a clickable link and when you click these links you will see the details for that bill.
+Each line represents a single bill showing the total amounts and the account balance before and after the bill. The ```Ref``` column is the bill ID as shown on your official statement. This is a clickable link and when you click these links you will see the details for that bill.
 
 <img src="Screenshot6.png" width="1024">
 
