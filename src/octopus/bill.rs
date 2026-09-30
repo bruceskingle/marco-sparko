@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use sparko_graphql::types::Date;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -1010,11 +1011,11 @@ impl BillList {
 }
 
 
-pub struct BillListDataSet {
-    data_set: OrderedListDataSet<AbstractBill>,
+pub struct BillDataSet {
+    pub data_set: OrderedListDataSet<String, Date, AbstractBill>,
 }
 
-impl BillListDataSet {
+impl BillDataSet {
     pub async fn new(
         account_number: &String,
         refresh: bool,
@@ -1025,15 +1026,22 @@ impl BillListDataSet {
         let query_provider = |opt_last_record: Option<&AbstractBill>| {
             let mut builder = super::graphql::bill::get_bills::Query::builder()
                 .with_account_number(account_number.clone())
-                .with_last(20);
+                .with_last(6);
 
             if let Some(last_record) = opt_last_record {
-                builder = builder.with_issued_from_date(last_record.as_bill_interface().issued_date_.clone());
+                // If we ever found ourselves in the position that there are two bills on the same issue date
+                // and we fetch one of them as the last item in a query we would never see the second one.
+                // By stepping back one day we usually read one bill we already have but we avoid that gap.
+                let start_date = last_record.as_bill_interface().issued_date_.clone(); //.previous_day();
+                builder = builder.with_issued_from_date(start_date);
             }
 
             builder.build()
         };
-        let indexer: Indexer<AbstractBill> = Box::new(|bill: &AbstractBill| bill.as_bill_interface().id_.clone());
+        let indexer  = |bill: &AbstractBill| {
+            let bill = bill.as_bill_interface();
+            (bill.id_.clone(), bill.issued_date_.clone())
+        };
         let response_iterator = |response: super::graphql::bill::get_bills::Response| {
             response.account_.bills_.edges.into_iter().map(|edge| edge.node)
         };

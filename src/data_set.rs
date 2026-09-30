@@ -5,7 +5,7 @@ use std::io::BufRead;
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
 
-use crate::{CacheManager, cache_manager::Indexer, octopus::token::OctopusTokenManager};
+use crate::{CacheManager, octopus::token::OctopusTokenManager, OrderedMap};
 
 // pub struct DataSetConfig {
 //     pub dir_path: PathBuf,
@@ -100,12 +100,16 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
 
 /// A DataSet which is a list of records where the records returned from the API are in ascending order and new records can be
 /// appended to the end of the list.
-pub struct OrderedListDataSet<T: DeserializeOwned + Serialize>
+pub struct OrderedListDataSet<K, O, V>
 {
-    pub data: IndexMap<String, T>,
+    pub data: OrderedMap<K, O, V> ,
 }
 
-impl<T: DeserializeOwned + Serialize> OrderedListDataSet<T>
+impl<K, O, V> OrderedListDataSet<K, O, V>
+where
+    K: Eq + std::hash::Hash + Ord + Clone + Send + Sync,
+    O: Ord + Clone,
+    V: DeserializeOwned + Serialize
 {
    pub async fn new<R, Q, QP, RI, IN, I>(
             hash_key: &str,
@@ -119,12 +123,12 @@ impl<T: DeserializeOwned + Serialize> OrderedListDataSet<T>
         where
             R: GraphQLResponse,
             Q: GraphQLQuery<R>,
-            QP: FnOnce(Option<&T>) -> Result<Q, sparko_graphql::Error>,
+            QP: FnOnce(Option<&V>) -> Result<Q, sparko_graphql::Error>,
             RI: FnOnce(R) -> I,
-            IN: Fn(&T) -> String + Send + Sync,
-            I: IntoIterator<Item = T>,
+            IN: Fn(&V) -> (K, O),
+            I: IntoIterator<Item = V>,
     {
-        let mut data = IndexMap::new();
+        let mut data = OrderedMap::new();
         let mut refresh = refresh;
         let mut path = config.dir_path.clone();
         path.push(hash_key);
@@ -146,8 +150,8 @@ impl<T: DeserializeOwned + Serialize> OrderedListDataSet<T>
             match serde_json::from_str(&line) {
                 Ok(value) => {
                     
-                    let index = indexer(&value);
-                    data.insert(index, value);
+                    let (index, order) = indexer(&value);
+                    data.insert(index, order, value);
                 },
                 Err(e) => {
                     println!("ERROR: failed to read record {:?}", e);
@@ -174,10 +178,10 @@ impl<T: DeserializeOwned + Serialize> OrderedListDataSet<T>
 
 
             for value in response_iterator(response) {
-                let index = indexer(&value);
+                    let (index, order) = indexer(&value);
                 if ! data.contains_key(&index) {
                     writeln!(file, "{}", serde_json::to_string(&value)?)?;
-                    data.insert(index, value);
+                    data.insert(index, order, value);
                 }
             }
 

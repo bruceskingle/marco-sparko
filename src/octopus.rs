@@ -23,7 +23,7 @@ use token::{OctopusTokenManager};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CacheManager, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, octopus::{bill::{AbstractBill, BillList}, token::OctopusAuthenticator}};
+use crate::{CacheManager, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, octopus::{bill::{AbstractBill, BillDataSet}, token::OctopusAuthenticator}};
 
 // include!("octopus/graphql.rs");
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -145,13 +145,14 @@ impl OctopusModule {
 
 
 
-fn find_bill<'a>(bill_id: &String, bills: &'a BillList) -> Option<&'a AbstractBill> {
-    if let Some((_hash, bill)) = bills.bills.get(bill_id) {
-        Some(bill)
-    }
-    else {
-        None
-    }
+fn find_bill<'a>(bill_id: &String, bills: &'a BillDataSet) -> Option<&'a AbstractBill> {
+    bills.data_set.data.get(bill_id)
+    // if let Some(bill) = bills.data_set.data.get(bill_id) {
+    //     Some(bill)
+    // }
+    // else {
+    //     None
+    // }
 }
 
 #[async_trait]
@@ -420,7 +421,7 @@ impl Module for OctopusModule {
                             rsx! {
                                 table {
                                     {AbstractBill::gui_summary_header()?}
-                                    for (_id , (_hash , bill)) in &bills.bills {
+                                    for (_id , bill) in &bills.data_set.data {
                                         {bill.gui_summary_line()?}
                                     }
                                 }

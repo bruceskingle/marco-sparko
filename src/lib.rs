@@ -1,3 +1,7 @@
+
+mod ordered_map;
+pub use ordered_map::OrderedMap;
+
 mod octopus;
 mod util;
 pub mod views;

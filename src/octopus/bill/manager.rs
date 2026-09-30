@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
-use crate::octopus::bill::{BillList, BillTransactionBreakDown, BillTransactionList};
+use crate::octopus::bill::{BillDataSet, BillTransactionBreakDown, BillTransactionList};
 // use anyhow::anyhow;
 use crate::octopus::meter::MeterType;
 use crate::CacheManager;
@@ -35,7 +35,7 @@ pub struct BillManager {
     pub cache_manager: Arc<CacheManager>,
     pub request_manager: Arc<RequestManager>,
     meter_manager: Arc<MeterManager>,
-    pub bills: Mutex<HashMap<String, Arc<BillList>>>,
+    pub bills: Mutex<HashMap<String, Arc<BillDataSet>>>,
 }
 
 impl BillManager {
@@ -49,19 +49,19 @@ impl BillManager {
         }
     }
 
-    pub async fn fetch_bills(&self, account_number: String) -> anyhow::Result<Arc<BillList>> {
+    pub async fn fetch_bills(&self, account_number: String) -> anyhow::Result<Arc<BillDataSet>> {
         let mut locked_map = self.bills.lock().await;
         // let mut map = &*locked_map;
         Ok((&*locked_map
-            .entry(account_number.clone())
-            .or_insert(
-                Arc::new(BillList::fetch(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?))).clone())
-        // BillList::new(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await
+                .entry(account_number.clone())
+                .or_insert(
+                    Arc::new(
+                        // BillList::fetch(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?
+                        BillDataSet::new(&account_number, crate::CHECK_FOR_UPDATES, &self.cache_manager, &self.request_manager).await?
+                    )
+                )
+            ).clone())
     }
-
-    // pub async fn get_statement_transactions(&self, account_number: String, statement_id: String)  -> anyhow::Result<BillTransactionList> {
-    //     BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number, statement_id).await
-    // }
 
     pub async fn fetch_bill_transaction_breakdown(&self, account_number: String, statement_id: String, billing_timezone: &time_tz::Tz)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
 
@@ -92,51 +92,6 @@ impl BillManager {
             else  {
                 result.push(BillTransactionBreakDown::from_abstract(transaction));
             }
-
-            /*
-            match transaction {
-                TransactionType::Charge(charge) => {
-                    if let Some(consumption) = &charge.consumption_ {
-                        // print the line items making up this charge
-                        //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
-
-                        let meter_type = match transaction.as_transaction_type().title_.as_str() {
-                            "Gas" => MeterType::Gas,
-                            "Electricity" => MeterType::Electricity,
-                            _ => panic!("Unknown consumption type")
-                        };
-
-                        let line_items = self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?;
-
-                        result.push(BillTransactionBreakDown::from_charge(charge, line_items));
-                    }
-                },
-                TransactionType::Payment(abstract_transaction_type) => todo!(),
-                TransactionType::Refund(abstract_transaction_type) => todo!(),
-                TransactionType::Credit(abstract_transaction_type) => todo!(),
-            }
-            if let TransactionType::Charge(charge) = &transaction {
-                if let Some(consumption) = &charge.consumption_ {
-                    // print the line items making up this charge
-                    //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
-
-                    let meter_type = match transaction.as_transaction_type().title_.as_str() {
-                        "Gas" => MeterType::Gas,
-                        "Electricity" => MeterType::Electricity,
-                        _ => panic!("Unknown consumption type")
-                    };
-
-                    let line_items = self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?;
-
-                    result.push(BillTransactionBreakDown::from_charge(charge, line_items));
-                    continue;
-                }
-            }
-            result.push(BillTransactionBreakDown{
-                transaction,
-                line_items: None,
-            });
-            */
         }
 
         Ok(result)
