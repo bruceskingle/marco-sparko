@@ -203,6 +203,12 @@ th.span {
     font-weight: bold;
 }
 
+.fetched {
+    background-color: var(--fetched);
+}
+
+/* .cached {} */
+
 th.row-header {
     text-align: right;
     padding-right: 20px;

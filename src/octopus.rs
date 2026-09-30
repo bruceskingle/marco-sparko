@@ -146,13 +146,13 @@ impl OctopusModule {
 
 
 fn find_bill<'a>(bill_id: &String, bills: &'a BillDataSet) -> Option<&'a AbstractBill> {
-    bills.data_set.data.get(bill_id)
-    // if let Some(bill) = bills.data_set.data.get(bill_id) {
-    //     Some(bill)
-    // }
-    // else {
-    //     None
-    // }
+    // bills.data_set.data.get(bill_id)
+    if let Some((_attributes, bill)) = bills.data_set.data.get(bill_id) {
+        Some(bill)
+    }
+    else {
+        None
+    }
 }
 
 #[async_trait]
@@ -421,8 +421,8 @@ impl Module for OctopusModule {
                             rsx! {
                                 table {
                                     {AbstractBill::gui_summary_header()?}
-                                    for (_id , bill) in &bills.data_set.data {
-                                        {bill.gui_summary_line()?}
+                                    for (_id , (attributes , bill)) in &bills.data_set.data {
+                                        {bill.gui_summary_line(attributes)?}
                                     }
                                 }
                             }

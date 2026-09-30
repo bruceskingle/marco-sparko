@@ -11,7 +11,7 @@ use anyhow::anyhow;
 use sparko_graphql::AuthenticatedRequestManager;
 
 use crate::cache_manager::Indexer;
-use crate::data_set::OrderedListDataSet;
+use crate::data_set::{DataSetAttributes, OrderedListDataSet};
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::bill::get_statement_transactions::{AbstractTransactionType, Consumption};
 use crate::util::as_decimal;
@@ -76,8 +76,9 @@ impl AbstractBill {
         }
     }
 
-    pub fn gui_summary_line(&self) -> Element {
+    pub fn gui_summary_line(&self, attributes: &DataSetAttributes) -> Element {
         let abstract_bill = self.as_bill_interface();
+        let row_class = if attributes.cached { "cached"} else {"fetched"};
 
         let detail = match self {
             AbstractBill::StatementType(statement) => {
@@ -134,7 +135,7 @@ impl AbstractBill {
 
         let id = abstract_bill.id_.clone();
         rsx!{
-            tr {
+            tr { class: row_class,
                 td { "{abstract_bill.issued_date_}" }
                 td {
                     div {
@@ -1026,7 +1027,7 @@ impl BillDataSet {
         let query_provider = |opt_last_record: Option<&AbstractBill>| {
             let mut builder = super::graphql::bill::get_bills::Query::builder()
                 .with_account_number(account_number.clone())
-                .with_last(6);
+                .with_last(2);
 
             if let Some(last_record) = opt_last_record {
                 // If we ever found ourselves in the position that there are two bills on the same issue date

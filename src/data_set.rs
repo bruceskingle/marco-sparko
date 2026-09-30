@@ -7,6 +7,10 @@ use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse}
 
 use crate::{CacheManager, octopus::token::OctopusTokenManager, OrderedMap};
 
+pub struct DataSetAttributes {
+    pub cached: bool,
+}
+
 // pub struct DataSetConfig {
 //     pub dir_path: PathBuf,
 //     pub verbose: bool,
@@ -102,7 +106,7 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
 /// appended to the end of the list.
 pub struct OrderedListDataSet<K, O, V>
 {
-    pub data: OrderedMap<K, O, V> ,
+    pub data: OrderedMap<K, O, (DataSetAttributes, V)> ,
 }
 
 impl<K, O, V> OrderedListDataSet<K, O, V>
@@ -151,7 +155,7 @@ where
                 Ok(value) => {
                     
                     let (index, order) = indexer(&value);
-                    data.insert(index, order, value);
+                    data.insert(index, order, (DataSetAttributes { cached: true, }, value));
                 },
                 Err(e) => {
                     println!("ERROR: failed to read record {:?}", e);
@@ -167,7 +171,7 @@ where
         
         if (refresh) {
 
-            let last_record = if let Some((_k,r)) = data.last() {
+            let last_record = if let Some((_k, (a,r))) = data.last() {
                 Some(r)
             }
             else {
@@ -181,7 +185,7 @@ where
                     let (index, order) = indexer(&value);
                 if ! data.contains_key(&index) {
                     writeln!(file, "{}", serde_json::to_string(&value)?)?;
-                    data.insert(index, order, value);
+                    data.insert(index, order, (DataSetAttributes { cached: false, }, value));
                 }
             }
 
