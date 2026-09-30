@@ -18,6 +18,7 @@ use crate::util::as_decimal;
 use crate::{CacheManager, NONE, NULL};
 
 use super::graphql::{bill, meter};
+use sparko_graphql::GraphQLQueryBuilder;
 use super::meter::Tariff;
 use bill::get_statement_transactions::{Charge, TransactionType};
 use super::RequestManager;
@@ -876,140 +877,6 @@ impl BillTransactionBreakDown {
     }
 }
 
-// static BILL_INDEXER: Indexer<AbstractBill> = Box::new(|bill: &AbstractBill| bill.as_bill_interface().id_.clone());
-
-
-// #[derive(Debug)]
-pub struct BillList {
-    pub account_number: String,
-    pub start_cursor: Option<String>,
-    pub has_previous_page: bool,
-    pub bills: IndexMap<String, (String, AbstractBill)>,
-    hash_key: String,
-    // #[debug(skip)]
-    indexer: Indexer<AbstractBill>,
-}
-
-
-impl fmt::Debug for BillList {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BillList")
-            .field("account_number", &self.account_number)
-            .field("start_cursor", &self.start_cursor)
-            .field("has_previous_page", &self.has_previous_page)
-            .field("bills_count", &self.bills.len())
-            .field("hash_key", &self.hash_key)  
-            .finish()
-    }
-}
-
-impl BillList {
-
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
-        let mut has_previous_page = self.has_previous_page;
-
-        println!("fetch_all bills {} in buffer has_previous_page={}", self.bills.len(), has_previous_page);
-
-        while has_previous_page 
-        {
-            let mut builder = super::graphql::bill::get_bills::Query::builder()
-            .with_account_number(self.account_number.clone())
-            .with_last(20);
-
-            if let Some(start_cursor) = &self.start_cursor {
-                builder = builder.with_before(start_cursor.clone())
-            }
-
-            let query = builder.build()?;
-            // let query = super::graphql::bill::get_bills::Query::from(builder.build()?);
-            let result = request_manager.call(&query).await;
-
-            let response = match result {
-                Ok(response) => response,
-                Err(e) => {
-                    println!("Error fetching bills: {:#?}", e);
-                    return Err(e.into());
-                }
-            };
-
-            //println!("request for {} bills after {:#?} returned {} bills", 20, self.start_cursor, response.account_.bills_.edges.len());
-
-            if let Some(start_cursor) = response.account_.bills_.page_info.start_cursor {
-                self.start_cursor = Some(start_cursor.clone());
-                has_previous_page = response.account_.bills_.page_info.has_previous_page.clone();
-            }
-            else {
-                has_previous_page = false;
-            }
-            let indexer = &self.indexer;
-
-            for edge in response.account_.bills_.edges.into_iter().rev() {
-                let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                self.bills.insert(indexer(&edge.node), (sort_key, edge.node));
-            }
-        }
-        self.has_previous_page = has_previous_page;
-        Ok(())
-    }
-    
-   async fn fetch(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: &String, check_for_updates: bool) -> anyhow::Result<Self> {
-    let hash_key = format!("{}#Bills", account_number);
-
-    let account_number = account_number.clone();
-        let mut bills = IndexMap::new();
-
-        let indexer: Indexer<AbstractBill> = Box::new(|bill: &AbstractBill| bill.as_bill_interface().id_.clone());
-
-        cache_manager.read(&hash_key, &mut bills, &indexer)?;
-
-        let cached_cnt = bills.len();
-
-        let mut result = if bills.is_empty() {
-        
-            let query = super::graphql::bill::get_bills::Query::builder()
-                .with_account_number(account_number.clone())
-                .with_last(1)
-                .build()?;
-            let response = request_manager.call(&query).await?;
-
-            for edge in response.account_.bills_.edges {
-                let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                bills.insert(indexer(&edge.node), (sort_key, edge.node));
-            }
-
-            BillList {
-                account_number,
-                start_cursor: response.account_.bills_.page_info.start_cursor,
-                has_previous_page: response.account_.bills_.page_info.has_previous_page,
-                bills,
-                hash_key,
-                indexer,
-            }
-        }
-        else {
-            let (_key, (start_cursor, _)) = bills.get_index(bills.len() - 1).unwrap();
-            BillList {
-                account_number,
-                start_cursor: Some(start_cursor.clone()),
-                has_previous_page: true,
-                bills,
-                hash_key,
-                indexer,
-            }
-        };
-
-        if check_for_updates {
-            println!("Checking for bill updates, result = {:#?}", result);
-            result.fetch_all(request_manager).await?;
-        }
-
-        if result.bills.len() > cached_cnt {
-            cache_manager.write(&result.hash_key, &result.bills, cached_cnt)?;
-        }
-        
-        Ok(result)
-    }
-}
 
 
 pub struct BillDataSet {
@@ -1024,10 +891,44 @@ impl BillDataSet {
         request_manager: &Arc<RequestManager>,
     ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#Bills", account_number);
-        let query_provider = |opt_last_record: Option<&AbstractBill>| {
+
+
+        // let query_provider = |opt_last_record: Option<&AbstractBill>, opt_last_response: Option<&super::graphql::bill::get_bills::Response>| {
+        //     let mut builder = super::graphql::bill::get_bills::Query::builder()
+        //         .with_account_number(account_number.clone())
+        //         .with_last(2);
+
+        //     if let Some(response) = opt_last_response {
+        //         if response.account_.bills_.page_info.has_previous_page && let Some(start_cursor) = &response.account_.bills_.page_info.start_cursor {
+        //             Some(builder.with_before(start_cursor.clone()))
+        //         }
+        //         else {
+        //             None
+        //         }
+        //         // if let Some(start_cursor) = response.account_.bills_.page_info.start_cursor {
+        //         //     self.start_cursor = Some(start_cursor.clone());
+        //         //     has_previous_page = response.account_.bills_.page_info.has_previous_page.clone();
+        //         // }
+
+                
+        //     }
+        //     else if let Some(last_record) = opt_last_record {
+        //         // If we ever found ourselves in the position that there are two bills on the same issue date
+        //         // and we fetch one of them as the last item in a query we would never see the second one.
+        //         // By stepping back one day we usually read one bill we already have but we avoid that gap.
+        //         let start_date = last_record.as_bill_interface().issued_date_.clone(); //.previous_day();
+        //         Some(builder.with_issued_from_date(start_date))
+        //     }
+        //     else {
+        //         Some(builder)
+        //     }
+        // };
+
+
+        let initial_query_provider = |opt_last_record: Option<&AbstractBill>| {
             let mut builder = super::graphql::bill::get_bills::Query::builder()
                 .with_account_number(account_number.clone())
-                .with_last(2);
+                .with_last(20);
 
             if let Some(last_record) = opt_last_record {
                 // If we ever found ourselves in the position that there are two bills on the same issue date
@@ -1039,6 +940,40 @@ impl BillDataSet {
 
             builder.build()
         };
+
+
+        let continuation_query_provider = |last_response: &super::graphql::bill::get_bills::Response| {
+             if last_response.account_.bills_.page_info.has_previous_page && let Some(start_cursor) = &last_response.account_.bills_.page_info.start_cursor {
+                Some(
+                    super::graphql::bill::get_bills::Query::builder()
+                        .with_account_number(account_number.clone())
+                        .with_last(20)
+                        .with_before(start_cursor.clone())
+                        .build())
+            }
+            else {
+                None
+            }
+        };
+
+
+
+        
+        // let query_provider = |opt_last_record: Option<&AbstractBill>| {
+        //     let mut builder = super::graphql::bill::get_bills::Query::builder()
+        //         .with_account_number(account_number.clone())
+        //         .with_last(2);
+
+        //     if let Some(last_record) = opt_last_record {
+        //         // If we ever found ourselves in the position that there are two bills on the same issue date
+        //         // and we fetch one of them as the last item in a query we would never see the second one.
+        //         // By stepping back one day we usually read one bill we already have but we avoid that gap.
+        //         let start_date = last_record.as_bill_interface().issued_date_.clone(); //.previous_day();
+        //         builder = builder.with_issued_from_date(start_date);
+        //     }
+
+        //     builder
+        // };
         let indexer  = |bill: &AbstractBill| {
             let bill = bill.as_bill_interface();
             (bill.id_.clone(), bill.issued_date_.clone())
@@ -1050,7 +985,8 @@ impl BillDataSet {
         let data_set = OrderedListDataSet::new(
             &hash_key,
             refresh, 
-            query_provider,
+            initial_query_provider,
+            continuation_query_provider,
             response_iterator,
             indexer, config, request_manager).await?;
 

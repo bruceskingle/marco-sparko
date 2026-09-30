@@ -9,6 +9,7 @@ use dioxus::prelude::*;
 use indexmap::IndexMap;
 use sparko_graphql::types::{Date, DateRange, DateTime, EdgeOf, PageInfo};
 use sparko_graphql::AuthenticatedRequestManager;
+use sparko_graphql::GraphQLQueryBuilder;
 use tokio::time::sleep;
 
 use crate::{CacheManager, NULL};

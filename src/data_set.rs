@@ -3,7 +3,7 @@ use std::{fs::OpenOptions, io::{BufReader, Seek, SeekFrom, Write}, path::PathBuf
 use indexmap::IndexMap;
 use std::io::BufRead;
 use serde::{Serialize, de::DeserializeOwned};
-use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
+use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLQueryBuilder, GraphQLResponse};
 
 use crate::{CacheManager, octopus::token::OctopusTokenManager, OrderedMap};
 
@@ -115,10 +115,11 @@ where
     O: Ord + Clone,
     V: DeserializeOwned + Serialize
 {
-   pub async fn new<R, Q, QP, RI, IN, I>(
+   pub async fn new<R, Q, IQP, CQP, RI, IN, I>(
             hash_key: &str,
             refresh: bool,
-            query_provider: QP,
+            initial_query_provider: IQP,
+            continuation_query_provider: CQP,
             response_iterator: RI,
             indexer: IN,
             config: &Arc<CacheManager>,
@@ -127,12 +128,14 @@ where
         where
             R: GraphQLResponse,
             Q: GraphQLQuery<R>,
-            QP: FnOnce(Option<&V>) -> Result<Q, sparko_graphql::Error>,
-            RI: FnOnce(R) -> I,
+            IQP: FnOnce(Option<&V>) -> Result<Q, sparko_graphql::Error>,
+            CQP: Fn(&R) -> Option<Result<Q, sparko_graphql::Error>>,
+            RI: Fn(R) -> I,
             IN: Fn(&V) -> (K, O),
             I: IntoIterator<Item = V>,
     {
-        let mut data = OrderedMap::new();
+
+        let mut data: OrderedMap<K, O, (DataSetAttributes, V)> = OrderedMap::new();
         let mut refresh = refresh;
         let mut path = config.dir_path.clone();
         path.push(hash_key);
@@ -177,17 +180,44 @@ where
             else {
                 None
             };
-            let query = query_provider(last_record)?;
-            let response = request_manager.call(&query).await?;
+            let query = initial_query_provider(last_record)?;
+            let mut response = request_manager.call(&query).await?;
 
+            // Self::handle_records(response, response_iterator, indexer, &mut data, &mut file)?;
 
-            for value in response_iterator(response) {
+            // for value in response_iterator(response) {
+            //         let (index, order) = indexer(&value);
+            //     if ! data.contains_key(&index) {
+            //         writeln!(file, "{}", serde_json::to_string(&value)?)?;
+            //         data.insert(index, order, (DataSetAttributes { cached: false, }, value));
+            //     }
+            // }
+
+            loop {
+                let cq = continuation_query_provider(&response);
+
+                // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
+
+                for value in response_iterator(response) {
                     let (index, order) = indexer(&value);
-                if ! data.contains_key(&index) {
-                    writeln!(file, "{}", serde_json::to_string(&value)?)?;
-                    data.insert(index, order, (DataSetAttributes { cached: false, }, value));
+                    if ! data.contains_key(&index) {
+                        writeln!(file, "{}", serde_json::to_string(&value)?)?;
+                        data.insert(index, order, (DataSetAttributes { cached: false, }, value));
+                    }
+                }
+
+                if let Some(continuation_query) = cq {
+                    let query = continuation_query?;
+
+                    response = request_manager.call(&query).await?;
+
+                    
+                }
+                else {
+                    break;
                 }
             }
+            
 
         };
 
@@ -196,6 +226,33 @@ where
         })
         
     }
+
+
+
+
+    // fn handle_records<R, RI, IN, I>(
+    //     response: R,
+    //     response_iterator: RI,
+    //     indexer: IN,
+    //     data: &mut OrderedMap<K, O, (DataSetAttributes, V)>,
+    //     file: &mut std::fs::File
+    // )   -> anyhow::Result<()>
+    
+    //     where
+    //         R: GraphQLResponse,
+    //         RI: FnOnce(R) -> I,
+    //         IN: Fn(&V) -> (K, O),
+    //         I: IntoIterator<Item = V>,
+    // {
+    //     for value in response_iterator(response) {
+    //         let (index, order) = indexer(&value);
+    //         if ! data.contains_key(&index) {
+    //             writeln!(file, "{}", serde_json::to_string(&value)?)?;
+    //             data.insert(index, order, (DataSetAttributes { cached: false, }, value));
+    //         }
+    //     }
+    //     Ok(())
+    // }
 }
 
 
