@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use sparko_graphql::types::Date;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::sync::Arc;
 
 use indexmap::IndexMap;
@@ -265,10 +264,7 @@ mod total_charges_module {
     pub struct TotalCharges {
         gross: i32,
         gross_usage: i32,
-        gross_supply: i32,
         net: i32,
-        net_usage: i32,
-        net_supply: i32,
         units: Decimal,
         inputs: i32,
     }
@@ -278,10 +274,7 @@ mod total_charges_module {
             TotalCharges{
                 gross: 0,
                 gross_usage: 0,
-                gross_supply: 0,
                 net: 0,
-                net_usage: 0,
-                net_supply: 0,
                 units: Decimal::new(0, 0),
                 inputs: 0,
             }
@@ -295,20 +288,8 @@ mod total_charges_module {
             self.gross_usage
         }
 
-        pub fn gross_supply(&self) -> i32 {
-            self.gross_supply
-        }
-
         pub fn net(&self) -> i32 {
             self.net
-        }
-
-        pub fn net_usage(&self) -> i32 {
-            self.net_usage
-        }
-
-        pub fn net_supply(&self) -> i32 {
-            self.net_supply
         }
 
         pub fn units(&self) -> &Decimal {
@@ -325,21 +306,10 @@ mod total_charges_module {
             net_factor: f64) {
             
             self.gross += *&transaction.amounts_.gross_;
-            self.gross_supply = consumption.supply_charge_;
             self.gross_usage += consumption.usage_cost_;
 
             self.net += (*&transaction.amounts_.gross_ as f64 / net_factor) as i32;
-            self.net_supply = (consumption.supply_charge_ as f64 / net_factor) as i32;
-            self.net_usage += (consumption.usage_cost_ as f64 / net_factor) as i32;
 
-            self.units += consumption.quantity_;
-            self.inputs += 1;
-        }
-        
-        pub fn accumulate_summary(&mut self, 
-            transaction: &crate::octopus::graphql::bill::get_statement_transactions::AbstractTransactionType,
-            consumption: &crate::octopus::graphql::bill::get_statement_transactions::Consumption) {
-            self.gross_usage += *&transaction.amounts_.gross_;
             self.units += consumption.quantity_;
             self.inputs += 1;
         }
@@ -891,39 +861,6 @@ impl BillDataSet {
         request_manager: &Arc<RequestManager>,
     ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#Bills", account_number);
-
-
-        // let query_provider = |opt_last_record: Option<&AbstractBill>, opt_last_response: Option<&super::graphql::bill::get_bills::Response>| {
-        //     let mut builder = super::graphql::bill::get_bills::Query::builder()
-        //         .with_account_number(account_number.clone())
-        //         .with_last(2);
-
-        //     if let Some(response) = opt_last_response {
-        //         if response.account_.bills_.page_info.has_previous_page && let Some(start_cursor) = &response.account_.bills_.page_info.start_cursor {
-        //             Some(builder.with_before(start_cursor.clone()))
-        //         }
-        //         else {
-        //             None
-        //         }
-        //         // if let Some(start_cursor) = response.account_.bills_.page_info.start_cursor {
-        //         //     self.start_cursor = Some(start_cursor.clone());
-        //         //     has_previous_page = response.account_.bills_.page_info.has_previous_page.clone();
-        //         // }
-
-                
-        //     }
-        //     else if let Some(last_record) = opt_last_record {
-        //         // If we ever found ourselves in the position that there are two bills on the same issue date
-        //         // and we fetch one of them as the last item in a query we would never see the second one.
-        //         // By stepping back one day we usually read one bill we already have but we avoid that gap.
-        //         let start_date = last_record.as_bill_interface().issued_date_.clone(); //.previous_day();
-        //         Some(builder.with_issued_from_date(start_date))
-        //     }
-        //     else {
-        //         Some(builder)
-        //     }
-        // };
-
 
         let initial_query_provider = |opt_last_record: Option<&AbstractBill>| {
             let mut builder = super::graphql::bill::get_bills::Query::builder()

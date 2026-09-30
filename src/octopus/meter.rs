@@ -12,6 +12,7 @@ use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use tokio::time::sleep;
 
+use crate::octopus::property::PropertyDataSet;
 use crate::{CacheManager, NULL};
 
 use super::graphql::meter;
@@ -78,7 +79,7 @@ impl MeterManager {
 
     pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
         let properties = self.get_properties(account_number).await?;
-        for property in &properties.properties.account_.properties_ {
+        for property in &properties.data_set.data.account_.properties_ {
             for network in &property.smart_device_networks_ {
                 for device in &network.smart_devices_ {
                     if let super::graphql::DeviceType::Esme =  device.type_ {
@@ -122,14 +123,15 @@ impl MeterManager {
         Ok(())
     }
 
-    pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyList>{
+    pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyDataSet>{
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
         //     entry.insert(Arc::new(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?));
         // }
         
         // Ok(self.properties.get(account_number).unwrap().clone())
 
-        PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await
+        PropertyDataSet::new(account_number, &self.cache_manager, &self.request_manager).await
+        // PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await
     }
 
     pub async fn get_line_items(&self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
@@ -263,54 +265,6 @@ impl MeterManager {
         }
         
         get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_node_id, &start_date_time, &end_date_time, billing_timezone).await
-    }
-}
-
-pub struct PropertyList {
-    pub properties: meter::account_properties_meters::Response,
-    pub meter_node_ids: Vec<String>,
-}
-
-impl PropertyList {
-    
-   async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String) -> anyhow::Result<Self> {
-    let hash_key = format!("{}#Properties", account_number);
-
-        let opt_properties: Option<meter::account_properties_meters::Response> = cache_manager.read_one(&hash_key)?;
-
-        let properties = if let Some(properties) = opt_properties {
-            properties
-        }
-        else {
-            let query = meter::account_properties_meters::Query::builder()
-                .with_account_number(account_number.clone())
-                .build()?;
-            let properties = request_manager.call(&query).await?;
-
-            cache_manager.write_one(&hash_key, &properties)?;
-
-            properties
-        };
-
-        let mut meter_node_ids: Vec<String> = Vec::new();
-
-        for property in &properties.account_.properties_ {
-            for point in &property.electricity_meter_points_ {
-                for meter in &point.meters_ {
-                    meter_node_ids.push(meter.node_id_.clone());
-                }
-            }
-            for point in &property.gas_meter_points_ {
-                for meter in &point.meters_ {
-                    meter_node_ids.push(meter.node_id_.clone());
-                }
-            }
-        }
-
-        Ok(PropertyList {
-            properties,
-            meter_node_ids,
-        })
     }
 }
 

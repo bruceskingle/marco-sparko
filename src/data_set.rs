@@ -1,9 +1,8 @@
-use std::{fs::OpenOptions, io::{BufReader, Seek, SeekFrom, Write}, path::PathBuf, sync::Arc};
+use std::{fs::OpenOptions, io::{BufReader, Seek, SeekFrom, Write}, sync::Arc};
 
-use indexmap::IndexMap;
 use std::io::BufRead;
 use serde::{Serialize, de::DeserializeOwned};
-use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLQueryBuilder, GraphQLResponse};
+use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
 
 use crate::{CacheManager, octopus::token::OctopusTokenManager, OrderedMap};
 
@@ -66,7 +65,16 @@ pub struct SingleRecordDataSet<R: GraphQLResponse>
 
 impl<R: GraphQLResponse> SingleRecordDataSet<R>
 {
-    pub async fn new<Q: GraphQLQuery<R>, F: FnOnce() -> Q>(hash_key: &str, query_provider: F, config: &Arc<CacheManager>, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>) -> anyhow::Result<Self> {
+    pub async fn new<Q, QP>(
+        hash_key: &str,
+        query_provider: QP,
+        config: &Arc<CacheManager>,
+        request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+    ) -> anyhow::Result<Self>
+        where
+            Q: GraphQLQuery<R>,
+            QP: FnOnce() -> Result<Q, sparko_graphql::Error>,
+    {
         let mut path = config.dir_path.clone();
         path.push(hash_key);
 
@@ -84,7 +92,7 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
             Err(e) => {
                 println!("Failed to read DataSet from {}: {:?}", path.display(), e);
 
-                let data = request_manager.call(&query_provider()).await?;
+                let data = request_manager.call(&query_provider()?).await?;
 
                 let mut file = &file;
                 file.seek(SeekFrom::Start(0))?;
@@ -172,9 +180,9 @@ where
             }
         }
         
-        if (refresh) {
+        if refresh  {
 
-            let last_record = if let Some((_k, (a,r))) = data.last() {
+            let last_record = if let Some((_k, (_a,r))) = data.last() {
                 Some(r)
             }
             else {

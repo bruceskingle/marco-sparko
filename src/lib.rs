@@ -14,8 +14,6 @@ mod data_set;
 mod cache_manager;
 pub use cache_manager::CacheManager;
 
-
-use std::collections::BTreeMap;
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -33,11 +31,11 @@ pub const NULL: &'static str = "Null";
 const CACHE_DIRECTORY_NAME: &'static str = ".marco-sparko-cache";
 
 /*
- * It is important that the names of all args here do not contain hypens or underscores
+ * It is important that the names of all args here do not contain hyphens or underscores
  * as these are used to separate module args from main args.
  * 
- * For example, to pass an arg to the octopus module, use --octopus-<argname> and in the corresponding Arg struct in the octopus module
- * all field names must begin with octopus_ so octopus_argname in this example.
+ * For example, to pass an arg to the octopus module, use --octopus-<arg_name> and in the corresponding Arg struct in the octopus module
+ * all field names must begin with octopus_ so octopus_arg_name in this example.
  * 
  * Underscores in the names of fields on this struct are translated into hyphens on the command line automatically by clap.
  */

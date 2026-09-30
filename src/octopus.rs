@@ -3,6 +3,7 @@
 pub mod token;
 pub mod decimal;
 mod account;
+mod property;
 mod bill;
 mod meter;
 
