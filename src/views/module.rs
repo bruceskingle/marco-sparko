@@ -131,7 +131,7 @@ pub fn Module(module_id: String) -> Element {
                             div { class: "filler", {element} }
                         )?,
                         Err(error) => {
-                            let escaped_error = escape_html(&error.to_string());
+                            let escaped_error = escape_html(&format!("{:?}", &error));
 
                             let html = format!("<div class=\"error\">Failed to load page content: <pre>{}</pre></div>", escaped_error);
                             rsx! {

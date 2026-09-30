@@ -283,11 +283,14 @@ pub fn read_vec<T: DeserializeOwned>(&self, hash_key: &str, vec: &mut Vec<(Strin
             Ok(file) => {
                 let _guard = file.lock_shared()?;
                 let reader = BufReader::new(file);
-                Some(serde_json::from_reader(reader)?)
+                match serde_json::from_reader(reader) {
+                    Ok(result) => Some(result),
+                    Err(err) => return Err(anyhow!(format!("Failed to read file {}: {:?}", hash_key, err))),
+                }
             },
             Err(error) => {
                 if error.kind() != std::io::ErrorKind::NotFound {
-                    println!("ERROR {:?}", error);
+                    println!("ERROR reading file {}: {:?}", hash_key, error);
                     return Err(anyhow!(error))
                 }
                 None
