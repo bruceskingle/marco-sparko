@@ -38,17 +38,6 @@ impl CacheManager {
     }
 
 
-    ////////////////
-    /// 
-    /// 
-    
-    pub fn write_vec<T: Serialize>(&self, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> anyhow::Result<()> {
-        let mut path = self.dir_path.clone();
-        path.push(hash_key);
-
-        self.do_write_vec(path, vec, cached_cnt)
-    }
-
     pub fn write_vec_for_date<T: Serialize>(&self, date: &Date, hash_key: &str, vec: &Vec<(String, T)>, cached_cnt: usize) -> anyhow::Result<()> {
         let mut path = self.dir_path.clone();
 
@@ -260,41 +249,5 @@ pub fn read_vec<T: DeserializeOwned>(&self, hash_key: &str, vec: &mut Vec<(Strin
         }
 
         Ok(())
-    }
-
-
-    pub fn write_one<T: Serialize>(&self, hash_key: &str, value: &T) -> anyhow::Result<()> {
-        let mut path = self.dir_path.clone();
-        path.push(hash_key);
-
-        let mut out = fs::File::create(path)?;
-        let _guard = out.lock_exclusive()?;
-
-        writeln!(out, "{}", serde_json::to_string(&value)?)?;
-
-        Ok(())
-    }
-
-    pub fn read_one<T: DeserializeOwned>(&self, hash_key: &str) -> anyhow::Result<Option<T>> {
-        let mut path = self.dir_path.clone();
-        path.push(hash_key);
-
-        Ok(match File::open(path) {
-            Ok(file) => {
-                let _guard = file.lock_shared()?;
-                let reader = BufReader::new(file);
-                match serde_json::from_reader(reader) {
-                    Ok(result) => Some(result),
-                    Err(err) => return Err(anyhow!(format!("Failed to read file {}: {:?}", hash_key, err))),
-                }
-            },
-            Err(error) => {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    println!("ERROR reading file {}: {:?}", hash_key, error);
-                    return Err(anyhow!(error))
-                }
-                None
-            },
-        })
     }
 }

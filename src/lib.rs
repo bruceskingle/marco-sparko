@@ -12,7 +12,7 @@ pub mod private_file;
 
 mod data_set;
 mod cache_manager;
-pub use cache_manager::CacheManager;
+use cache_manager::CacheManager;
 
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use anyhow::anyhow;

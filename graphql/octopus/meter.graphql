@@ -57,6 +57,7 @@ query accountPropertiesMeters($accountNumber: String!) @ms_required_by_default {
 query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_default {
   node(id: $meterNodeId) {
     ... on ElectricityMeterType @ms_required_by_default {
+    	nodeId
       importMeter @ms_optional {
         meterPoint {
           mpan
@@ -156,6 +157,7 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
       }
     }
     ... on GasMeterType @ms_required_by_default {
+    	nodeId
       meterPoint {
         agreements(excludeFuture: false, validAfter: $validAfter) @ms_required_by_default {
           id

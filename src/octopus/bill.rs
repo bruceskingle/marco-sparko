@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use sparko_graphql::types::Date;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use indexmap::IndexMap;
 
@@ -10,7 +11,7 @@ use anyhow::anyhow;
 use sparko_graphql::AuthenticatedRequestManager;
 
 use crate::cache_manager::Indexer;
-use crate::data_set::{DataSetAttributes, OrderedListDataSet};
+use crate::data_set::{DataSetAttributes, ListDataSet, OrderedListDataSet};
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::bill::get_statement_transactions::{AbstractTransactionType, Consumption};
 use crate::util::as_decimal;
@@ -856,7 +857,6 @@ pub struct BillDataSet {
 impl BillDataSet {
     pub async fn new(
         account_number: &String,
-        refresh: bool,
         config: &Arc<CacheManager>,
         request_manager: &Arc<RequestManager>,
     ) -> anyhow::Result<Self> {
@@ -892,36 +892,18 @@ impl BillDataSet {
                 None
             }
         };
-
-
-
-        
-        // let query_provider = |opt_last_record: Option<&AbstractBill>| {
-        //     let mut builder = super::graphql::bill::get_bills::Query::builder()
-        //         .with_account_number(account_number.clone())
-        //         .with_last(2);
-
-        //     if let Some(last_record) = opt_last_record {
-        //         // If we ever found ourselves in the position that there are two bills on the same issue date
-        //         // and we fetch one of them as the last item in a query we would never see the second one.
-        //         // By stepping back one day we usually read one bill we already have but we avoid that gap.
-        //         let start_date = last_record.as_bill_interface().issued_date_.clone(); //.previous_day();
-        //         builder = builder.with_issued_from_date(start_date);
-        //     }
-
-        //     builder
-        // };
         let indexer  = |bill: &AbstractBill| {
             let bill = bill.as_bill_interface();
             (bill.id_.clone(), bill.issued_date_.clone())
         };
         let response_iterator = |response: super::graphql::bill::get_bills::Response| {
-            response.account_.bills_.edges.into_iter().map(|edge| edge.node)
+            let it = response.account_.bills_.edges.into_iter().map(|edge| edge.node);
+            it
         };
 
         let data_set = OrderedListDataSet::new(
             &hash_key,
-            refresh, 
+            Duration::from_hours(24), 
             initial_query_provider,
             continuation_query_provider,
             response_iterator,
@@ -931,123 +913,73 @@ impl BillDataSet {
     }
 }
 
-pub struct BillTransactionList {
-    pub account_number: String,
-    pub statement_id: String,
-    pub start_cursor: Option<String>,
-    pub has_previous_page: bool,
-    pub transactions: IndexMap<String, (String, TransactionType)>,
-    hash_key: String,
-    indexer: Indexer<TransactionType>,
+
+pub struct StatementTransactionDataSet {
+    pub data_set: ListDataSet<String, TransactionType>,
 }
 
-impl BillTransactionList {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, statement_id: String) -> anyhow::Result<Self> {
+
+impl StatementTransactionDataSet {
+    pub async fn new(
+        account_number: String,
+        statement_id: String,
+        config: &Arc<CacheManager>,
+        request_manager: &Arc<RequestManager>,
+    ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
-            let indexer: Indexer<TransactionType> = Box::new(|txn: &TransactionType| txn.as_transaction_type().id_.clone());
-            let mut transactions = IndexMap::new();
-    
-            cache_manager.read(&hash_key, &mut transactions, &indexer)?;
-    
-            let cached_cnt = transactions.len();
-    
-            let result = if transactions.is_empty() {
-                
-                let query = super::graphql::bill::get_statement_transactions::Query::builder()
+
+        let initial_query_provider = || {
+            super::graphql::bill::get_statement_transactions::Query::builder()
                         .with_account_number(account_number.clone())
                         .with_statement_id(statement_id.clone())
-                        .with_transactions_last(1)
-                        .build()?;
-                let response = request_manager.call(&query).await?;
-                let bill = response.account_.bill_;
+                        .with_transactions_last(20)
+                        .build()
+        };
 
-                if let bill::get_statement_transactions::BillInterface::StatementType(statement) = bill {
 
-                    for edge in statement.transactions_.edges {
-                        let key = indexer(&edge.node);
-                        let sort_key = edge.cursor; //format!("{}#{}", &edge.node.as_bill_interface().issued_date_, &edge.cursor);
-                        transactions.insert(key, (sort_key, edge.node));
-                    }
-        
-                    let mut result = BillTransactionList {
-                        account_number,
-                        statement_id,
-                        start_cursor: statement.transactions_.page_info.start_cursor,
-                        has_previous_page: statement.transactions_.page_info.has_previous_page,
-                        transactions,
-                        hash_key,
-                        indexer,
-                    };
-
-                    result.fetch_all(request_manager).await?;
-
-                    result
+        let continuation_query_provider = |last_response: &super::graphql::bill::get_statement_transactions::Response| {
+            if let bill::get_statement_transactions::BillInterface::StatementType(statement) = &last_response.account_.bill_ {
+                if statement.transactions_.page_info.has_previous_page && let Some(start_cursor) = &statement.transactions_.page_info.start_cursor {
+                    Some(
+                        super::graphql::bill::get_statement_transactions::Query::builder()
+                            .with_account_number(account_number.clone())
+                            .with_statement_id(statement_id.clone())
+                            .with_transactions_last(20)
+                            .with_transactions_before(start_cursor.clone())
+                            .build())
                 }
                 else {
-                    return Err(anyhow!(format!("Bill {} is not a statement", statement_id)))
+                    None
                 }
             }
             else {
-                let (_key, (start_cursor, _)) = transactions.get_index(transactions.len() - 1).unwrap();
-                BillTransactionList {
-                    account_number,
-                    statement_id,
-                    start_cursor: Some(start_cursor.clone()),
-                    has_previous_page: true,
-                    transactions,
-                    hash_key,
-                    indexer,
-                }
-            };
-    
-            // don't think this will ever be necessary but could be gated on check_for_updates
-            // result.fetch_all(request_manager).await?;
-    
-            if result.transactions.len() > cached_cnt {
-                cache_manager.write(&result.hash_key, &result.transactions, cached_cnt)?;
+                None
             }
-            
-            Ok(result)
-        }
+        };
+        let indexer  = |transaction: &TransactionType| {
+            transaction.as_transaction_type().id_.clone()
+        };
 
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager)  -> anyhow::Result<()> {
-        let mut has_previous_page = self.has_previous_page;
-
-        //println!("fetch_all statement transactions {} in buffer", self.transactions.len());
-
-        
-
-        while has_previous_page {
-            let mut builder = super::graphql::bill::get_statement_transactions::Query::builder()
-                .with_account_number(self.account_number.clone())
-                .with_statement_id(self.statement_id.clone())
-                .with_transactions_first(100);
-
-            if let Some(end_cursor) = &self.start_cursor {
-                builder = builder.with_transactions_before(end_cursor.clone());
+        let response_iterator = |response: super::graphql::bill::get_statement_transactions::Response| {
+            if let bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
+                let it = statement.transactions_.edges.into_iter().map(|edge| edge.node);
+                it
             }
-            let query = //super::graphql::bill::get_statement_transactions::Query::from(
-                builder.build()?;
-            let response = request_manager.call(&query).await?;
-
-            
-            if let super::graphql::bill::get_statement_transactions::BillInterface::StatementType(statement) = response.account_.bill_ {
-                //println!("request for {} statement transactions after {:#?} returned {} statement transactions", 100, self.start_cursor, statement.transactions_.len());
-
-                self.start_cursor = statement.transactions_.page_info.start_cursor.clone();
-                has_previous_page = statement.transactions_.page_info.has_previous_page.clone();
-
-                for edge in statement.transactions_.edges.into_iter().rev() {
-                    let sort_key = edge.cursor;
-                    let key = (self.indexer)(&edge.node);
-                    self.transactions.insert(key, (sort_key, edge.node));
-                }
-                
-                //println!("has_previous_page = {:#?}", has_previous_page);
+            else {
+                panic!("Bill {} is not a statement", statement_id)
             }
-        }
-        self.has_previous_page = has_previous_page;
-        Ok(())
+            // response.account_.bills_.edges.into_iter().map(|edge| edge.node)
+        };
+
+        let data_set = ListDataSet::new(
+            &hash_key,
+            None, 
+            initial_query_provider,
+            continuation_query_provider,
+            response_iterator,
+            indexer, config, request_manager).await?;
+
+        Ok(Self { data_set })
     }
 }
 

@@ -1,7 +1,9 @@
-use std::{fs::OpenOptions, io::{BufReader, Seek, SeekFrom, Write}, sync::Arc};
+use std::{fs::{FileTimes, OpenOptions}, io::{BufReader, Seek, SeekFrom, Write}, sync::Arc, time::{Duration, SystemTime}};
 
 use std::io::BufRead;
+use indexmap::IndexMap;
 use serde::{Serialize, de::DeserializeOwned};
+use anyhow::anyhow;
 use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
 
 use crate::{CacheManager, octopus::token::OctopusTokenManager, OrderedMap};
@@ -66,11 +68,12 @@ pub struct SingleRecordDataSet<R: GraphQLResponse>
 impl<R: GraphQLResponse> SingleRecordDataSet<R>
 {
     pub async fn new<Q, QP>(
-        hash_key: &str,
-        query_provider: QP,
-        config: &Arc<CacheManager>,
-        request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
-    ) -> anyhow::Result<Self>
+            hash_key: &str,
+            refresh_after: Duration,
+            query_provider: QP,
+            config: &Arc<CacheManager>,
+            request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+        ) -> anyhow::Result<Self>
         where
             Q: GraphQLQuery<R>,
             QP: FnOnce() -> Result<Q, sparko_graphql::Error>,
@@ -84,27 +87,43 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
             .create(true)
             .open(&path)?;
         let _guard = file.lock()?;
-        let reader = BufReader::new(&file);
-        let data = match serde_json::from_reader(reader) {
-            Ok(data) => {
-                data
-            },
-            Err(e) => {
-                println!("Failed to read DataSet from {}: {:?}", path.display(), e);
+        let modified = file.metadata()?.modified()?;
+        let mut refresh =  SystemTime::now()
+            .duration_since(modified)
+            .map(|age| age > refresh_after)
+            .unwrap_or(false); // If the file is modified in the future, do not refresh it.
 
-                let data = request_manager.call(&query_provider()?).await?;
+        let mut data: Option<R> = None; // data is always initialized but the compiler can't see it so I need to use an Option.
 
-                let mut file = &file;
-                file.seek(SeekFrom::Start(0))?;
-                file.set_len(0)?;
-                writeln!(file, "{}", serde_json::to_string(&data)?)?;
+        // Need to test refresh twice because a read error sets it to true.
+        if !refresh {
 
-                data
-            },
-        };
+            let reader = BufReader::new(&file);
+            match serde_json::from_reader(reader) {
+                Ok(value) => {
+                    data = Some(value);
+                },
+                Err(e) => {
+                    println!("Failed to read DataSet from {}: {:?}", path.display(), e);
+                    refresh = true;
+                },
+            }
+        }
+
+        if refresh {
+
+            let value = request_manager.call(&query_provider()?).await?;
+
+            let mut file = &file;
+            file.seek(SeekFrom::Start(0))?;
+            file.set_len(0)?;
+            writeln!(file, "{}", serde_json::to_string(&value)?)?;
+
+            data = Some(value);
+        }
 
         Ok(Self {
-            data
+            data: data.unwrap()
         })
         
     }
@@ -125,7 +144,7 @@ where
 {
    pub async fn new<R, Q, IQP, CQP, RI, IN, I>(
             hash_key: &str,
-            refresh: bool,
+            refresh_after: Duration,
             initial_query_provider: IQP,
             continuation_query_provider: CQP,
             response_iterator: RI,
@@ -144,7 +163,6 @@ where
     {
 
         let mut data: OrderedMap<K, O, (DataSetAttributes, V)> = OrderedMap::new();
-        let mut refresh = refresh;
         let mut path = config.dir_path.clone();
         path.push(hash_key);
 
@@ -154,6 +172,11 @@ where
             .create(true)
             .open(&path)?;
         let _guard = file.lock()?;
+        let modified = file.metadata()?.modified()?;
+        let mut refresh =  SystemTime::now()
+            .duration_since(modified)
+            .map(|age| age > refresh_after)
+            .unwrap_or(false); // If the file is modified in the future, do not refresh it.
 
         let lines = BufReader::new(&file).lines();
         for line in lines.map_while(Result::ok) {
@@ -181,6 +204,7 @@ where
         }
         
         if refresh  {
+            file.set_times(FileTimes::new().set_modified(SystemTime::now()))?;
 
             let last_record = if let Some((_k, (_a,r))) = data.last() {
                 Some(r)
@@ -231,6 +255,302 @@ where
 
         Ok(Self {
             data
+        })
+        
+    }
+}
+
+
+
+
+/// A DataSet which is a list of records where the records returned paginated from the API
+pub struct ListDataSet<K, V>
+{
+    pub data: IndexMap<K, V> ,
+    pub attributes: DataSetAttributes,
+}
+
+impl<K, V> ListDataSet<K, V>
+where
+    K: Eq + std::hash::Hash + Ord + Clone + Send + Sync,
+    V: DeserializeOwned + Serialize
+{
+   pub async fn new<R, Q, IQP, CQP, RI, IN, I>(
+            hash_key: &str,
+            refresh_after: Option<Duration>,
+            initial_query_provider: IQP,
+            continuation_query_provider: CQP,
+            response_iterator: RI,
+            indexer: IN,
+            config: &Arc<CacheManager>,
+            request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+        ) -> anyhow::Result<Self>
+        where
+            R: GraphQLResponse,
+            Q: GraphQLQuery<R>,
+            IQP: FnOnce() -> Result<Q, sparko_graphql::Error>,
+            CQP: Fn(&R) -> Option<Result<Q, sparko_graphql::Error>>,
+            RI: Fn(R) -> I,
+            IN: Fn(&V) -> K,
+            I: IntoIterator<Item = V>,
+    {
+
+        let mut attributes = DataSetAttributes { cached: true, };
+        let mut data: IndexMap<K, V> = IndexMap::new();
+        let mut path = config.dir_path.clone();
+        path.push(hash_key);
+
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)?;
+        let _guard = file.lock()?;
+        let modified = file.metadata()?.modified()?;
+        let mut refresh =  if let Some(refresh_after) = refresh_after {
+            SystemTime::now()
+                .duration_since(modified)
+                .map(|age| age > refresh_after)
+                .unwrap_or(false) // If the file is modified in the future, do not refresh it.
+        } else {
+            false
+        };
+
+        if !refresh {
+            let lines = BufReader::new(&file).lines();
+            for line in lines.map_while(Result::ok) {
+                if config.verbose 
+                {
+                    println!("READ {}", line);
+                }
+
+                match serde_json::from_str(&line) {
+                    Ok(value) => {
+                        
+                        let index = indexer(&value);
+                        data.insert(index, value);
+                    },
+                    Err(e) => {
+                        println!("ERROR: failed to read record {:?}", e);
+                        refresh = true;
+
+                        file.seek(SeekFrom::Start(0))?;
+                        file.set_len(0)?;
+                        data.clear();
+                        break;
+                    },
+                }
+            }
+        }
+        
+        if refresh  {
+            let query = initial_query_provider()?;
+            let mut response = request_manager.call(&query).await?;
+
+            attributes.cached = false;
+
+            loop {
+                let cq = continuation_query_provider(&response);
+
+                for value in response_iterator(response) {
+                    let index = indexer(&value);
+                    if ! data.contains_key(&index) {
+                        writeln!(file, "{}", serde_json::to_string(&value)?)?;
+                        data.insert(index, value);
+                    }
+                }
+
+                if let Some(continuation_query) = cq {
+                    let query = continuation_query?;
+
+                    response = request_manager.call(&query).await?;
+                }
+                else {
+                    break;
+                }
+            }
+            
+
+        };
+
+        Ok(Self {
+            data,
+            attributes,
+        })
+        
+    }
+}
+
+// /// A DataSet which is a list of records where the records are returned from the API in a single call
+// pub struct SimpleListDataSet<V>
+// {
+//     pub data: Vec<V>,
+//     pub attributes: DataSetAttributes,
+// }
+
+// impl<V> SimpleListDataSet<V>
+// where
+//     V: DeserializeOwned + Serialize
+// {
+//    pub async fn new<R, Q, IQP, RI, IN, I>(
+//             hash_key: &str,
+//             refresh: bool,
+//             initial_query_provider: IQP,
+//             response_iterator: RI,
+//             config: &Arc<CacheManager>,
+//             request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+//         ) -> anyhow::Result<Self>
+//         where
+//             R: GraphQLResponse,
+//             Q: GraphQLQuery<R>,
+//             IQP: FnOnce() -> Result<Q, sparko_graphql::Error>,
+//             RI: Fn(R) -> I,
+//             I: IntoIterator<Item = V>,
+//     {
+
+//         let mut data: Vec<V> = Vec::new();
+//         let mut refresh = refresh;
+//         let mut path = config.dir_path.clone();
+//         path.push(hash_key);
+
+//         let mut attributes = DataSetAttributes { cached: true, };
+//         let mut file = OpenOptions::new()
+//             .read(true)
+//             .write(true)
+//             .create(true)
+//             .open(&path)?;
+//         let _guard = file.lock()?;
+
+//         let lines = BufReader::new(&file).lines();
+//         for line in lines.map_while(Result::ok) {
+//             if config.verbose 
+//             {
+//                 println!("READ {}", line);
+//             }
+
+//             match serde_json::from_str(&line) {
+//                 Ok(value) => {
+//                     data.push(value);
+//                 },
+//                 Err(e) => {
+//                     println!("ERROR: failed to read record {:?}", e);
+//                     refresh = true;
+
+//                     file.seek(SeekFrom::Start(0))?;
+//                     file.set_len(0)?;
+//                     data.clear();
+//                     break;
+//                 },
+//             }
+//         }
+        
+//         if refresh  {
+
+//             attributes.cached = false;
+//             let query = initial_query_provider()?;
+//             let mut response = request_manager.call(&query).await?;
+
+//                 for value in response_iterator(response) {
+//                     writeln!(file, "{}", serde_json::to_string(&value)?)?;
+//                     data.push(value);
+//                 }
+            
+
+//         };
+
+//         Ok(Self {
+//             data,
+//             attributes,
+//         })
+        
+//     }
+
+/// A DataSet which is a list of records where each record is returned from the API in a single call
+pub struct MultiQueryDataSet<R>
+{
+    pub data: Vec<R>,
+    pub attributes: DataSetAttributes,
+}
+
+impl<R> MultiQueryDataSet<R>
+where
+    R: GraphQLResponse,
+{
+   pub async fn new<Q, QI>(
+            hash_key: &str,
+            refresh_after: Duration,
+            query_iterator: QI,
+            config: &Arc<CacheManager>,
+            request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+        ) -> anyhow::Result<Self>
+        where
+            Q: GraphQLQuery<R>,
+            QI: IntoIterator<Item = Result<Q, sparko_graphql::Error>>,
+    {
+
+        let mut data: Vec<R> = Vec::new();
+        let mut path = config.dir_path.clone();
+        path.push(hash_key);
+
+        let mut attributes = DataSetAttributes { cached: true, };
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)?;
+        let _guard = file.lock()?;
+        let modified = file.metadata()?.modified()?;
+        let mut refresh =  SystemTime::now()
+            .duration_since(modified)
+            .map(|age| age > refresh_after)
+            .unwrap_or(false); // If the file is modified in the future, do not refresh it.
+
+        // Need to test refresh twice because a read error sets it to true.
+        if !refresh {
+            
+            let lines = BufReader::new(&file).lines();
+            for line in lines.map_while(Result::ok) {
+                if config.verbose 
+                {
+                    println!("READ {}", line);
+                }
+
+                match serde_json::from_str(&line) {
+                    Ok(value) => {
+                        data.push(value);
+                    },
+                    Err(e) => {
+                        println!("ERROR: failed to read record {:?}", e);
+                        refresh = true;
+                        break;
+                    },
+                }
+            }
+        }
+        
+        if refresh  {
+            file.seek(SeekFrom::Start(0))?;
+            file.set_len(0)?;
+            data.clear();
+            attributes.cached = false;
+
+            for query_result in query_iterator {
+                match query_result {
+                    Ok(query) => {
+                        let mut response = request_manager.call(&query).await?;
+                        writeln!(file, "{}", serde_json::to_string(&response)?)?;
+                        data.push(response);
+                    },
+                    Err(err) => {
+                        return Err(anyhow!(format!("Failed to get query {}", err)));
+                    },
+                }
+            }
+        }
+
+        Ok(Self {
+            data,
+            attributes,
         })
         
     }

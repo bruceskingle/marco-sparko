@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
-use crate::octopus::bill::{BillDataSet, BillTransactionBreakDown, BillTransactionList};
+use crate::octopus::bill::{BillDataSet, BillTransactionBreakDown, StatementTransactionDataSet};
 // use anyhow::anyhow;
 use crate::octopus::meter::MeterType;
 use crate::CacheManager;
@@ -57,7 +57,7 @@ impl BillManager {
                 .or_insert(
                     Arc::new(
                         // BillList::fetch(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?
-                        BillDataSet::new(&account_number, crate::CHECK_FOR_UPDATES, &self.cache_manager, &self.request_manager).await?
+                        BillDataSet::new(&account_number, &self.cache_manager, &self.request_manager).await?
                     )
                 )
             ).clone())
@@ -67,10 +67,10 @@ impl BillManager {
 
 
         let mut result = Vec::new();
-        let transactions = BillTransactionList::new(&self.cache_manager, &self.request_manager, account_number.clone(), statement_id).await?;
+        let transactions = StatementTransactionDataSet::new(account_number.clone(), statement_id, &self.cache_manager, &self.request_manager).await?;
 
 
-        for (_key, (_cursor, transaction)) in transactions.transactions {
+        for (_key, transaction) in transactions.data_set.data {
             if let TransactionType::Charge(charge_ref) = &transaction && charge_ref.consumption_.is_some() {
                         // print the line items making up this charge
                         //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);

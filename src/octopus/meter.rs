@@ -12,6 +12,7 @@ use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use tokio::time::sleep;
 
+use crate::data_set::MultiQueryDataSet;
 use crate::octopus::property::PropertyDataSet;
 use crate::{CacheManager, NULL};
 
@@ -141,7 +142,8 @@ impl MeterManager {
         // }
         
         // let properties = self.properties.get(account_number).unwrap();
-        let meter_agreements = MeterAgreementList::new(&self.cache_manager, &self.request_manager, account_number.clone(), &properties.meter_node_ids).await?;
+        let meter_agreements = //MeterAgreementList::new(&self.cache_manager, &self.request_manager, account_number.clone(), &properties.meter_node_ids).await?;
+            MeterAgreementDataSet::new(&self.cache_manager, &self.request_manager, &account_number, &properties.meter_node_ids).await?;
 
         // println!("Meter Agreements");
         // for (cursor, agreement_vec) in &meter_agreements.electricity_map {
@@ -515,66 +517,61 @@ impl Tariff {
     }
 }
 
-pub struct MeterAgreementList {
-    pub _account_number: String,
+pub struct MeterAgreementDataSet {
     pub import_electricity_map: HashMap<String, Vec<meter::meter_agreements::ElectricityAgreementType>>,
     pub export_electricity_map: HashMap<String, Vec<meter::meter_agreements::ElectricityAgreementType>>,
     pub gas_map: HashMap<String, Vec<meter::meter_agreements::GasAgreementType>>,
-    _hash_key: String,
 }
 
-impl MeterAgreementList {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
+impl MeterAgreementDataSet {
+    pub async fn new(config: &Arc<CacheManager>, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: &str, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
         let hash_key = format!("{}#MeterAgreements", account_number);
-            let the_beginning: DateTime = DateTime::from_calendar_date(2000, time::Month::January, 1)?;
-            let mut agreements = Vec::new();
-    
-            cache_manager.read_vec(&hash_key, &mut agreements)?;
-    
-            let cached_cnt = agreements.len();
-    
-            if agreements.is_empty() {
-                for meter_node_id in meter_node_ids {
-                    let query = meter::meter_agreements::Query::builder()
-                            .with_meter_node_id(meter_node_id.clone())
-                            .with_valid_after(the_beginning.clone())
-                            .build()?;
-                    let response = request_manager.call(&query).await?;
+        let the_beginning: DateTime = DateTime::from_calendar_date(2000, time::Month::January, 1)?;
+        let mut queries = Vec::new();
 
-                    agreements.push((meter_node_id.clone(), response));
-                }
-                cache_manager.write_vec(&hash_key, &agreements, cached_cnt)?;
-            }
+        for meter_node_id in meter_node_ids {
+            let query = meter::meter_agreements::Query::builder()
+                .with_meter_node_id(meter_node_id.clone())
+                .with_valid_after(the_beginning.clone())
+                .build();
 
-            let mut export_electricity_map = HashMap::new();
-            let mut import_electricity_map = HashMap::new();
-            let mut gas_map = HashMap::new();
-
-            for (meter_node_id, response) in agreements {
-                match response.node_ {
-                    meter::meter_agreements::Node::ElectricityMeterType(electricity_meter_type) => {
-                        if electricity_meter_type.import_meter_.is_some() {
-                            export_electricity_map.insert(meter_node_id, electricity_meter_type.meter_point_.agreements_);
-                        }
-                        else {
-                            import_electricity_map.insert(meter_node_id, electricity_meter_type.meter_point_.agreements_);
-                        }
-                    },
-                    meter::meter_agreements::Node::GasMeterType(gas_meter_type) => {
-                        gas_map.insert(meter_node_id, gas_meter_type.meter_point_.agreements_);
-                    },
-                    _ => unreachable!()
-                }
-            }
-            
-            Ok(MeterAgreementList {
-                _account_number: account_number,
-                export_electricity_map,
-                import_electricity_map,
-                gas_map,
-                _hash_key: hash_key,
-            })
+            queries.push(query);
         }
+        let data = MultiQueryDataSet::new(
+            &hash_key,
+            Duration::from_hours(24),
+            queries,
+            config,
+            request_manager).await?;
+        
+
+        let mut export_electricity_map = HashMap::new();
+        let mut import_electricity_map = HashMap::new();
+        let mut gas_map = HashMap::new();
+
+        for response in data.data {
+            match response.node_ {
+                meter::meter_agreements::Node::ElectricityMeterType(electricity_meter_type) => {
+                    if electricity_meter_type.import_meter_.is_some() {
+                        export_electricity_map.insert(electricity_meter_type.node_id_, electricity_meter_type.meter_point_.agreements_);
+                    }
+                    else {
+                        import_electricity_map.insert(electricity_meter_type.node_id_, electricity_meter_type.meter_point_.agreements_);
+                    }
+                },
+                meter::meter_agreements::Node::GasMeterType(gas_meter_type) => {
+                    gas_map.insert(gas_meter_type.node_id_, gas_meter_type.meter_point_.agreements_);
+                },
+                _ => unreachable!()
+            }
+        }
+        
+        Ok(Self {
+            export_electricity_map,
+            import_electricity_map,
+            gas_map,
+        })
+    }
 
     fn get_in_scope(self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<(String, Tariff)> {
         let mut in_scope_agreements = Vec::new();
@@ -616,8 +613,111 @@ impl MeterAgreementList {
 
         in_scope_agreements
     }
-    
 }
+
+// pub struct MeterAgreementList {
+//     pub _account_number: String,
+//     pub import_electricity_map: HashMap<String, Vec<meter::meter_agreements::ElectricityAgreementType>>,
+//     pub export_electricity_map: HashMap<String, Vec<meter::meter_agreements::ElectricityAgreementType>>,
+//     pub gas_map: HashMap<String, Vec<meter::meter_agreements::GasAgreementType>>,
+//     _hash_key: String,
+// }
+
+// impl MeterAgreementList {
+//     async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
+//         let hash_key = format!("{}#MeterAgreements", account_number);
+//             let the_beginning: DateTime = DateTime::from_calendar_date(2000, time::Month::January, 1)?;
+//             let mut agreements = Vec::new();
+    
+//             cache_manager.read_vec(&hash_key, &mut agreements)?;
+    
+//             let cached_cnt = agreements.len();
+    
+//             if agreements.is_empty() {
+//                 for meter_node_id in meter_node_ids {
+//                     let query = meter::meter_agreements::Query::builder()
+//                             .with_meter_node_id(meter_node_id.clone())
+//                             .with_valid_after(the_beginning.clone())
+//                             .build()?;
+//                     let response = request_manager.call(&query).await?;
+
+//                     agreements.push((meter_node_id.clone(), response));
+//                 }
+//                 cache_manager.write_vec(&hash_key, &agreements, cached_cnt)?;
+//             }
+
+//             let mut export_electricity_map = HashMap::new();
+//             let mut import_electricity_map = HashMap::new();
+//             let mut gas_map = HashMap::new();
+
+//             for (meter_node_id, response) in agreements {
+//                 match response.node_ {
+//                     meter::meter_agreements::Node::ElectricityMeterType(electricity_meter_type) => {
+//                         if electricity_meter_type.import_meter_.is_some() {
+//                             export_electricity_map.insert(meter_node_id, electricity_meter_type.meter_point_.agreements_);
+//                         }
+//                         else {
+//                             import_electricity_map.insert(meter_node_id, electricity_meter_type.meter_point_.agreements_);
+//                         }
+//                     },
+//                     meter::meter_agreements::Node::GasMeterType(gas_meter_type) => {
+//                         gas_map.insert(meter_node_id, gas_meter_type.meter_point_.agreements_);
+//                     },
+//                     _ => unreachable!()
+//                 }
+//             }
+            
+//             Ok(MeterAgreementList {
+//                 _account_number: account_number,
+//                 export_electricity_map,
+//                 import_electricity_map,
+//                 gas_map,
+//                 _hash_key: hash_key,
+//             })
+//         }
+
+//     fn get_in_scope(self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<(String, Tariff)> {
+//         let mut in_scope_agreements = Vec::new();
+
+//         match meter_type {
+//             MeterType::Gas => {
+//                 for (_meter_node_id, agreement_vec) in self.gas_map {
+//                     for agreement in agreement_vec {
+//                         if &agreement.valid_from_ <= end_date {
+//                             if let Some(valid_to) = &agreement.valid_to_ {
+//                                 if valid_to >= start_date {
+//                                     in_scope_agreements.push((agreement.id_.to_string(), Tariff::Gas(agreement.tariff_)));
+//                                 }
+//                             }
+//                             else {
+//                                 in_scope_agreements.push((agreement.id_.to_string(), Tariff::Gas(agreement.tariff_)));
+//                             }
+//                         }
+//                     }
+//                 }
+//             },
+//             MeterType::Electricity => {
+//                 for (_meter_node_id, agreement_vec) in if is_export {self.export_electricity_map} else {self.import_electricity_map} {
+//                     for agreement in agreement_vec {
+//                         if &agreement.valid_from_ <= end_date {
+//                             if let Some(valid_to) = &agreement.valid_to_ {
+//                                 if valid_to >= start_date {
+//                                     in_scope_agreements.push((agreement.id_.to_string(), Tariff::Electricity(agreement.tariff_)));
+//                                 }
+//                             }
+//                             else {
+//                                 in_scope_agreements.push((agreement.id_.to_string(), Tariff::Electricity(agreement.tariff_)));
+//                             }
+//                         }
+//                     }
+//                 }
+//             },
+//         }
+
+//         in_scope_agreements
+//     }
+    
+// }
 
 impl meter::electricity_agreement_line_items::AgreementInterface {
     pub fn get_line_items(self) -> Vec<EdgeOf<meter::electricity_agreement_line_items::LineItemType>> {

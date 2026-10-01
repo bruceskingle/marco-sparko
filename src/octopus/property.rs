@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::CacheManager;
 use crate::data_set::{SingleRecordDataSet};
@@ -20,7 +21,13 @@ impl PropertyDataSet {
                 .with_account_number(account_number.clone())
                 .build()
         };
-        let data_set = SingleRecordDataSet::new(&hash_key, query_provider, config, request_manager).await?;
+        let data_set = SingleRecordDataSet::new(
+            &hash_key,
+            Duration::from_hours(20 * 24), // 30 days
+            query_provider,
+            config,
+            request_manager
+        ).await?;
 
         let mut meter_node_ids: Vec<String> = Vec::new();
 
