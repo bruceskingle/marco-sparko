@@ -17,6 +17,10 @@ impl<K,O,V> OrderedMap<K,O,V> {
         self.values.clear();
         self.order.clear();
     }
+    
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
 }
 
 impl<K: Eq + std::hash::Hash + Ord + Clone, O: Ord + Clone, V> OrderedMap<K, O, V> {

@@ -13,6 +13,7 @@ use sparko_graphql::AuthenticatedRequestManager;
 use crate::cache_manager::Indexer;
 use crate::data_set::{DataSetAttributes, ListDataSet, OrderedListDataSet};
 use crate::octopus::decimal::Decimal;
+use crate::octopus::graphql::AccountStatementStatus;
 use crate::octopus::graphql::bill::get_statement_transactions::{AbstractTransactionType, Consumption};
 use crate::util::as_decimal;
 use crate::{CacheManager, NONE, NULL};
@@ -135,9 +136,14 @@ impl AbstractBill {
         };
 
         let id = abstract_bill.id_.clone();
+        let issued_date = if let Some(date) = &abstract_bill.issued_date_ {
+            date.to_string()
+        } else {
+            "N/A".to_string()
+        };
         rsx!{
             tr { class: row_class,
-                td { "{abstract_bill.issued_date_}" }
+                td { "{issued_date}" }
                 td {
                     div {
                         class: "link",
@@ -204,13 +210,19 @@ impl AbstractBill {
         } else {
             rsx!{}
         };
-            
+        
+
+        let issued_date = if let Some(date) = &abstract_bill.issued_date_ {
+            date.to_string()
+        } else {
+            "N/A".to_string()
+        };
         parts.push(rsx!{
             h1 { "Energy Account Statement" }
             table { class: "display",
                 tr {
                     th { class: "row-header", "Date:" }
-                    td { "{abstract_bill.issued_date_}" }
+                    td { "{issued_date}" }
                 }
                 tr {
                     th { class: "row-header", "Ref:" }
@@ -865,14 +877,16 @@ impl BillDataSet {
         let initial_query_provider = |opt_last_record: Option<&AbstractBill>| {
             let mut builder = super::graphql::bill::get_bills::Query::builder()
                 .with_account_number(account_number.clone())
+                .with_include_bills_without_pdf(true)
+                .with_include_open_statements(true)
                 .with_last(20);
 
             if let Some(last_record) = opt_last_record {
                 // If we ever found ourselves in the position that there are two bills on the same issue date
                 // and we fetch one of them as the last item in a query we would never see the second one.
                 // By stepping back one day we usually read one bill we already have but we avoid that gap.
-                let start_date = last_record.as_bill_interface().issued_date_.clone(); //.previous_day();
-                builder = builder.with_issued_from_date(start_date);
+                let start_date = last_record.as_bill_interface().from_date_.clone(); //.previous_day();
+                builder = builder.with_from_date(start_date);
             }
 
             builder.build()
@@ -884,6 +898,8 @@ impl BillDataSet {
                 Some(
                     super::graphql::bill::get_bills::Query::builder()
                         .with_account_number(account_number.clone())
+                        .with_include_bills_without_pdf(true)
+                        .with_include_open_statements(true)
                         .with_last(20)
                         .with_before(start_cursor.clone())
                         .build())
@@ -893,8 +909,15 @@ impl BillDataSet {
             }
         };
         let indexer  = |bill: &AbstractBill| {
+            let is_final = if let AbstractBill::StatementType(statement) = bill {
+                statement.status_ == AccountStatementStatus::Closed
+            }
+            else {
+                true
+            };
+
             let bill = bill.as_bill_interface();
-            (bill.id_.clone(), bill.issued_date_.clone())
+            (bill.id_.clone(), bill.from_date_.clone(), is_final)
         };
         let response_iterator = |response: super::graphql::bill::get_bills::Response| {
             let it = response.account_.bills_.edges.into_iter().map(|edge| edge.node);
