@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,7 +12,7 @@ use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use tokio::time::sleep;
 
-use crate::data_set::MultiQueryDataSet;
+use crate::data_set::{MonthlyDataSet, MultiQueryDataSet, OrderedListDataSet};
 use crate::octopus::property::PropertyDataSet;
 use crate::{CacheManager, NULL};
 
@@ -56,27 +56,27 @@ impl MeterManager {
         Ok(DateRange::get_current_month_inclusive()?)
     }
 
-    pub async fn consumption_handler(&self, args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
-        let properties = self.get_properties(account_number).await?;
-        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
-        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
-        // }
+    // pub async fn consumption_handler(&self, args: std::str::SplitWhitespace<'_>, account_number: &String, billing_timezone: &time_tz::Tz) ->  anyhow::Result<()> {
+    //     let properties = self.get_properties(account_number).await?;
+    //     // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+    //     //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+    //     // }
         
-        // let properties =self.properties.get(account_number).unwrap();
+    //     // let properties =self.properties.get(account_number).unwrap();
 
-        let date_range = Self::get_date_range(args)?;
+    //     let date_range = Self::get_date_range(args)?;
 
-        for meter_node_id in &properties.meter_node_ids {
-            //println!("meter_node_id {}",meter_node_id);
+    //     for meter_node_id in &properties.meter_node_ids {
+    //         //println!("meter_node_id {}",meter_node_id);
 
-            let consumption = self.get_consumption(account_number, meter_node_id, &date_range, billing_timezone).await?;
+    //         let consumption = self.get_consumption(account_number, meter_node_id, &date_range, billing_timezone).await?;
 
-            //println!("print {} items",consumption.len());
-            ConsumptionList::print_consumption(&consumption)?;
-        }
+    //         //println!("print {} items",consumption.len());
+    //         ConsumptionList::print_consumption(&consumption)?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
         let properties = self.get_properties(account_number).await?;
@@ -167,28 +167,28 @@ impl MeterManager {
                 let mut in_scope_items = Vec::new();
                 let mut bucket_date = start_date_time.to_date();
                 loop {
-                    //println!("Get bucket {:?}", bucket_date);
+                    println!("Get bucket {:?}", bucket_date);
                     let line_items = AgreementLineItems::new(cache_manager, request_manager, account_number.clone(), meter_type, agreement_id.clone(), &bucket_date, billing_timezone).await?;
 
-                    for (_cursor, item) in line_items.line_items {
-                        //println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
+                    for (_cursor, (attrinutes, item)) in line_items.line_items {
+                        println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
                         if &item.start_at_ >= end_date_time {
                             // thats it
-                            //println!("Line item has date {:?} so we are done", item.start_at_);
+                            println!("Line item has date {:?} so we are done", item.start_at_);
                             return Ok(in_scope_items)
                         }
                         if &item.start_at_ >= start_date_time {
-                            //println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
+                            println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
                             in_scope_items.push(item);
                         }
                     }
 
                     bucket_date = line_items.end_date;
 
-                    //println!("New bucket date {:?}", bucket_date);
+                    println!("New bucket date {:?}", bucket_date);
 
                     if *bucket_date > end_date_time.date() {
-                        //println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
+                        println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
                         return Ok(in_scope_items)
                     }
                 }
@@ -220,54 +220,54 @@ impl MeterManager {
 
 
 
-    pub async fn get_consumption(&self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>>{
-        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
-        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
-        // }
+    // pub async fn get_consumption(&self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>>{
+    //     // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+    //     //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+    //     // }
         
-        // let properties = self.properties.get(account_number).unwrap();
+    //     // let properties = self.properties.get(account_number).unwrap();
         
-        let start_date_time = date_range.start.at_midnight(billing_timezone);
-        let end_date_time = date_range.end.at_next_midnight(billing_timezone);
+    //     let start_date_time = date_range.start.at_midnight(billing_timezone);
+    //     let end_date_time = date_range.end.at_next_midnight(billing_timezone);
 
-        //println!("get_consumption {:?} - {:?}", start_date_time, end_date_time);
+    //     //println!("get_consumption {:?} - {:?}", start_date_time, end_date_time);
 
         
-        async fn get_line_items2(
-            cache_manager: &CacheManager, request_manager: &RequestManager,
-            account_number: &String, meter_node_id: &String, start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>> {
-                let mut in_scope_items = Vec::new();
-                let mut bucket_date = start_date_time.to_date();
-                loop {
-                    //println!("Get bucket {:?}", bucket_date);
-                    let line_items = ConsumptionList::new(cache_manager, request_manager, account_number.clone(), meter_node_id.clone(), &bucket_date, billing_timezone).await?;
+    //     async fn get_line_items2(
+    //         cache_manager: &CacheManager, request_manager: &RequestManager,
+    //         account_number: &String, meter_node_id: &String, start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>> {
+    //             let mut in_scope_items = Vec::new();
+    //             let mut bucket_date = start_date_time.to_date();
+    //             loop {
+    //                 //println!("Get bucket {:?}", bucket_date);
+    //                 let line_items = ConsumptionList::new(cache_manager, request_manager, account_number.clone(), meter_node_id.clone(), &bucket_date, billing_timezone).await?;
 
-                    for (_cursor, item) in line_items.consumption{
-                        //println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
-                        if &item.start_at_ >= end_date_time {
-                            // thats it
-                            //println!("Line item has date {:?} so we are done", item.start_at_);
-                            return Ok(in_scope_items)
-                        }
-                        if &item.end_at_ >= start_date_time {
-                            //println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
-                            in_scope_items.push(item);
-                        }
-                    }
+    //                 for (_cursor, item) in line_items.consumption{
+    //                     //println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
+    //                     if &item.start_at_ >= end_date_time {
+    //                         // thats it
+    //                         //println!("Line item has date {:?} so we are done", item.start_at_);
+    //                         return Ok(in_scope_items)
+    //                     }
+    //                     if &item.end_at_ >= start_date_time {
+    //                         //println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
+    //                         in_scope_items.push(item);
+    //                     }
+    //                 }
 
-                    bucket_date = line_items.end_date;
+    //                 bucket_date = line_items.end_date;
 
-                    //println!("New bucket date {:?}", bucket_date);
+    //                 //println!("New bucket date {:?}", bucket_date);
 
-                    if *bucket_date > end_date_time.date() {
-                        //println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
-                        return Ok(in_scope_items)
-                    }
-                }
-        }
+    //                 if *bucket_date > end_date_time.date() {
+    //                     //println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
+    //                     return Ok(in_scope_items)
+    //                 }
+    //             }
+    //     }
         
-        get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_node_id, &start_date_time, &end_date_time, billing_timezone).await
-    }
+    //     get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_node_id, &start_date_time, &end_date_time, billing_timezone).await
+    // }
 }
 
 
@@ -720,47 +720,83 @@ impl MeterAgreementDataSet {
 // }
 
 impl meter::electricity_agreement_line_items::AgreementInterface {
-    pub fn get_line_items(self) -> Vec<EdgeOf<meter::electricity_agreement_line_items::LineItemType>> {
+
+    pub fn as_electricity_agreement(self) -> meter::electricity_agreement_line_items::ElectricityAgreementType {    
         match self {
             meter::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
-                electricity_agreement_type.line_items_.edges
-                //.into_iter().collect()
+                electricity_agreement_type
+            },
+            meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_abstract_agreement_interface) => unreachable!(),
+        }
+    }
+    pub fn as_electricity_agreement_ref(&self) -> &meter::electricity_agreement_line_items::ElectricityAgreementType {    
+        match self {
+            meter::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
+                electricity_agreement_type
             },
             meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_abstract_agreement_interface) => unreachable!(),
         }
     }
 
+    // pub fn get_line_items(&self) -> &Vec<EdgeOf<meter::electricity_agreement_line_items::LineItemType>> {
+    //     match self {
+    //         meter::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
+    //             &electricity_agreement_type.line_items_.edges
+    //             //.into_iter().collect()
+    //         },
+    //         meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_abstract_agreement_interface) => unreachable!(),
+    //     }
+    // }
 
-    pub fn get_page_info(&self) -> &PageInfo {
-        match self {
-            meter::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
-                &electricity_agreement_type.line_items_.page_info
-                //.into_iter().collect()
-            },
-            meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_abstract_agreement_interface) => unreachable!(),
-        }
-    }
+
+    // pub fn get_page_info(&self) -> &PageInfo {
+    //     match self {
+    //         meter::electricity_agreement_line_items::AgreementInterface::ElectricityAgreementType(electricity_agreement_type) => {
+    //             &electricity_agreement_type.line_items_.page_info
+    //             //.into_iter().collect()
+    //         },
+    //         meter::electricity_agreement_line_items::AgreementInterface::GasAgreementType(_abstract_agreement_interface) => unreachable!(),
+    //     }
+    // }
 }
 
 impl meter::gas_agreement_line_items::AgreementInterface {
-    pub fn get_line_items(self) -> Vec<EdgeOf<meter::gas_agreement_line_items::LineItemType>> {
+    pub fn as_gas_agreement(self) -> meter::gas_agreement_line_items::GasAgreementType {
         match self {
             meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(_electricity_agreement_type) => unreachable!(),
             meter::gas_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) => {
-                abstract_agreement_interface.line_items_.edges
+                abstract_agreement_interface
             },
         }
     }
-
-
-    pub fn get_page_info(&self) -> &PageInfo {
+    
+    pub fn as_gas_agreement_ref(&self) -> &meter::gas_agreement_line_items::GasAgreementType {
         match self {
             meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(_electricity_agreement_type) => unreachable!(),
-            meter::gas_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) =>{
-                &abstract_agreement_interface.line_items_.page_info
+            meter::gas_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) => {
+                abstract_agreement_interface
             },
         }
     }
+    
+    // pub fn get_line_items(&self) -> &Vec<EdgeOf<meter::gas_agreement_line_items::LineItemType>> {
+    //     match self {
+    //         meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(_electricity_agreement_type) => unreachable!(),
+    //         meter::gas_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) => {
+    //             &abstract_agreement_interface.line_items_.edges
+    //         },
+    //     }
+    // }
+
+
+    // pub fn get_page_info(&self) -> &PageInfo {
+    //     match self {
+    //         meter::gas_agreement_line_items::AgreementInterface::ElectricityAgreementType(_electricity_agreement_type) => unreachable!(),
+    //         meter::gas_agreement_line_items::AgreementInterface::GasAgreementType(abstract_agreement_interface) =>{
+    //             &abstract_agreement_interface.line_items_.page_info
+    //         },
+    //     }
+    // }
 }
 
 impl Into<meter::electricity_agreement_line_items::LineItemType> for meter::gas_agreement_line_items::LineItemType {
@@ -776,408 +812,568 @@ impl Into<meter::electricity_agreement_line_items::LineItemType> for meter::gas_
 }
 
 pub struct AgreementLineItems {
-    pub _account_number: String,
+    pub account_number: String,
     pub agreement_id: String,
-    pub end_cursor: Option<String>,
-    pub has_next_page: bool,
-    pub line_items: Vec<(String, meter::electricity_agreement_line_items::LineItemType)>,
-    hash_key: String,
+    // pub end_cursor: Option<String>,
+    // pub has_next_page: bool,
+    // pub line_items: Vec<(String, LI)>,
+    // hash_key: String,
     start_date: Date,
     end_date: Date,
-    _start_date_time: DateTime,
-    end_date_time: DateTime,
+    // start_date_time: DateTime,
+    // end_date_time: DateTime,
+
+    pub line_items: std::collections::BTreeMap<DateTime, (crate::data_set::DataSetAttributes, meter::electricity_agreement_line_items::LineItemType)>,
 }
 
 impl AgreementLineItems {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_type: &MeterType, agreement_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<Self> {
+    async fn new(
+        config: &CacheManager,
+        request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
+        account_number: String,
+        meter_type: &MeterType,
+        agreement_id: String,
+        date: &Date,
+        billing_timezone: &time_tz::Tz
+    ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#{}AgreementTransactions", account_number, agreement_id, meter_type);
-        let mut has_next_page = true;
-        let mut end_cursor: Option<String> = None;
-        let mut transactions: Vec<(String, meter::electricity_agreement_line_items::LineItemType)> = Vec::new();
-
-
-        let (bucket_start_date, bucket_end_date) = cache_manager.read_vec_for_date(date, &hash_key, &mut transactions)?;
-        let bucket_start_date_time = bucket_start_date.at_midnight(billing_timezone);
-        let bucket_end_date_time = bucket_end_date.at_midnight(billing_timezone);
-
-        let cached_cnt = transactions.len();
-
-        //println!("Loaded {} rows for AgreementLineItems[{}..{}]", cached_cnt, bucket_start_date, bucket_end_date);
-
-        if !transactions.is_empty() {
-            let (cursor, final_txn) = transactions.get(transactions.len()-1).unwrap();
-            if final_txn.end_at_ >= bucket_end_date_time {
-                // this bucket is full
-                has_next_page = false;
-            }
-            end_cursor = Some(cursor.clone());
-        }
-
-        while has_next_page {
-            match meter_type {
-                MeterType::Gas => {
-                    let mut builder = meter::gas_agreement_line_items::Query::builder()
-                        .with_agreement_id(agreement_id.clone())
-                        .with_start_at(bucket_start_date_time.clone())
-                        .with_timezone(String::from("Europe/London"))
-                        .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
-                        .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
-                        .with_first(50)
-                        ;
-                    if let Some(end_cursor) = &end_cursor {
-                        builder = builder.with_after(end_cursor.clone());
-                    }
-                    
-                    let query = builder.build()?;
-
-                    let response = request_manager.call(&query).await?;
-
-                    let response_has_next_page = *&response.gas_agreement_.get_page_info().has_next_page;
-
-                    for edge in response.gas_agreement_.get_line_items() {
-                        //println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
-
-                        if has_next_page {
-                            // we are still filling the bucket we need to return
-                            if edge.node.start_at_ >= bucket_end_date_time {
-                                //println!("Beyond the end of this bucket, break");
-                                // this bucket is full
-                                has_next_page = false;
-                                break; // TODO: save this in the next bucket
-                            }
-                            transactions.push((edge.cursor.clone(), edge.node.into()));
-                            end_cursor = Some(edge.cursor);
-                        }
-                    }
-
-                    // perhaps there were no additional rows for the next bucket but no more rows for this one either
-                    if has_next_page {
-                        if response_has_next_page {
-                            //println!("No more data available so we are done");
-                        }
-                        has_next_page = response_has_next_page;
-                    }
-
-                },
-                MeterType::Electricity =>{
-                    let mut builder = meter::electricity_agreement_line_items::Query::builder()
-                        .with_agreement_id(agreement_id.clone())
-                        .with_start_at(bucket_start_date_time.clone())
-                        .with_timezone(String::from("Europe/London"))
-                        .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
-                        .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
-                        .with_first(50)
-                        ;
-                    if let Some(end_cursor) = &end_cursor {
-                        builder = builder.with_after(end_cursor.clone());
-                    }
-                    
-                    let query = builder.build()?;
-
-                    let response = request_manager.call(&query).await?;
-
-                    // writeln!(out, "{}", serde_json::to_string(&response)?)?;
-
-                    // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
-
-
-                    let response_has_next_page = *&response.electricity_agreement_.get_page_info().has_next_page;
-
-                    for edge in response.electricity_agreement_.get_line_items() {
-                        //println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
-
-                        if has_next_page {
-                            // we are still filling the bucket we need to return
-                            if edge.node.start_at_ >= bucket_end_date_time {
-                                //println!("Beyond the end of this bucket, break");
-                                // this bucket is full
-                                has_next_page = false;
-                                break; // TODO: save this in the next bucket
-                            }
-                            transactions.push((edge.cursor.clone(), edge.node));
-                            end_cursor = Some(edge.cursor);
-                        }
-                    }
-
-                    // perhaps there were no additional rows for the next bucket but no more rows for this one either
-                    if has_next_page {
-                        if response_has_next_page {
-                            //println!("No more data available so we are done");
-                        }
-                        has_next_page = response_has_next_page;
-                    }
-                },
-            }
-        }
-
-
-
-        let mut result = AgreementLineItems {
-            _account_number: account_number,
-            agreement_id,
-            end_cursor,
-            has_next_page,
-            line_items: transactions,
-            hash_key,
-            start_date: bucket_start_date,
-            end_date: bucket_end_date,
-            _start_date_time: bucket_start_date_time.clone(),
-            end_date_time: bucket_end_date_time,
-        };
-
-        if has_next_page {
-            // bucket is not yet full
-            result.fetch_all(request_manager, &bucket_start_date_time).await?;
-        }
-
         
-
-        if result.line_items.len() > cached_cnt {
-            cache_manager.write_vec_for_date(&result.start_date, &result.hash_key, &result.line_items, cached_cnt)?;
-        }
-        
-        Ok(result)
-    }
-
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> anyhow::Result<()> {
-        let mut has_next_page = self.has_next_page;
-
-        while has_next_page {
-            let mut builder = meter::electricity_agreement_line_items::Query::builder()
-            .with_agreement_id(self.agreement_id.clone())
-                .with_start_at(start_date_time.clone())
-                .with_first(100)
-                .with_timezone(String::from("Europe/London"))
-                .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
-                .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
-                ;
-
-            if let Some(end_cursor) = &self.end_cursor {
-                builder = builder.with_after(end_cursor.clone());
-            }
-            let query = builder.build()?;
-            let response = request_manager.call(&query).await?;
-            let response_has_next_page = *&response.electricity_agreement_.get_page_info().has_next_page;
-
-            for edge in response.electricity_agreement_.get_line_items() {
-                if edge.node.end_at_ >= self.end_date_time { // have to test here before we move edge.node and break later
-                    // this bucket is full
-                    has_next_page = false;
-                }
-                self.line_items.push((edge.cursor.clone(), edge.node));
-                self.end_cursor = Some(edge.cursor);
-
-
-                if !has_next_page {
-                    // this bucket is full
-                    break; // TODO: save this in the next bucket
-                }
-            }
-
-            // perhaps there were no additional rows for the next bucket but no more rows for this one either
-            if has_next_page {
-                has_next_page = response_has_next_page;
-            }
-        }
-        self.has_next_page = has_next_page;
-        Ok(())
-    }
-}
-
-pub struct ConsumptionList {
-    #[allow(dead_code)]
-    pub account_number: String,
-    pub meter_node_id: String,
-    pub end_cursor: Option<String>,
-    pub has_next_page: bool,
-    pub consumption: Vec<(String, meter::meter_consumption::ConsumptionType)>,
-    hash_key: String,
-    start_date: Date,
-    end_date: Date,
-    #[allow(dead_code)]
-    start_date_time: DateTime,
-    end_date_time: DateTime,
-}
-
-impl ConsumptionList {
-    async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<Self> {
-        let hash_key = format!("{}#{}#ConsumptionRecords", account_number, meter_node_id);
-        let mut has_next_page = true;
-        let mut end_cursor: Option<String> = None;
-        let mut transactions: Vec<(String, meter::meter_consumption::ConsumptionType)> = Vec::new();
-
-
-        let (bucket_start_date, bucket_end_date) = cache_manager.read_vec_for_date(date, &hash_key, &mut transactions)?;
-        let bucket_start_date_time = bucket_start_date.at_midnight(billing_timezone);
-        let bucket_end_date_time = bucket_end_date.at_midnight(billing_timezone);
-
-        let cached_cnt = transactions.len();
-
-        //println!("Loaded {} rows for ConsumptionList[{}..{}]", cached_cnt, bucket_start_date, bucket_end_date);
-
-        if !transactions.is_empty() {
-            let (cursor, final_txn) = transactions.get(transactions.len()-1).unwrap();
-            if final_txn.end_at_ >= bucket_end_date_time {
-                // this bucket is full
-                has_next_page = false;
-            }
-            end_cursor = Some(cursor.clone());
-        }
-
-        while has_next_page {
-            
-                    let mut builder = meter::meter_consumption::Query::builder()
-                        .with_meter_id(meter_node_id.clone())
-                        .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
-                        .with_start_at(bucket_start_date_time.clone())
-                        .with_timezone(String::from("Europe/London"))
-                        .with_first(50)
-                        ;
-                    if let Some(end_cursor) = &end_cursor {
-                        builder = builder.with_after(end_cursor.clone());
+        let (
+            start_date,
+            end_date,
+            line_items): (Date, Date, std::collections::BTreeMap<DateTime, (crate::data_set::DataSetAttributes, meter::electricity_agreement_line_items::LineItemType)>
+        ) = match meter_type {
+            MeterType::Gas => {
+                let initial_query_provider = |bucket_start: &Date, last_record: Option<&meter::gas_agreement_line_items::LineItemType>| {
+                    let start_date = if let Some(last_record) = last_record {
+                        last_record.start_at_.clone()
                     }
-                    
-                    let query = builder.build()?;
-
-                    let response = request_manager.call(&query).await?;
-
-                    // writeln!(out, "{}", serde_json::to_string(&response)?)?;
-
-                    // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
-
-                    let page = match response.node_ {
-                        meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
-                            electricity_meter.consumption_
-                        },
-                        meter::meter_consumption::Node::GasMeterType(gas_meter) => {
-                            gas_meter.consumption_
-                        },
-                        _ => {
-                            return Err(anyhow!("Unexpected response type"))
-                        },
+                    else {
+                        bucket_start.at_midnight(billing_timezone)
                     };
+                    meter::gas_agreement_line_items::Query::builder()
+                        .with_agreement_id(agreement_id.clone())
+                        .with_start_at(start_date)
+                        .with_timezone(String::from("Europe/London"))
+                        .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
+                        .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
+                        .with_first(50)
+                        .build()
 
-                    let response_has_next_page = page.page_info.has_next_page;
-
-                    for edge in page.edges {
-                        //println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
-
-                        if has_next_page {
-                            // we are still filling the bucket we need to return
-                            if edge.node.start_at_ >= bucket_end_date_time {
-                                //println!("Beyond the end of this bucket, break");
-                                // this bucket is full
-                                has_next_page = false;
-                                break; // TODO: save this in the next bucket
-                            }
-                            transactions.push((edge.cursor.clone(), edge.node));
-                            end_cursor = Some(edge.cursor);
-                        }
+                };
+                let continuation_query_provider = |last_response: &meter::gas_agreement_line_items::Response| {
+                    
+                    let agreement = last_response.gas_agreement_.as_gas_agreement_ref();
+                    if let Some(end_cursor) = agreement.line_items_.page_info.end_cursor.clone() {
+                        let start_date = agreement.line_items_.edges.last().unwrap().node.start_at_.clone();
+                        Some(meter::gas_agreement_line_items::Query::builder()
+                            .with_agreement_id(agreement_id.clone())
+                            .with_start_at(start_date)
+                            .with_timezone(String::from("Europe/London"))
+                            .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
+                            .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
+                            .with_first(50)
+                            .with_after(end_cursor)
+                            .build())
                     }
-
-                    // perhaps there were no additional rows for the next bucket but no more rows for this one either
-                    if has_next_page {
-                        if response_has_next_page {
-                            //println!("No more data available so we are done");
-                        }
-                        has_next_page = response_has_next_page;
+                    else {
+                        None
                     }
-        }
+                };
 
-        let mut result = ConsumptionList {
-            account_number,
-            meter_node_id,
-            end_cursor,
-            has_next_page,
-            consumption: transactions,
-            hash_key,
-            start_date: bucket_start_date,
-            end_date: bucket_end_date,
-            start_date_time: bucket_start_date_time.clone(),
-            end_date_time: bucket_end_date_time,
+                let response_iterator = |response: meter::gas_agreement_line_items::Response| {
+                    response.gas_agreement_.as_gas_agreement().line_items_.edges.into_iter().map(|edge| edge.node)
+                };
+
+                let indexer = |item: &meter::gas_agreement_line_items::LineItemType| {
+                    (item.start_at_.clone(), true)
+                };
+
+                 let data_set = MonthlyDataSet::new(&hash_key,
+                    date,
+                    Duration::from_hours(24),
+                    initial_query_provider,
+                    continuation_query_provider,
+                    response_iterator,
+                    indexer,
+                    config,
+                    request_manager
+                ).await?;
+
+                let mut data = BTreeMap::new();
+                for (k, (a,v)) in data_set.data {
+                    data.insert(k, (a, v.into()));
+                }
+
+                (data_set.start_date, data_set.end_date, data)
+            },
+            MeterType::Electricity => {
+                let initial_query_provider = |bucket_start: &Date, last_record: Option<&meter::electricity_agreement_line_items::LineItemType>| {
+                    let start_date = if let Some(last_record) = last_record {
+                        last_record.start_at_.clone()
+                    }
+                    else {
+                        bucket_start.at_midnight(billing_timezone)
+                    };
+                
+                    meter::electricity_agreement_line_items::Query::builder()
+                        .with_agreement_id(agreement_id.clone())
+                        .with_start_at(start_date)
+                        .with_timezone(String::from("Europe/London"))
+                        .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
+                        .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
+                        .with_first(50)
+                        .build()
+
+                };
+                let continuation_query_provider = |last_response: &meter::electricity_agreement_line_items::Response| {
+                    // let end_cursor = last_response.electricity_agreement_.get_line_items().last().unwrap().cursor;
+                
+                    let agreement = last_response.electricity_agreement_.as_electricity_agreement_ref();
+                    if let Some(end_cursor) = agreement.line_items_.page_info.end_cursor.clone() {
+                        let start_date = agreement.line_items_.edges.last().unwrap().node.start_at_.clone();
+                        Some(meter::electricity_agreement_line_items::Query::builder()
+                        .with_agreement_id(agreement_id.clone())
+                        .with_start_at(start_date.clone())
+                        .with_timezone(String::from("Europe/London"))
+                        .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
+                        .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
+                        .with_first(50)
+                        .with_after(end_cursor)
+                        .build())
+                    }
+                    else {
+                        None
+                    }
+                };
+
+
+                let response_iterator = |response: meter::electricity_agreement_line_items::Response| {
+                    response.electricity_agreement_.as_electricity_agreement().line_items_.edges.into_iter().map(|edge| edge.node)
+                };
+
+                let indexer = |item: &meter::electricity_agreement_line_items::LineItemType| {
+                    (item.start_at_.clone(), true)
+                };
+
+                 let data_set = MonthlyDataSet::new(&hash_key,
+                    date,
+                    Duration::from_hours(24),
+                    initial_query_provider,
+                    continuation_query_provider,
+                    response_iterator,
+                    indexer,
+                    config,
+                    request_manager
+                ).await?;
+
+                (data_set.start_date, data_set.end_date, data_set.data)
+            },
         };
 
-        if has_next_page {
-            // bucket is not yet full
-            result.fetch_all(request_manager, &bucket_start_date_time).await?;
-        }       
+        Ok(Self {
+            account_number,
+            agreement_id,
+            start_date,
+            end_date,
+            line_items,
+        })
+    }
+       
 
-        if result.consumption.len() > cached_cnt {
-            cache_manager.write_vec_for_date(&result.start_date, &result.hash_key, &result.consumption, cached_cnt)?;
-        }
+
+
+
+
+
+
+    //     let mut has_next_page = true;
+    //     let mut end_cursor: Option<String> = None;
+    //     let mut transactions: Vec<(String, meter::electricity_agreement_line_items::LineItemType)> = Vec::new();
+
+
+    //     let (bucket_start_date, bucket_end_date) = cache_manager.read_vec_for_date(date, &hash_key, &mut transactions)?;
+    //     let bucket_start_date_time = bucket_start_date.at_midnight(billing_timezone);
+    //     let bucket_end_date_time = bucket_end_date.at_midnight(billing_timezone);
+
+    //     let cached_cnt = transactions.len();
+
+    //     //println!("Loaded {} rows for AgreementLineItems[{}..{}]", cached_cnt, bucket_start_date, bucket_end_date);
+
+    //     if !transactions.is_empty() {
+    //         let (cursor, final_txn) = transactions.get(transactions.len()-1).unwrap();
+    //         if final_txn.end_at_ >= bucket_end_date_time {
+    //             // this bucket is full
+    //             has_next_page = false;
+    //         }
+    //         end_cursor = Some(cursor.clone());
+    //     }
+
+    //     while has_next_page {
+    //         match meter_type {
+    //             MeterType::Gas => {
+    //                 let mut builder = meter::gas_agreement_line_items::Query::builder()
+    //                     .with_agreement_id(agreement_id.clone())
+    //                     .with_start_at(bucket_start_date_time.clone())
+    //                     .with_timezone(String::from("Europe/London"))
+    //                     .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
+    //                     .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
+    //                     .with_first(50)
+    //                     ;
+    //                 if let Some(end_cursor) = &end_cursor {
+    //                     builder = builder.with_after(end_cursor.clone());
+    //                 }
+                    
+    //                 let query = builder.build()?;
+
+    //                 let response = request_manager.call(&query).await?;
+
+    //                 let response_has_next_page = *&response.gas_agreement_.get_page_info().has_next_page;
+
+    //                 for edge in response.gas_agreement_.get_line_items() {
+    //                     //println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
+
+    //                     if has_next_page {
+    //                         // we are still filling the bucket we need to return
+    //                         if edge.node.start_at_ >= bucket_end_date_time {
+    //                             //println!("Beyond the end of this bucket, break");
+    //                             // this bucket is full
+    //                             has_next_page = false;
+    //                             break; // TODO: save this in the next bucket
+    //                         }
+    //                         transactions.push((edge.cursor.clone(), edge.node.into()));
+    //                         end_cursor = Some(edge.cursor);
+    //                     }
+    //                 }
+
+    //                 // perhaps there were no additional rows for the next bucket but no more rows for this one either
+    //                 if has_next_page {
+    //                     if response_has_next_page {
+    //                         //println!("No more data available so we are done");
+    //                     }
+    //                     has_next_page = response_has_next_page;
+    //                 }
+
+    //             },
+    //             MeterType::Electricity =>{
+    //                 let mut builder = meter::electricity_agreement_line_items::Query::builder()
+    //                     .with_agreement_id(agreement_id.clone())
+    //                     .with_start_at(bucket_start_date_time.clone())
+    //                     .with_timezone(String::from("Europe/London"))
+    //                     .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
+    //                     .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
+    //                     .with_first(50)
+    //                     ;
+    //                 if let Some(end_cursor) = &end_cursor {
+    //                     builder = builder.with_after(end_cursor.clone());
+    //                 }
+                    
+    //                 let query = builder.build()?;
+
+    //                 let response = request_manager.call(&query).await?;
+
+    //                 // writeln!(out, "{}", serde_json::to_string(&response)?)?;
+
+    //                 // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
+
+
+    //                 let response_has_next_page = *&response.electricity_agreement_.get_page_info().has_next_page;
+
+    //                 for edge in response.electricity_agreement_.get_line_items() {
+    //                     //println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
+
+    //                     if has_next_page {
+    //                         // we are still filling the bucket we need to return
+    //                         if edge.node.start_at_ >= bucket_end_date_time {
+    //                             //println!("Beyond the end of this bucket, break");
+    //                             // this bucket is full
+    //                             has_next_page = false;
+    //                             break; // TODO: save this in the next bucket
+    //                         }
+    //                         transactions.push((edge.cursor.clone(), edge.node));
+    //                         end_cursor = Some(edge.cursor);
+    //                     }
+    //                 }
+
+    //                 // perhaps there were no additional rows for the next bucket but no more rows for this one either
+    //                 if has_next_page {
+    //                     if response_has_next_page {
+    //                         //println!("No more data available so we are done");
+    //                     }
+    //                     has_next_page = response_has_next_page;
+    //                 }
+    //             },
+    //         }
+    //     }
+
+
+
+    //     let mut result = AgreementLineItems {
+    //         _account_number: account_number,
+    //         agreement_id,
+    //         end_cursor,
+    //         has_next_page,
+    //         line_items: transactions,
+    //         hash_key,
+    //         start_date: bucket_start_date,
+    //         end_date: bucket_end_date,
+    //         _start_date_time: bucket_start_date_time.clone(),
+    //         end_date_time: bucket_end_date_time,
+    //     };
+
+    //     if has_next_page {
+    //         // bucket is not yet full
+    //         result.fetch_all(request_manager, &bucket_start_date_time).await?;
+    //     }
+
         
-        Ok(result)
-    }
 
-    pub fn print_consumption(consumption: &Vec<meter::meter_consumption::ConsumptionType>) -> anyhow::Result<()> {
-        let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-
-        println!();
-        println!("{:-^20} {:-^20} {:-^10} ", "From", "To", "Amount");
-        for item in consumption {
-            println!("{:20} {:20} {:10.3}", item.start_at_.format(&format).unwrap(), item.end_at_.format(&format).unwrap(), item.value_);
-        }
-        Ok(())
-    }
-
-    pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> anyhow::Result<()> {
-        let mut has_next_page = self.has_next_page;
-
-        //println!("fetch_all statement transactions {} in buffer", self.line_items.len());
-
+    //     if result.line_items.len() > cached_cnt {
+    //         cache_manager.write_vec_for_date(&result.start_date, &result.hash_key, &result.line_items, cached_cnt)?;
+    //     }
         
+    //     Ok(result)
+    // }
 
-        while has_next_page {
-            let mut builder = meter::meter_consumption::Query::builder()
-                .with_meter_id(self.meter_node_id.clone())
-                .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
-                .with_start_at(start_date_time.clone())
-                .with_timezone(String::from("Europe/London"))
-                .with_first(50)
-                ;
-            if let Some(end_cursor) = &self.end_cursor {
-                builder = builder.with_after(end_cursor.clone());
-            }
-            
-            let query = builder.build()?;
+    // pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> anyhow::Result<()> {
+    //     let mut has_next_page = self.has_next_page;
 
-            let response = request_manager.call(&query).await?;
+    //     while has_next_page {
+    //         let mut builder = meter::electricity_agreement_line_items::Query::builder()
+    //         .with_agreement_id(self.agreement_id.clone())
+    //             .with_start_at(start_date_time.clone())
+    //             .with_first(100)
+    //             .with_timezone(String::from("Europe/London"))
+    //             .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
+    //             .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
+    //             ;
 
-            let page = match response.node_ {
-                meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
-                    electricity_meter.consumption_
-                },
-                meter::meter_consumption::Node::GasMeterType(gas_meter) => {
-                    gas_meter.consumption_
-                },
-                _ => {
-                    return Err(anyhow!("Unexpected response type"))
-                },
-            };
+    //         if let Some(end_cursor) = &self.end_cursor {
+    //             builder = builder.with_after(end_cursor.clone());
+    //         }
+    //         let query = builder.build()?;
+    //         let response = request_manager.call(&query).await?;
+    //         let response_has_next_page = *&response.electricity_agreement_.get_page_info().has_next_page;
 
-            let response_has_next_page = page.page_info.has_next_page;
-            
-            for edge in page.edges {
-                if edge.node.end_at_ >= self.end_date_time { // have to test here before we move edge.node and break later
-                    // this bucket is full
-                    has_next_page = false;
-                }
-                self.consumption.push((edge.cursor.clone(), edge.node));
-                self.end_cursor = Some(edge.cursor);
+    //         for edge in response.electricity_agreement_.get_line_items() {
+    //             if edge.node.end_at_ >= self.end_date_time { // have to test here before we move edge.node and break later
+    //                 // this bucket is full
+    //                 has_next_page = false;
+    //             }
+    //             self.line_items.push((edge.cursor.clone(), edge.node));
+    //             self.end_cursor = Some(edge.cursor);
 
 
-                if !has_next_page {
-                    // this bucket is full
-                    break; // TODO: save this in the next bucket
-                }
-            }
+    //             if !has_next_page {
+    //                 // this bucket is full
+    //                 break; // TODO: save this in the next bucket
+    //             }
+    //         }
 
-            // perhaps there were no additional rows for the next bucket but no more rows for this one either
-            if has_next_page {
-                has_next_page = response_has_next_page;
-            }
-        }
-        self.has_next_page = has_next_page;
-        Ok(())
-    }
+    //         // perhaps there were no additional rows for the next bucket but no more rows for this one either
+    //         if has_next_page {
+    //             has_next_page = response_has_next_page;
+    //         }
+    //     }
+    //     self.has_next_page = has_next_page;
+    //     Ok(())
+    // }
 }
+
+// pub struct ConsumptionList {
+//     #[allow(dead_code)]
+//     pub account_number: String,
+//     pub meter_node_id: String,
+//     pub end_cursor: Option<String>,
+//     pub has_next_page: bool,
+//     pub consumption: Vec<(String, meter::meter_consumption::ConsumptionType)>,
+//     hash_key: String,
+//     start_date: Date,
+//     end_date: Date,
+//     #[allow(dead_code)]
+//     start_date_time: DateTime,
+//     end_date_time: DateTime,
+// }
+
+// impl ConsumptionList {
+//     async fn new(cache_manager: &CacheManager, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: String, meter_node_id: String, date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<Self> {
+//         let hash_key = format!("{}#{}#ConsumptionRecords", account_number, meter_node_id);
+//         let mut has_next_page = true;
+//         let mut end_cursor: Option<String> = None;
+//         let mut transactions: Vec<(String, meter::meter_consumption::ConsumptionType)> = Vec::new();
+
+
+//         let (bucket_start_date, bucket_end_date) = cache_manager.read_vec_for_date(date, &hash_key, &mut transactions)?;
+//         let bucket_start_date_time = bucket_start_date.at_midnight(billing_timezone);
+//         let bucket_end_date_time = bucket_end_date.at_midnight(billing_timezone);
+
+//         let cached_cnt = transactions.len();
+
+//         //println!("Loaded {} rows for ConsumptionList[{}..{}]", cached_cnt, bucket_start_date, bucket_end_date);
+
+//         if !transactions.is_empty() {
+//             let (cursor, final_txn) = transactions.get(transactions.len()-1).unwrap();
+//             if final_txn.end_at_ >= bucket_end_date_time {
+//                 // this bucket is full
+//                 has_next_page = false;
+//             }
+//             end_cursor = Some(cursor.clone());
+//         }
+
+//         while has_next_page {
+            
+//                     let mut builder = meter::meter_consumption::Query::builder()
+//                         .with_meter_id(meter_node_id.clone())
+//                         .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
+//                         .with_start_at(bucket_start_date_time.clone())
+//                         .with_timezone(String::from("Europe/London"))
+//                         .with_first(50)
+//                         ;
+//                     if let Some(end_cursor) = &end_cursor {
+//                         builder = builder.with_after(end_cursor.clone());
+//                     }
+                    
+//                     let query = builder.build()?;
+
+//                     let response = request_manager.call(&query).await?;
+
+//                     // writeln!(out, "{}", serde_json::to_string(&response)?)?;
+
+//                     // let response: meter::electricity_agreement_line_items::Response = serde_json::from_reader(&input)?;
+
+//                     let page = match response.node_ {
+//                         meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
+//                             electricity_meter.consumption_
+//                         },
+//                         meter::meter_consumption::Node::GasMeterType(gas_meter) => {
+//                             gas_meter.consumption_
+//                         },
+//                         _ => {
+//                             return Err(anyhow!("Unexpected response type"))
+//                         },
+//                     };
+
+//                     let response_has_next_page = page.page_info.has_next_page;
+
+//                     for edge in page.edges {
+//                         //println!("Record for {:?} - {:?}", edge.node.start_at_, edge.node.end_at_);
+
+//                         if has_next_page {
+//                             // we are still filling the bucket we need to return
+//                             if edge.node.start_at_ >= bucket_end_date_time {
+//                                 //println!("Beyond the end of this bucket, break");
+//                                 // this bucket is full
+//                                 has_next_page = false;
+//                                 break; // TODO: save this in the next bucket
+//                             }
+//                             transactions.push((edge.cursor.clone(), edge.node));
+//                             end_cursor = Some(edge.cursor);
+//                         }
+//                     }
+
+//                     // perhaps there were no additional rows for the next bucket but no more rows for this one either
+//                     if has_next_page {
+//                         if response_has_next_page {
+//                             //println!("No more data available so we are done");
+//                         }
+//                         has_next_page = response_has_next_page;
+//                     }
+//         }
+
+//         let mut result = ConsumptionList {
+//             account_number,
+//             meter_node_id,
+//             end_cursor,
+//             has_next_page,
+//             consumption: transactions,
+//             hash_key,
+//             start_date: bucket_start_date,
+//             end_date: bucket_end_date,
+//             start_date_time: bucket_start_date_time.clone(),
+//             end_date_time: bucket_end_date_time,
+//         };
+
+//         if has_next_page {
+//             // bucket is not yet full
+//             result.fetch_all(request_manager, &bucket_start_date_time).await?;
+//         }       
+
+//         if result.consumption.len() > cached_cnt {
+//             cache_manager.write_vec_for_date(&result.start_date, &result.hash_key, &result.consumption, cached_cnt)?;
+//         }
+        
+//         Ok(result)
+//     }
+
+//     pub fn print_consumption(consumption: &Vec<meter::meter_consumption::ConsumptionType>) -> anyhow::Result<()> {
+//         let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+
+//         println!();
+//         println!("{:-^20} {:-^20} {:-^10} ", "From", "To", "Amount");
+//         for item in consumption {
+//             println!("{:20} {:20} {:10.3}", item.start_at_.format(&format).unwrap(), item.end_at_.format(&format).unwrap(), item.value_);
+//         }
+//         Ok(())
+//     }
+
+//     pub async fn fetch_all(&mut self, request_manager: &RequestManager, start_date_time: &DateTime)  -> anyhow::Result<()> {
+//         let mut has_next_page = self.has_next_page;
+
+//         //println!("fetch_all statement transactions {} in buffer", self.line_items.len());
+
+        
+
+//         while has_next_page {
+//             let mut builder = meter::meter_consumption::Query::builder()
+//                 .with_meter_id(self.meter_node_id.clone())
+//                 .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
+//                 .with_start_at(start_date_time.clone())
+//                 .with_timezone(String::from("Europe/London"))
+//                 .with_first(50)
+//                 ;
+//             if let Some(end_cursor) = &self.end_cursor {
+//                 builder = builder.with_after(end_cursor.clone());
+//             }
+            
+//             let query = builder.build()?;
+
+//             let response = request_manager.call(&query).await?;
+
+//             let page = match response.node_ {
+//                 meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
+//                     electricity_meter.consumption_
+//                 },
+//                 meter::meter_consumption::Node::GasMeterType(gas_meter) => {
+//                     gas_meter.consumption_
+//                 },
+//                 _ => {
+//                     return Err(anyhow!("Unexpected response type"))
+//                 },
+//             };
+
+//             let response_has_next_page = page.page_info.has_next_page;
+            
+//             for edge in page.edges {
+//                 if edge.node.end_at_ >= self.end_date_time { // have to test here before we move edge.node and break later
+//                     // this bucket is full
+//                     has_next_page = false;
+//                 }
+//                 self.consumption.push((edge.cursor.clone(), edge.node));
+//                 self.end_cursor = Some(edge.cursor);
+
+
+//                 if !has_next_page {
+//                     // this bucket is full
+//                     break; // TODO: save this in the next bucket
+//                 }
+//             }
+
+//             // perhaps there were no additional rows for the next bucket but no more rows for this one either
+//             if has_next_page {
+//                 has_next_page = response_has_next_page;
+//             }
+//         }
+//         self.has_next_page = has_next_page;
+//         Ok(())
+//     }
+// }

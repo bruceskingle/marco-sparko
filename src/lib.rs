@@ -275,10 +275,7 @@ impl MarcoSparkoContext {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         private_file::create_private_dir(&dir_path)?;
 
-        Ok(Arc::new(CacheManager {
-            dir_path,
-            verbose,
-        }))
+        Ok(Arc::new(CacheManager::new(dir_path,verbose)))
     }
 
     pub fn read_cache<T>(&self, module_id: &str) -> Option<T>
