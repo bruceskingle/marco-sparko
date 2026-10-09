@@ -78,51 +78,51 @@ impl MeterManager {
     //     Ok(())
     // }
 
-    pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
-        let properties = self.get_properties(account_number).await?;
-        for property in &properties.data_set.data.account_.properties_ {
-            for network in &property.smart_device_networks_ {
-                for device in &network.smart_devices_ {
-                    if let super::graphql::DeviceType::Esme =  device.type_ {
-                        let mut cnt=5;
-                        let ten_seconds = Duration::new(10, 0);
+    // pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
+    //     let properties = self.get_properties(account_number).await?;
+    //     for property in &properties.data_set.data.account_.properties_ {
+    //         for network in &property.smart_device_networks_ {
+    //             for device in &network.smart_devices_ {
+    //                 if let super::graphql::DeviceType::Esme =  device.type_ {
+    //                     let mut cnt=5;
+    //                     let ten_seconds = Duration::new(10, 0);
 
 
-                        let now = DateTime::now_utc();
-                        let now_mod_ten = now.replace_second(now.second()%10).unwrap();
-                        let mut end_timestamp = now_mod_ten.unix_timestamp() + 10;
+    //                     let now = DateTime::now_utc();
+    //                     let now_mod_ten = now.replace_second(now.second()%10).unwrap();
+    //                     let mut end_timestamp = now_mod_ten.unix_timestamp() + 10;
 
-                        while cnt>0 {
-                            cnt -= 1;
+    //                     while cnt>0 {
+    //                         cnt -= 1;
 
-                            let start = DateTime::from_unix_timestamp(end_timestamp - 60)?;
-                            let end = DateTime::from_unix_timestamp(end_timestamp)?;
+    //                         let start = DateTime::from_unix_timestamp(end_timestamp - 60)?;
+    //                         let end = DateTime::from_unix_timestamp(end_timestamp)?;
 
-                            let query = meter::get_current_demand::Query::builder()
-                                .with_meter_device_id(device.device_id_.clone())
-                                .with_start(start)
-                                .with_end(end)
-                                .with_grouping(crate::octopus::graphql::TelemetryGrouping::TenSeconds)
-                                .build()?;
-                            let demand = &self.request_manager.call(&query).await?;
+    //                         let query = meter::get_current_demand::Query::builder()
+    //                             .with_meter_device_id(device.device_id_.clone())
+    //                             .with_start(start)
+    //                             .with_end(end)
+    //                             .with_grouping(crate::octopus::graphql::TelemetryGrouping::TenSeconds)
+    //                             .build()?;
+    //                         let demand = &self.request_manager.call(&query).await?;
                 
-                            if demand.smart_meter_telemetry_.is_empty() {
-                                println!("NO RESULT");
-                            }
-                            else {
-                                let result = demand.smart_meter_telemetry_.get(demand.smart_meter_telemetry_.len() - 1).unwrap();
-                                println!("{} at {}", result.demand_, result.read_at_);
-                            }
-                            end_timestamp += 10;
-                            sleep(ten_seconds).await;
-                        }
-                    }
-                }
-            }
-        }
+    //                         if demand.smart_meter_telemetry_.is_empty() {
+    //                             println!("NO RESULT");
+    //                         }
+    //                         else {
+    //                             let result = demand.smart_meter_telemetry_.get(demand.smart_meter_telemetry_.len() - 1).unwrap();
+    //                             println!("{} at {}", result.demand_, result.read_at_);
+    //                         }
+    //                         end_timestamp += 10;
+    //                         sleep(ten_seconds).await;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyDataSet>{
         // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {

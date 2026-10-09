@@ -38,6 +38,7 @@ time-tz = "2.0.0"
 #tz-rs = "0.7.0"
 dioxus = { version = "0.7.3", features = ["router", "desktop"] }
 dioxus-desktop = "0.7"
+dioxus-free-icons = { version = "0.10", features = ["lucide"] }
 anyhow = "1.0.100"
 wasm-bindgen = "0.2.105"
 fs4 = "0.13.1"

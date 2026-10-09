@@ -139,7 +139,7 @@ body {
     padding: 10px;
 }
 
-.link {
+.link, a {
     color: rgb(153, 153, 226);
     text-decoration: underline;
     cursor: pointer;
@@ -148,6 +148,12 @@ body {
     border: white 1px solid;
     border-radius: 5px;
     padding: 10px; */
+}
+
+/* Small icon sitting alongside text, e.g. the external link marker */
+.inline-icon {
+    vertical-align: middle;
+    margin-left: 4px;
 }
 
 #links a:hover {

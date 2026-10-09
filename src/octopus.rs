@@ -183,8 +183,8 @@ impl Module for OctopusModule {
                 path: "bills",
             },
             PageInfo {
-                label: "Consumption",
-                path: "consumption",
+                label: "Properties",
+                path: "properties",
             }
         )
     }
@@ -342,11 +342,12 @@ impl Module for OctopusModule {
                     }
                 }
             },
-            "consumption" => {
+            "properties" => {
                 rsx! {
-                    ConsumptionPage {
+                    PropertiesPage {
                         account_id: self.account_id.clone(),
                         meter_manager: self.meter_manager.clone(),
+                        path,
                     }
                 }
             },
@@ -480,20 +481,22 @@ fn BillDetail(props: BillDetailProps) -> Element {
 }
 
 #[derive(Props, Clone)]
-struct ConsumptionPageProps {
+struct PropertiesPageProps {
     account_id: String,
     meter_manager: Arc<MeterManager>,
+    path: Vec<String>,
 }
 
-impl PartialEq for ConsumptionPageProps {
+impl PartialEq for PropertiesPageProps {
     fn eq(&self, other: &Self) -> bool {
         self.account_id == other.account_id
             && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
+            && self.path == other.path
     }
 }
 
 #[component]
-fn ConsumptionPage(props: ConsumptionPageProps) -> Element {
+fn PropertiesPage(props: PropertiesPageProps) -> Element {
     // Fetch the list of all properties, this runs once when the component is mounted.
     let properties_resource = use_resource({
         let meter_manager = props.meter_manager.clone();
@@ -510,15 +513,89 @@ fn ConsumptionPage(props: ConsumptionPageProps) -> Element {
             div { "Loading Properties for account {props.account_id}..." }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:?}"))?,
-        Some(Ok(property_list)) => rsx! {
-            table {
-                {Property::gui_summary_header()?}
-                for x in &property_list.data_set.data.account_.properties_ {
-                    {Property::gui_summary_line(x)?}
+        Some(Ok(property_list)) => {
+
+            // Are we looking at one bill?
+            if let Some(property_id) = props.path.first() {
+                if let Some(property) = property_list.property_map.get(property_id) {
+                    let p = property.clone();
+                    // The key causes BillDetail to be re-mounted when the bill changes, which drops
+                    // (and so cancels) any fetch in progress for the previous bill.
+                    rsx! {
+                        PropertyDetail {
+                            key: "{property_id}",
+                            account_id: props.account_id.clone(),
+                            property: property.clone(),
+                            meter_manager: props.meter_manager.clone(),
+                        }
+                    }
+                }
+                else {
+                    rsx! {
+                        div { "No such property {property_id}" }
+                    }
+                }
+            }
+            else {
+                rsx! {
+                    table {
+                        {Property::gui_summary_header()?}
+                        for property in property_list.property_map.values() {
+                            {property.gui_summary_line()?}
+                        }
+                    }
                 }
             }
         },
     }
+}
+
+#[derive(Props, Clone)]
+struct PropertyDetailProps {
+    property: Arc<graphql::meter::account_properties_meters::PropertyType>,
+    account_id: String,
+    meter_manager: Arc<MeterManager>,
+}
+
+impl PartialEq for PropertyDetailProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+            && Arc::ptr_eq(&self.property, &other.property)
+            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
+    }
+}
+
+#[component]
+fn PropertyDetail(props: PropertyDetailProps) -> Element {
+
+    rsx! {
+        {props.property.gui_display()?}
+    }
+    // // Fetch all transactions for this bill.
+    // let transactions_resource = use_resource({
+    //     let props = props.clone();
+    //     move || {
+    //         let props = props.clone();
+    //         async move {
+    //             props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
+    //                 props.billing_timezone).await
+    //         }
+    //     }
+    // });
+
+    // let Some(bill) = find_bill(&props.bill_id, &props.bills) else {
+    //     return rsx! {
+    //         {format!("No such bill {}", props.bill_id)}
+    //     };
+    // };
+
+    // match &*transactions_resource.read() {
+    //     None => rsx! {
+    //         {format!("Loading transactions for bill {}...", props.bill_id)}
+    //     },
+    //     Some(Err(error)) => Err(anyhow!("Failed to load transactions for bill {}: {error:?}", props.bill_id))?,
+    //     Some(Ok(bill_transactions)) => bill.gui_display(bill_transactions),
+    // }
 }
 
 pub struct OctopusModuleFactory {
