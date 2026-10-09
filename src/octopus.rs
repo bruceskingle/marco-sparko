@@ -189,371 +189,335 @@ impl Module for OctopusModule {
         )
     }
 
-    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a> {
+    fn get_component(&self, page_id: &str, path: Vec<String>) -> Element {
         match page_id {
             "user" => {
-                Box::new(|| {
-                    // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
-                    let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
-                    let account_user = &self.account_manager.data_set.data.viewer_;
-                    let dob = if let Some(date) = &account_user.date_of_birth_ {
-                        date.format(&date_format).unwrap()
-                    }
-                    else {
-                        "".to_string()
-                    };
+                // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+                let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
+                let account_user = &self.account_manager.data_set.data.viewer_;
+                let dob = if let Some(date) = &account_user.date_of_birth_ {
+                    date.format(&date_format).unwrap()
+                }
+                else {
+                    "".to_string()
+                };
 
-                            // tr {
-                            //    th { class: "row-header","accounts"} td{"{account_user.accounts_}"}
-                            // }
-                    rsx! {
-                        h1 { "Viewer (Current User)" }
-                        table { class: "display",
-                            tr {
-                                th { class: "row-header", "ID" }
-                                td { "{account_user.id_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Full Name" }
-                                td { "{account_user.full_name_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Title" }
-                                td { "{account_user.title_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Preferred Name" }
-                                td { "{account_user.preferred_name_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Given Name" }
-                                td { "{account_user.given_name_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Family Name" }
-                                td { "{account_user.family_name_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Pronouns" }
-                                td { {account_user.pronouns_.as_deref().unwrap_or("")} }
-                            }
-                            tr {
-                                th { class: "row-header", "Email" }
-                                td { "{account_user.email_}" }
-                            }
-
-                            tr {
-                                th { class: "row-header", "Mobile" }
-                                td { "{account_user.mobile_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Landline" }
-                                td { "{account_user.landline_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "API Key" }
-                                td { {account_user.live_secret_key_.as_deref().unwrap_or("")} }
-                            }
-                            tr {
-                                th { class: "row-header", "Is Deceased" }
-                                td { "{account_user.is_deceased_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Date of Birth" }
-                                td { {dob} }
-                            }
-                            tr {
-                                th { class: "row-header", "Alternative Phone Numbers" }
-                                td { {format!("{:?}", account_user.alternative_phone_numbers_)} }
-                            }
-                            tr {
-                                th { class: "row-header", "Has Family Issues" }
-                                td { "{account_user.has_family_issues_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Is in Hardship" }
-                                td { "{account_user.is_in_hardship_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Is opted in to Wheel of Fortune" }
-                                td { "{account_user.is_opted_in_to_wof_}" }
-                            }
+                        // tr {
+                        //    th { class: "row-header","accounts"} td{"{account_user.accounts_}"}
+                        // }
+                rsx! {
+                    h1 { "Viewer (Current User)" }
+                    table { class: "display",
+                        tr {
+                            th { class: "row-header", "ID" }
+                            td { "{account_user.id_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Full Name" }
+                            td { "{account_user.full_name_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Title" }
+                            td { "{account_user.title_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Preferred Name" }
+                            td { "{account_user.preferred_name_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Given Name" }
+                            td { "{account_user.given_name_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Family Name" }
+                            td { "{account_user.family_name_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Pronouns" }
+                            td { {account_user.pronouns_.as_deref().unwrap_or("")} }
+                        }
+                        tr {
+                            th { class: "row-header", "Email" }
+                            td { "{account_user.email_}" }
                         }
 
-                        h2 { "Accounts" }
+                        tr {
+                            th { class: "row-header", "Mobile" }
+                            td { "{account_user.mobile_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Landline" }
+                            td { "{account_user.landline_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "API Key" }
+                            td { {account_user.live_secret_key_.as_deref().unwrap_or("")} }
+                        }
+                        tr {
+                            th { class: "row-header", "Is Deceased" }
+                            td { "{account_user.is_deceased_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Date of Birth" }
+                            td { {dob} }
+                        }
+                        tr {
+                            th { class: "row-header", "Alternative Phone Numbers" }
+                            td { {format!("{:?}", account_user.alternative_phone_numbers_)} }
+                        }
+                        tr {
+                            th { class: "row-header", "Has Family Issues" }
+                            td { "{account_user.has_family_issues_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Is in Hardship" }
+                            td { "{account_user.is_in_hardship_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Is opted in to Wheel of Fortune" }
+                            td { "{account_user.is_opted_in_to_wof_}" }
+                        }
+                    }
 
-                        for account in &account_user.accounts_ {
-                            div {
-                                h3 { "Account {account.number_}" }
-                                table { class: "display",
-                                    tr {
-                                        th { class: "row-header", "Brand" }
-                                        td { "{account.brand_}" }
-                                    }
-                                    tr {
-                                        th { class: "row-header", "Overdue Balance" }
-                                        td { "{account.overdue_balance_}" }
-                                    }
-                                    tr {
-                                        th { class: "row-header", "Billing Name" }
-                                        td { "{account.billing_name_}" }
-                                    }
-                                    tr {
-                                        th { class: "row-header", "Billing Sub Name" }
-                                        td { {account.billing_sub_name_.as_deref().unwrap_or("")} }
-                                    }
-                                    tr {
-                                        th { class: "row-header", "Billing EMail" }
-                                        td { {account.billing_email_.as_deref().unwrap_or("")} }
-                                    }
+                    h2 { "Accounts" }
+
+                    for account in &account_user.accounts_ {
+                        div {
+                            h3 { "Account {account.number_}" }
+                            table { class: "display",
+                                tr {
+                                    th { class: "row-header", "Brand" }
+                                    td { "{account.brand_}" }
+                                }
+                                tr {
+                                    th { class: "row-header", "Overdue Balance" }
+                                    td { "{account.overdue_balance_}" }
+                                }
+                                tr {
+                                    th { class: "row-header", "Billing Name" }
+                                    td { "{account.billing_name_}" }
+                                }
+                                tr {
+                                    th { class: "row-header", "Billing Sub Name" }
+                                    td { {account.billing_sub_name_.as_deref().unwrap_or("")} }
+                                }
+                                tr {
+                                    th { class: "row-header", "Billing EMail" }
+                                    td { {account.billing_email_.as_deref().unwrap_or("")} }
                                 }
                             }
                         }
                     }
-                })
+                }
             },
             "account" => {
-                Box::new(|| {
-                    let account_user = &self.account_manager.data_set.data.viewer_;
-                    // let x = account_user.full_name_;
-                    let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
-                    rsx! {
-                        table { class: "display",
-                            tr {
-                                th { class: "row-header", "ID" }
-                                td { "{account_user.id_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "Full Name" }
-                                td { "{account_user.full_name_}" }
-                            }
-                            tr {
-                                th { class: "row-header", "API Key" }
-                                td { "{api_key}" }
-                            }
-                        
+                let account_user = &self.account_manager.data_set.data.viewer_;
+                // let x = account_user.full_name_;
+                let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
+                rsx! {
+                    table { class: "display",
+                        tr {
+                            th { class: "row-header", "ID" }
+                            td { "{account_user.id_}" }
                         }
+                        tr {
+                            th { class: "row-header", "Full Name" }
+                            td { "{account_user.full_name_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "API Key" }
+                            td { "{api_key}" }
+                        }
+                    
                     }
-                })
+                }
             },
             "bills" => {
-                Box::new(move || {
-                    // Create all the signals and actions.
-
-                    // First the list of all bills.
-                    let mut bill_list_call_signal = use_signal::<bool>(|| true);
-
-                    let mut bill_list_action = use_action(move |args: (String, Arc<BillManager>)| async move {
-                        args.1.fetch_bills(
-                            args.0).await
-                    });
-
-                    // Initiate the fetch of all bills if we haven;t already done so.
-                    if *bill_list_call_signal.read() {
-                        bill_list_call_signal.set(false);
-                        bill_list_action.call((self.account_id.clone(), self.bill_manager.clone()));
+                rsx! {
+                    BillsPage {
+                        account_id: self.account_id.clone(),
+                        bill_manager: self.bill_manager.clone(),
+                        billing_timezone: self.billing_timezone,
+                        path,
                     }
-
-                    // Now the action to fetch all transactions for one bill
-                    let mut bill_transactions_call_signal = use_signal::<Option<String>>(|| None);
-                    let mut bill_transactions_action = use_action(
-                        | args: (Arc<BillManager>, String, String, 
-                        &'static Tz)
-                        | async move {
-                           let (bm, account_number, statement_id, billing_timezone) = args;
-
-                            bm.fetch_bill_transaction_breakdown(account_number, statement_id, 
-                                billing_timezone
-                                // timezones::db::europe::LONDON
-                            ).await
-                        });
-
-
-
-
-                    // Do we have the list of all bills on this account?
-
-                    if let Some(result) = bill_list_action.value() {
-                        let bills_signal = result?;
-                        let bills = &*bills_signal.read();
-
-                        // Are we looking at one bill?
-                        if let Some(bill_id) = path.get(0) {
-
-                            // Yes, have we initiated the fetch of the transactions?
-                            let opt_current_bill_id =
-                            if let Some(current_bill_id) = &*bill_transactions_call_signal.read() {
-                                if current_bill_id != bill_id {
-                                    // This is a different bill, so cancel the fetch
-                                    bill_transactions_action.cancel();
-                                    None
-                                }
-                                else {
-                                    Some(current_bill_id.clone())
-                                }
-                            }
-                            else {
-                                None
-                            };
-
-                            if opt_current_bill_id.is_none() {
-                                // start transaction fetch
-                                bill_transactions_call_signal.set(Some(bill_id.clone()));
-                                let acid: String = self.account_id.clone();
-
-                                bill_transactions_action.call((self.bill_manager.clone(), acid, bill_id.clone(), self.billing_timezone));
-                            }
-
-                            if let Some(bill) = find_bill(bill_id, bills) {
-                                if let Some(result) = bill_transactions_action.value() {
-                                    let bill_transactions_signal = result?;
-                                    let bill_transactions = &*bill_transactions_signal.read();
-                                    
-                                    bill.gui_display(bill_transactions)
-                                }
-                                else {
-                                    rsx! {
-                                        {format!("Loading transactions for bill {}...", bill_id)}
-                                    }
-                                }
-                            }
-                            else {
-                                rsx! {
-                                    {format!("No such bill {bill_id}")}
-                                }
-                            }
-                        }
-                        else {
-                            rsx! {
-                                table {
-                                    {AbstractBill::gui_summary_header()?}
-                                    for (_id , (attributes , bill)) in &bills.data_set.data {
-                                        {bill.gui_summary_line(attributes)?}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else {
-                        rsx! {
-                            div { "Loading Bills for account {self.account_id}..." }
-                        }
-                    }
-                })
+                }
             },
             "consumption" => {
-                Box::new(move || {
-                    // Create all the signals and actions.
-
-                    // First the list of all properties.
-                    let mut property_list_call_signal = use_signal::<bool>(|| true);
-
-                    let mut property_list_action = use_action(move |account_id: String, meter_manager: Arc<MeterManager>| async move {
-                        meter_manager.get_properties(
-                            &account_id).await
-                    });
-
-                    // Initiate the fetch of all properties if we haven;t already done so.
-                    if *property_list_call_signal.read() {
-                        property_list_call_signal.set(false);
-                        property_list_action.call(self.account_id.clone(), self.meter_manager.clone());
+                rsx! {
+                    ConsumptionPage {
+                        account_id: self.account_id.clone(),
+                        meter_manager: self.meter_manager.clone(),
                     }
-
-                    // // Now the action to fetch all transactions for one bill
-                    // let mut bill_transactions_call_signal = use_signal::<Option<String>>(|| None);
-                    // let mut bill_transactions_action = use_action(
-                    //     | args: (Arc<BillManager>, String, String, 
-                    //     &'static Tz)
-                    //     | async move {
-                    //        let (bm, account_number, statement_id, billing_timezone) = args;
-
-                    //         bm.fetch_bill_transaction_breakdown(account_number, statement_id, 
-                    //             billing_timezone
-                    //             // timezones::db::europe::LONDON
-                    //         ).await
-                    //     });
-
-
-
-
-                    // Do we have the list of all bills on this account?
-
-                    if let Some(result) = property_list_action.value() {
-                        let property_list_signal = result?;
-                        let property_list = &*property_list_signal.read();
-
-                        // // Are we looking at one bill?
-                        // if let Some(bill_id) = path.get(0) {
-
-                        //     // Yes, have we initiated the fetch of the transactions?
-                        //     let opt_current_bill_id =
-                        //     if let Some(current_bill_id) = &*bill_transactions_call_signal.read() {
-                        //         if current_bill_id != bill_id {
-                        //             // This is a different bill, so cancel the fetch
-                        //             bill_transactions_action.cancel();
-                        //             None
-                        //         }
-                        //         else {
-                        //             Some(current_bill_id.clone())
-                        //         }
-                        //     }
-                        //     else {
-                        //         None
-                        //     };
-
-                        //     if opt_current_bill_id.is_none() {
-                        //         // start transaction fetch
-                        //         bill_transactions_call_signal.set(Some(bill_id.clone()));
-                        //         let acid: String = self.account_id.clone();
-
-                        //         bill_transactions_action.call((self.bill_manager.clone(), acid, bill_id.clone(), self.billing_timezone));
-                        //     }
-
-                        //     if let Some(bill) = find_bill(bill_id, bills) {
-                        //         if let Some(result) = bill_transactions_action.value() {
-                        //             let bill_transactions_signal = result?;
-                        //             let bill_transactions = &*bill_transactions_signal.read();
-                                    
-                        //             bill.gui_display(bill_transactions)
-                        //         }
-                        //         else {
-                        //             rsx! {
-                        //                 {format!("Loading transactions for bill {}...", bill_id)}
-                        //             }
-                        //         }
-                        //     }
-                        //     else {
-                        //         rsx! {
-                        //             {format!("No such bill {bill_id}")}
-                        //         }
-                        //     }
-                        // }
-                        // else {
-                            rsx! {
-                                table {
-                                    {Property::gui_summary_header()?}
-                                    for x in &property_list.data_set.data.account_.properties_ {
-                                        {Property::gui_summary_line(x)?}
-                                    }
-                                }
-                            }
-                        // }
-                    }
-                    else {
-                        rsx! {
-                            div { "Loading Properties for account {self.account_id}..." }
-                        }
-                    }
-                })
+                }
             },
             _ => {
-                Box::new(move || {
-                    rsx! {
-                        div { "Unknown page_id, {page_id}" }
-                    }
-                    })
+                rsx! {
+                    div { "Unknown page_id, {page_id}" }
+                }
             },
         }
+    }
+}
+
+/*
+ * Page components.
+ *
+ * Each page which needs hooks is a real component so that its hooks are owned by that component
+ * rather than by the enclosing Module component, which renders different pages at different times.
+ */
+
+#[derive(Props, Clone)]
+struct BillsPageProps {
+    account_id: String,
+    bill_manager: Arc<BillManager>,
+    billing_timezone: &'static Tz,
+    path: Vec<String>,
+}
+
+impl PartialEq for BillsPageProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+            && Arc::ptr_eq(&self.bill_manager, &other.bill_manager)
+            && std::ptr::eq(self.billing_timezone, other.billing_timezone)
+            && self.path == other.path
+    }
+}
+
+#[component]
+fn BillsPage(props: BillsPageProps) -> Element {
+    // Fetch the list of all bills, this runs once when the component is mounted.
+    let bills_resource = use_resource({
+        let bill_manager = props.bill_manager.clone();
+        let account_id = props.account_id.clone();
+        move || {
+            let bill_manager = bill_manager.clone();
+            let account_id = account_id.clone();
+            async move { bill_manager.fetch_bills(account_id).await }
+        }
+    });
+
+    match &*bills_resource.read() {
+        None => rsx! {
+            div { "Loading Bills for account {props.account_id}..." }
+        },
+        Some(Err(error)) => Err(anyhow!("Failed to load bills: {error:?}"))?,
+        Some(Ok(bills)) => {
+            // Are we looking at one bill?
+            if let Some(bill_id) = props.path.first() {
+                // The key causes BillDetail to be re-mounted when the bill changes, which drops
+                // (and so cancels) any fetch in progress for the previous bill.
+                rsx! {
+                    BillDetail {
+                        key: "{bill_id}",
+                        account_id: props.account_id.clone(),
+                        bill_id: bill_id.clone(),
+                        bills: bills.clone(),
+                        bill_manager: props.bill_manager.clone(),
+                        billing_timezone: props.billing_timezone,
+                    }
+                }
+            }
+            else {
+                rsx! {
+                    table {
+                        {AbstractBill::gui_summary_header()?}
+                        for (_id , (attributes , bill)) in &bills.data_set.data {
+                            {bill.gui_summary_line(attributes)?}
+                        }
+                    }
+                }
+            }
+        },
+    }
+}
+
+#[derive(Props, Clone)]
+struct BillDetailProps {
+    account_id: String,
+    bill_id: String,
+    bills: Arc<BillDataSet>,
+    bill_manager: Arc<BillManager>,
+    billing_timezone: &'static Tz,
+}
+
+impl PartialEq for BillDetailProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+            && self.bill_id == other.bill_id
+            && Arc::ptr_eq(&self.bills, &other.bills)
+            && Arc::ptr_eq(&self.bill_manager, &other.bill_manager)
+            && std::ptr::eq(self.billing_timezone, other.billing_timezone)
+    }
+}
+
+#[component]
+fn BillDetail(props: BillDetailProps) -> Element {
+    // Fetch all transactions for this bill.
+    let transactions_resource = use_resource({
+        let props = props.clone();
+        move || {
+            let props = props.clone();
+            async move {
+                props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
+                    props.billing_timezone).await
+            }
+        }
+    });
+
+    let Some(bill) = find_bill(&props.bill_id, &props.bills) else {
+        return rsx! {
+            {format!("No such bill {}", props.bill_id)}
+        };
+    };
+
+    match &*transactions_resource.read() {
+        None => rsx! {
+            {format!("Loading transactions for bill {}...", props.bill_id)}
+        },
+        Some(Err(error)) => Err(anyhow!("Failed to load transactions for bill {}: {error:?}", props.bill_id))?,
+        Some(Ok(bill_transactions)) => bill.gui_display(bill_transactions),
+    }
+}
+
+#[derive(Props, Clone)]
+struct ConsumptionPageProps {
+    account_id: String,
+    meter_manager: Arc<MeterManager>,
+}
+
+impl PartialEq for ConsumptionPageProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
+    }
+}
+
+#[component]
+fn ConsumptionPage(props: ConsumptionPageProps) -> Element {
+    // Fetch the list of all properties, this runs once when the component is mounted.
+    let properties_resource = use_resource({
+        let meter_manager = props.meter_manager.clone();
+        let account_id = props.account_id.clone();
+        move || {
+            let meter_manager = meter_manager.clone();
+            let account_id = account_id.clone();
+            async move { meter_manager.get_properties(&account_id).await }
+        }
+    });
+
+    match &*properties_resource.read() {
+        None => rsx! {
+            div { "Loading Properties for account {props.account_id}..." }
+        },
+        Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:?}"))?,
+        Some(Ok(property_list)) => rsx! {
+            table {
+                {Property::gui_summary_header()?}
+                for x in &property_list.data_set.data.account_.properties_ {
+                    {Property::gui_summary_line(x)?}
+                }
+            }
+        },
     }
 }
 

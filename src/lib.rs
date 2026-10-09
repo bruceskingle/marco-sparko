@@ -131,7 +131,7 @@ pub struct PageInfo {
 pub trait Module {
     fn get_page_list(&self) -> Vec<PageInfo>;
     fn module_id(&self) -> &'static str;
-    fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a>;
+    fn get_component(&self, page_id: &str, path: Vec<String>) -> Element;
     fn cli_debug(&self) -> anyhow::Result<()>;
 }
 
