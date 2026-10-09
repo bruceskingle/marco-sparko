@@ -52,15 +52,15 @@ impl AbstractBill {
 
      pub fn gui_summary_header() -> Element{
         rsx!{
-            tr { style: "background: #666666;",
+            tr {
 
                 th { colspan: 5, "" }
-                th { "Balance" }
-                th { colspan: 3, "Charges" }
-                th { colspan: 3, "Credits" }
-                th { "Balance" }
+                th { class: "header", "Balance" }
+                th { class: "header", colspan: 3, "Charges" }
+                th { class: "header", colspan: 3, "Credits" }
+                th { class: "header", "Balance" }
             }
-            tr { style: "background: #666666;",
+            tr { class: "header",
                 th { "Date" }
                 th { "Ref" }
                 th { "From" }
@@ -356,10 +356,10 @@ impl TransactionType {
         rsx!{
             tr {
                 th { colspan: 11, "" }
-                th { colspan: 3, class: "span", "Net" }
-                th { colspan: 3, class: "span", "Gross" }
+                th { colspan: 3, class: "header", "Net" }
+                th { colspan: 3, class: "header", "Gross" }
             }
-            tr {
+            tr { class: "header",
                 th { "id" }
                 th { "Description" }
                 th { "Posted" }

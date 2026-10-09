@@ -1,12 +1,81 @@
+use dioxus::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::CacheManager;
-use crate::data_set::{SingleRecordDataSet};
+use crate::data_set::{DataSetAttributes, SingleRecordDataSet};
 use sparko_graphql::GraphQLQueryBuilder;
 
 use super::graphql::meter;
 use super::RequestManager;
+
+
+/*
+        #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty)]
+        pub struct PropertyType {
+            #[serde(rename = "id")]
+            pub id_: String, // T1
+            #[serde(rename = "address")]
+            pub address_: String, // T1
+            #[serde(rename = "postcode")]
+            pub postcode_: String, // T1
+            #[serde(rename = "occupancyPeriods")]
+            pub occupancy_periods_: Vec<OccupancyPeriodType>, // T1
+            #[serde(rename = "coordinates")]
+            pub coordinates_: CoordinatesType, // T1
+            #[serde(rename = "electricityMeterPoints")]
+            pub electricity_meter_points_: Vec<ElectricityMeterPointType>, // T1
+            #[serde(rename = "gasMeterPoints")]
+            pub gas_meter_points_: Vec<GasMeterPointType>, // T1
+            #[serde(rename = "smartDeviceNetworks")]
+            pub smart_device_networks_: Vec<SmartMeterDeviceNetworkType>, // T1
+        }
+*/
+
+pub type Property = meter::account_properties_meters::PropertyType;
+
+impl Property {
+    pub fn gui_summary_header() -> Element{
+        rsx!{
+            tr { class: "header",
+                th { "ID" }
+                th { "Address" }
+                th { "Post Code" }
+                th { "Occupancy Periods" }
+                th { "Coordinates" }
+            }
+        }
+    }
+
+    pub fn gui_summary_line(&self) -> Element {
+        // let row_class = if attributes.cached { "cached"} else {"fetched"};
+    let id = self.id_.clone();
+        
+        rsx!{
+            tr {
+                td {
+                    div {
+                        class: "link",
+                        // onclick: |_| {path_signal.set(vec!(String::from("bills"), abstract_bill.id_.clone()))},
+                        onclick: move |_| {
+                            // println!("Id={}", id);
+                            // let id = abstract_bill.id_.clone();
+                            // nav_callback(id);
+                            let mut path_signal = use_context::<Signal<Vec<String>>>();
+                            let new_path = vec![String::from("bills"), id.clone()];
+                            path_signal.set(new_path);
+                        },
+                        "{self.id_}"
+                    }
+                }
+                td { "{self.address_}" }
+                td { "{self.postcode_}" }
+                td { "{self.occupancy_periods_.len()}" }
+                td { "{self.coordinates_.latitude_}, {self.coordinates_.longitude_}" }
+            }
+        }
+    }
+}
 
 pub struct PropertyDataSet {
     pub data_set: SingleRecordDataSet<meter::account_properties_meters::Response>,

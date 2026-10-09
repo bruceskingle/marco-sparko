@@ -89,6 +89,20 @@ pub fn Module(module_id: String) -> Element {
         construct_module_action.call(module_registrations.clone(), context.clone(), module_id.clone());
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
     if let Some(result) = construct_module_action.value() {
         let builder_signal = result?;
         let builder = (*builder_signal.read()).clone();

@@ -24,7 +24,7 @@ use token::{OctopusTokenManager};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use crate::{CacheManager, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, octopus::{bill::{AbstractBill, BillDataSet}, token::OctopusAuthenticator}};
+use crate::{CacheManager, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, octopus::{bill::{AbstractBill, BillDataSet}, property::Property, token::OctopusAuthenticator}};
 
 // include!("octopus/graphql.rs");
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -181,7 +181,12 @@ impl Module for OctopusModule {
             PageInfo {
                 label: "Bills",
                 path: "bills",
-        })
+            },
+            PageInfo {
+                label: "Consumption",
+                path: "consumption",
+            }
+        )
     }
 
     fn get_component<'a>(&'a self, page_id: &'a str, path: Vec<String>) -> Box<dyn Fn() -> Element + 'a> {
@@ -432,6 +437,111 @@ impl Module for OctopusModule {
                     else {
                         rsx! {
                             div { "Loading Bills for account {self.account_id}..." }
+                        }
+                    }
+                })
+            },
+            "consumption" => {
+                Box::new(move || {
+                    // Create all the signals and actions.
+
+                    // First the list of all properties.
+                    let mut property_list_call_signal = use_signal::<bool>(|| true);
+
+                    let mut property_list_action = use_action(move |account_id: String, meter_manager: Arc<MeterManager>| async move {
+                        meter_manager.get_properties(
+                            &account_id).await
+                    });
+
+                    // Initiate the fetch of all properties if we haven;t already done so.
+                    if *property_list_call_signal.read() {
+                        property_list_call_signal.set(false);
+                        property_list_action.call(self.account_id.clone(), self.meter_manager.clone());
+                    }
+
+                    // // Now the action to fetch all transactions for one bill
+                    // let mut bill_transactions_call_signal = use_signal::<Option<String>>(|| None);
+                    // let mut bill_transactions_action = use_action(
+                    //     | args: (Arc<BillManager>, String, String, 
+                    //     &'static Tz)
+                    //     | async move {
+                    //        let (bm, account_number, statement_id, billing_timezone) = args;
+
+                    //         bm.fetch_bill_transaction_breakdown(account_number, statement_id, 
+                    //             billing_timezone
+                    //             // timezones::db::europe::LONDON
+                    //         ).await
+                    //     });
+
+
+
+
+                    // Do we have the list of all bills on this account?
+
+                    if let Some(result) = property_list_action.value() {
+                        let property_list_signal = result?;
+                        let property_list = &*property_list_signal.read();
+
+                        // // Are we looking at one bill?
+                        // if let Some(bill_id) = path.get(0) {
+
+                        //     // Yes, have we initiated the fetch of the transactions?
+                        //     let opt_current_bill_id =
+                        //     if let Some(current_bill_id) = &*bill_transactions_call_signal.read() {
+                        //         if current_bill_id != bill_id {
+                        //             // This is a different bill, so cancel the fetch
+                        //             bill_transactions_action.cancel();
+                        //             None
+                        //         }
+                        //         else {
+                        //             Some(current_bill_id.clone())
+                        //         }
+                        //     }
+                        //     else {
+                        //         None
+                        //     };
+
+                        //     if opt_current_bill_id.is_none() {
+                        //         // start transaction fetch
+                        //         bill_transactions_call_signal.set(Some(bill_id.clone()));
+                        //         let acid: String = self.account_id.clone();
+
+                        //         bill_transactions_action.call((self.bill_manager.clone(), acid, bill_id.clone(), self.billing_timezone));
+                        //     }
+
+                        //     if let Some(bill) = find_bill(bill_id, bills) {
+                        //         if let Some(result) = bill_transactions_action.value() {
+                        //             let bill_transactions_signal = result?;
+                        //             let bill_transactions = &*bill_transactions_signal.read();
+                                    
+                        //             bill.gui_display(bill_transactions)
+                        //         }
+                        //         else {
+                        //             rsx! {
+                        //                 {format!("Loading transactions for bill {}...", bill_id)}
+                        //             }
+                        //         }
+                        //     }
+                        //     else {
+                        //         rsx! {
+                        //             {format!("No such bill {bill_id}")}
+                        //         }
+                        //     }
+                        // }
+                        // else {
+                            rsx! {
+                                table {
+                                    {Property::gui_summary_header()?}
+                                    for x in &property_list.data_set.data.account_.properties_ {
+                                        {Property::gui_summary_line(x)?}
+                                    }
+                                }
+                            }
+                        // }
+                    }
+                    else {
+                        rsx! {
+                            div { "Loading Properties for account {self.account_id}..." }
                         }
                     }
                 })

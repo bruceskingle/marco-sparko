@@ -188,10 +188,9 @@ th {
     color: var(--header);
 }
 
-th.span {
-    background-color: var(--header_span_bg);
+.header {
     color: var(--header);
-    text-align: center;
+    background-color: var(--header_span_bg);
 }
 
 .derived {

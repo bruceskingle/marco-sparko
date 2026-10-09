@@ -55,6 +55,10 @@ pub fn App() -> Element {
     // Store the init signal in context so it can be accessed and reset from anywhere
     use_context_provider::<Signal<InitRequested>>(move || init_signal);
     
+    use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
+
+    use_context_provider::<ModuleRegistrations>(move || ModuleRegistrations::new(verbose));
+
     let window = use_window();
     window.set_inner_size(LogicalSize::new(1400, 768));
     window.set_title("Marco Sparko");
@@ -66,10 +70,8 @@ pub fn App() -> Element {
         let marco_sparko_context = MarcoSparkoContext::new(args)?;
         context_signal.set(Some(marco_sparko_context));
         // let x: Signal<Arc<MarcoSparkoContext>>;
-        use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
-
-        let module_registrations = ModuleRegistrations::new(verbose);
-        use_context_provider::<ModuleRegistrations>(move || module_registrations);
+        
+        
 
         init_signal.set(InitRequested(false));
         
