@@ -161,12 +161,25 @@ impl Property {
         let mut meters = Vec::new();
 
         for meter_point in &self.electricity_meter_points_ {
+            let id = self.id_.clone();
             meters.push(rsx!{
                 h2 { "Electricity Meter Point" }
                 table { class: "display",
                     tr {
                         th { class: "row-header", "ID" }
-                        td { "{meter_point.id_}" }
+                        td {
+                            div {
+                                class: "link",
+                                onclick: move |_| {
+
+                                    let mut path_signal = use_context::<Signal<Vec<String>>>();
+                                    let new_path = vec![String::from("meters"), id.clone()];
+                                    path_signal.set(new_path);
+                                },
+                                "{meter_point.id_}"
+                            }
+                        }
+                    
                     }
                     tr {
                         th { class: "row-header", "MPAN" }

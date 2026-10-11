@@ -185,6 +185,10 @@ impl Module for OctopusModule {
             PageInfo {
                 label: "Properties",
                 path: "properties",
+            },
+            PageInfo {
+                label: "Meters",
+                path: "meters",
             }
         )
     }
@@ -345,6 +349,15 @@ impl Module for OctopusModule {
             "properties" => {
                 rsx! {
                     PropertiesPage {
+                        account_id: self.account_id.clone(),
+                        meter_manager: self.meter_manager.clone(),
+                        path,
+                    }
+                }
+            },
+            "meters" => {
+                rsx! {
+                    MeterPage {
                         account_id: self.account_id.clone(),
                         meter_manager: self.meter_manager.clone(),
                         path,
@@ -570,6 +583,124 @@ fn PropertyDetail(props: PropertyDetailProps) -> Element {
 
     rsx! {
         {props.property.gui_display()?}
+    }
+    // // Fetch all transactions for this bill.
+    // let transactions_resource = use_resource({
+    //     let props = props.clone();
+    //     move || {
+    //         let props = props.clone();
+    //         async move {
+    //             props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
+    //                 props.billing_timezone).await
+    //         }
+    //     }
+    // });
+
+    // let Some(bill) = find_bill(&props.bill_id, &props.bills) else {
+    //     return rsx! {
+    //         {format!("No such bill {}", props.bill_id)}
+    //     };
+    // };
+
+    // match &*transactions_resource.read() {
+    //     None => rsx! {
+    //         {format!("Loading transactions for bill {}...", props.bill_id)}
+    //     },
+    //     Some(Err(error)) => Err(anyhow!("Failed to load transactions for bill {}: {error:?}", props.bill_id))?,
+    //     Some(Ok(bill_transactions)) => bill.gui_display(bill_transactions),
+    // }
+}
+
+
+
+#[derive(Props, Clone)]
+struct MeterPageProps {
+    account_id: String,
+    meter_manager: Arc<MeterManager>,
+    path: Vec<String>,
+}
+
+impl PartialEq for MeterPageProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
+            && self.path == other.path
+    }
+}
+
+#[component]
+fn MeterPage(props: MeterPageProps) -> Element {
+    // // Fetch the list of all meters, this runs once when the component is mounted.
+    // let properties_resource = use_resource({
+    //     let meter_manager = props.meter_manager.clone();
+    //     let account_id = props.account_id.clone();
+    //     move || {
+    //         let meter_manager = meter_manager.clone();
+    //         let account_id = account_id.clone();
+    //         async move { meter_manager.get_properties(&account_id).await }
+    //     }
+    // });
+
+    // match &*properties_resource.read() {
+    //     None => rsx! {
+    //         div { "Loading Meter for account {props.account_id}..." }
+    //     },
+    //     Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:?}"))?,
+        // Some(Ok(property_list)) => {
+
+            // Are we looking at one meter?
+            if let Some(meter_id) = props.path.first() {
+            //     if let Some(property) = property_list.property_map.get(meter_id) {
+            //         let p = property.clone();
+                    // The key causes BillDetail to be re-mounted when the bill changes, which drops
+                    // (and so cancels) any fetch in progress for the previous bill.
+                    rsx! {
+                        MeterDetail {
+                            key: "{meter_id}",
+                            account_id: props.account_id.clone(),
+                            meter_id: meter_id.clone(),
+                            // property: property.clone(),
+                            meter_manager: props.meter_manager.clone(),
+                        }
+                    }
+            //     }
+            //     else {
+            //         rsx! {
+            //             div { "No such property {property_id}" }
+            //         }
+            //     }
+            }
+            else {
+                rsx! { "ERROR There is no meter page at present" }
+            }
+        // }
+    //     ,
+    // }
+}
+
+#[derive(Props, Clone)]
+struct MeterDetailProps {
+    // property: Arc<graphql::meter::account_properties_meters::MeterType>,
+    account_id: String,
+    meter_id: String,
+    meter_manager: Arc<MeterManager>,
+}
+
+impl PartialEq for MeterDetailProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.account_id == other.account_id
+            && self.meter_id == other.meter_id
+            // && Arc::ptr_eq(&self.property, &other.property)
+            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
+    }
+}
+
+#[component]
+fn MeterDetail(props: MeterDetailProps) -> Element {
+
+    rsx! {
+        //TODO fetch meter consumption for the given period and display it
+        div { "Meter Consumption for meter {props.meter_id}" }
     }
     // // Fetch all transactions for this bill.
     // let transactions_resource = use_resource({
