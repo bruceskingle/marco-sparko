@@ -2787,4 +2787,4 @@ query
 ```
 Description
 
-[My Energy Page - Get Your Geek >](webUiQueriesGetYourGeek.md)
+[My Energy Page - Home and EV Data >](webUIQueriesMyEnergyHomeAndEv.md)

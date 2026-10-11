@@ -161,8 +161,6 @@ impl Property {
         let mut meters = Vec::new();
 
         for meter_point in &self.electricity_meter_points_ {
-
-
             meters.push(rsx!{
                 h2 { "Electricity Meter Point" }
                 table { class: "display",
@@ -184,7 +182,7 @@ impl Property {
                     }
                 }
             });
-            
+
             for meter in &meter_point.meters_ {
                 let direction = if meter.import_meter_.is_none() { "Import" } else { "Export" };
 
@@ -210,6 +208,56 @@ impl Property {
                         tr {
                             th { class: "row-header", "Direction" }
                             td { "{direction}" }
+                        }
+                    }
+                });
+            }
+        }
+
+
+
+        for meter_point in &self.gas_meter_points_ {
+            meters.push(rsx!{
+                h2 { "Gas Meter Point" }
+                table { class: "display",
+                    tr {
+                        th { class: "row-header", "ID" }
+                        td { "{meter_point.id_}" }
+                    }
+                    tr {
+                        th { class: "row-header", "MPRN" }
+                        td { "{meter_point.mprn_}" }
+                    }
+                    tr {
+                        th { class: "row-header", "Status" }
+                        td { "{meter_point.status_}" }
+                    }
+                    tr {
+                        th { class: "row-header", "Supply End Date" }
+                        td { "{gui_opt_date(&meter_point.supply_end_date_)}" }
+                    }
+                }
+            });
+
+            for meter in &meter_point.meters_ {
+                meters.push(rsx!{
+                    h3 { "Gas Meter" }
+                    table { class: "display",
+                        tr {
+                            th { class: "row-header", "Node ID" }
+                            td { "{meter.node_id_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Serial Number" }
+                            td { "{meter.serial_number_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Consumption Units" }
+                            td { "{meter.consumption_units_}" }
+                        }
+                        tr {
+                            th { class: "row-header", "Has And Allows HH Readings" }
+                            td { "{&meter.has_and_allows_hh_readings_}" }
                         }
                     }
                 });
