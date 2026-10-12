@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::octopus::bill::{BillDataSet, BillTransactionBreakDown, StatementTransactionDataSet};
 // use anyhow::anyhow;
 use crate::octopus::meter::MeterType;
-use crate::CacheManager;
+use crate::CacheConfig;
 
 use super::super::graphql::bill;
 use super::super::meter::MeterManager;
@@ -32,14 +32,14 @@ use super::super::RequestManager;
  * 
  */
 pub struct BillManager {
-    pub cache_manager: Arc<CacheManager>,
+    pub cache_manager: Arc<CacheConfig>,
     pub request_manager: Arc<RequestManager>,
     meter_manager: Arc<MeterManager>,
     pub bills: Mutex<HashMap<String, Arc<BillDataSet>>>,
 }
 
 impl BillManager {
-    pub fn new(cache_manager: &Arc<CacheManager>, request_manager: &Arc<RequestManager>, meter_manager: &Arc<MeterManager>)  -> Self {
+    pub fn new(cache_manager: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>, meter_manager: &Arc<MeterManager>)  -> Self {
         Self {
             // account_number,
             cache_manager: cache_manager.clone(),

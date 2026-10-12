@@ -24,10 +24,10 @@ use token::{OctopusTokenManager};
 use clap::Parser;
 
 use sparko_graphql::TokenManager;
-use sparko_graphql::types::{Date, DateRange, DateTime};
+use sparko_graphql::types::{Date, DateTime};
 use dioxus_free_icons::{Icon, icons::ld_icons::LdCalendar};
 use time_tz::{OffsetDateTimeExt, PrimitiveDateTimeExt};
-use crate::{CacheManager, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, octopus::{bill::{AbstractBill, BillDataSet}, property::Property, token::OctopusAuthenticator}};
+use crate::{CacheConfig, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo, octopus::{bill::{AbstractBill, BillDataSet}, property::Property, token::OctopusAuthenticator}};
 
 // include!("octopus/graphql.rs");
 include!(concat!(env!("OUT_DIR"), "/graphql.rs"));
@@ -94,7 +94,7 @@ struct LoginForm {
 }
 
 impl OctopusModule {
-    async fn new(octopus_args: OctopusArgs, cache_manager: Arc<CacheManager>, profile: Profile, 
+    async fn new(octopus_args: OctopusArgs, cache_manager: Arc<CacheConfig>, profile: Profile, 
         request_manager: Arc<RequestManager>, _verbose: bool) -> anyhow::Result<OctopusModule> {   
 
         let billing_timezone = Self::get_billing_timezone(&profile);
@@ -535,7 +535,6 @@ fn PropertiesPage(props: PropertiesPageProps) -> Element {
             // Are we looking at one bill?
             if let Some(property_id) = props.path.first() {
                 if let Some(property) = property_list.property_map.get(property_id) {
-                    let p = property.clone();
                     // The key causes BillDetail to be re-mounted when the bill changes, which drops
                     // (and so cancels) any fetch in progress for the previous bill.
                     rsx! {
@@ -1007,8 +1006,6 @@ impl PartialEq for MeterDetailProps {
 
 #[component]
 fn MeterDetail(props: MeterDetailProps) -> Element {
-    let end = props.end.as_ref().map(|d| d.to_string()).unwrap_or_else(|| String::from("now"));
-
     // rsx! {
     //     //TODO fetch meter consumption for the given period and display it
     //     div { "Meter Consumption for meter {props.meter_id} from {props.start} to {end}" }
@@ -1048,7 +1045,7 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
 pub struct OctopusModuleFactory {
     context: Arc<MarcoSparkoContext>,
     octopus_args: OctopusArgs,
-    cache_manager: Arc<CacheManager>,
+    cache_manager: Arc<CacheConfig>,
     token_manager: Arc<OctopusTokenManager>,
     request_manager: Arc<sparko_graphql::RequestManager>,
     profile: Profile,
@@ -1332,14 +1329,14 @@ impl OctopusModuleFactoryBuilder {
             json_profile: Option<serde_json::Value>
         ) -> anyhow::Result<OctopusModuleFactoryBuilder> {
 
-        let margs = if let Some(args) = context.args.module_args(MODULE_ID) {
+        let module_args = if let Some(args) = context.args.module_args(MODULE_ID) {
             args
         }
         else {
             Vec::new()
         };
 
-        let octopus_args = OctopusArgs::parse_from(margs);
+        let octopus_args = OctopusArgs::parse_from(module_args);
         let profile = if let Some(json) = json_profile {
             serde_json::from_value(json)?
         }

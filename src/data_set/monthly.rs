@@ -11,7 +11,7 @@ use sparko_graphql::{
     types::{Date, DateTime},
 };
 
-use crate::{CacheManager, octopus::token::OctopusTokenManager};
+use crate::{CacheConfig, octopus::token::OctopusTokenManager};
 use super::DataSetAttributes;
 
 /// A DataSet which is a monthly bucket containing a list of records where each record has a DateTime ordering and the records 
@@ -36,7 +36,7 @@ where
             continuation_query_provider: CQP,
             response_iterator: RI,
             indexer: IN,
-            config: &CacheManager,
+            config: &CacheConfig,
             request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
         ) -> anyhow::Result<Self>
         where
@@ -174,7 +174,7 @@ where
             };
 
             let last_record = if let Some(index) = last_index {
-                if let Some((_k, (r))) = data.get(&index) {
+                if let Some((_k, r )) = data.get(&index) {
                     Some(r)
                 }
                 else {

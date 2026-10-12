@@ -41,7 +41,6 @@ dioxus-desktop = "0.7"
 dioxus-free-icons = { version = "0.10", features = ["lucide"] }
 anyhow = "1.0.100"
 wasm-bindgen = "0.2.105"
-fs4 = "0.13.1"
 windows = { version = "0.54", features = [
     "Win32_Foundation",
     "Win32_Security",

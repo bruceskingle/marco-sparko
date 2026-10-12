@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
 
-use crate::{CacheManager, octopus::token::OctopusTokenManager};
+use crate::{CacheConfig, octopus::token::OctopusTokenManager};
 use super::DataSetAttributes;
 
 /// A DataSet which is a list of records where the records returned paginated from the API
@@ -31,7 +31,7 @@ where
             continuation_query_provider: CQP,
             response_iterator: RI,
             indexer: IN,
-            config: &Arc<CacheManager>,
+            config: &Arc<CacheConfig>,
             request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
         ) -> anyhow::Result<Self>
         where

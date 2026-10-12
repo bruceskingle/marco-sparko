@@ -11,8 +11,8 @@ pub mod profile;
 pub mod private_file;
 
 mod data_set;
-mod cache_manager;
-use cache_manager::CacheManager;
+mod cache;
+use cache::CacheConfig;
 
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use anyhow::anyhow;
@@ -271,11 +271,11 @@ impl MarcoSparkoContext {
         Ok(path)
     }
       
-    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheManager>> {
+    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheConfig>> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         private_file::create_private_dir(&dir_path)?;
 
-        Ok(Arc::new(CacheManager::new(dir_path,verbose)))
+        Ok(Arc::new(CacheConfig::new(dir_path,verbose)))
     }
 
     pub fn read_cache<T>(&self, module_id: &str) -> Option<T>

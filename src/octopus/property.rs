@@ -5,8 +5,8 @@ use sparko_graphql::types::Date;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::CacheManager;
-use crate::data_set::{DataSetAttributes, SingleRecordDataSet};
+use crate::CacheConfig;
+use crate::data_set::SingleRecordDataSet;
 use sparko_graphql::GraphQLQueryBuilder;
 
 use super::graphql::meter;
@@ -138,8 +138,6 @@ impl Property {
 
 
     pub fn gui_display(&self) -> Element {
-        // let row_class = if attributes.cached { "cached"} else {"fetched"};
-        let id = self.id_.clone();
         let mut it = self.occupancy_periods_.iter();
         let period = if let Some(period_data) = it.next() {
             Self::format_period(period_data)
@@ -161,7 +159,6 @@ impl Property {
         let mut meters = Vec::new();
 
         for meter_point in &self.electricity_meter_points_ {
-            let id = self.id_.clone();
             meters.push(rsx!{
                 h2 { "Electricity Meter Point" }
                 table { class: "display",
@@ -333,7 +330,7 @@ pub struct PropertyDataSet {
 }
 
 impl PropertyDataSet {
-    pub async fn new(account_number: &String, config: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> anyhow::Result<Self> {
+    pub async fn new(account_number: &String, config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>)  -> anyhow::Result<Self> {
         let hash_key = format!("{}#Properties", account_number);
         let query_provider = || {
             meter::account_properties_meters::Query::builder()

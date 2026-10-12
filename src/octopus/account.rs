@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::CacheManager;
+use crate::CacheConfig;
 use crate::data_set::{SingleRecordDataSet};
 
 use super::graphql::account;
@@ -13,7 +13,7 @@ pub struct AccountManager {
 }
 
 impl AccountManager {
-    pub async fn new(config: &Arc<CacheManager>, request_manager: &Arc<RequestManager>)  -> anyhow::Result<Self> {
+    pub async fn new(config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>)  -> anyhow::Result<Self> {
         let hash_key = format!("#Viewer");
         let data_set = SingleRecordDataSet::new(
             &hash_key,

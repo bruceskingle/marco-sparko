@@ -7,7 +7,7 @@ use std::{
 
 use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
 
-use crate::{CacheManager, octopus::token::OctopusTokenManager};
+use crate::{CacheConfig, octopus::token::OctopusTokenManager};
 
 pub struct SingleRecordDataSet<R: GraphQLResponse>
 {
@@ -20,7 +20,7 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
             hash_key: &str,
             refresh_after: Duration,
             query_provider: QP,
-            config: &Arc<CacheManager>,
+            config: &Arc<CacheConfig>,
             request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
         ) -> anyhow::Result<Self>
         where

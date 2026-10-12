@@ -6,24 +6,18 @@ use std::time::Duration;
 
 use indexmap::IndexMap;
 
-use anyhow::anyhow;
-
-use sparko_graphql::AuthenticatedRequestManager;
-
-use crate::cache_manager::Indexer;
 use crate::data_set::{DataSetAttributes, ListDataSet, OrderedListDataSet};
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::AccountStatementStatus;
 use crate::octopus::graphql::bill::get_statement_transactions::{AbstractTransactionType, Consumption};
 use crate::util::as_decimal;
-use crate::{CacheManager, NONE, NULL};
+use crate::{CacheConfig, NONE, NULL};
 
 use super::graphql::{bill, meter};
 use sparko_graphql::GraphQLQueryBuilder;
 use super::meter::Tariff;
 use bill::get_statement_transactions::{Charge, TransactionType};
 use super::RequestManager;
-use super::{token::OctopusTokenManager};
 mod manager;
 pub use manager::BillManager;
 
@@ -869,7 +863,7 @@ pub struct BillDataSet {
 impl BillDataSet {
     pub async fn new(
         account_number: &String,
-        config: &Arc<CacheManager>,
+        config: &Arc<CacheConfig>,
         request_manager: &Arc<RequestManager>,
     ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#Bills", account_number);
@@ -946,7 +940,7 @@ impl StatementTransactionDataSet {
     pub async fn new(
         account_number: String,
         statement_id: String,
-        config: &Arc<CacheManager>,
+        config: &Arc<CacheConfig>,
         request_manager: &Arc<RequestManager>,
     ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);

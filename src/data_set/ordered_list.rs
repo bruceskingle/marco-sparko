@@ -8,7 +8,7 @@ use std::{
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
 
-use crate::{CacheManager, OrderedMap, octopus::token::OctopusTokenManager};
+use crate::{CacheConfig, OrderedMap, octopus::token::OctopusTokenManager};
 use super::DataSetAttributes;
 
 /// A DataSet which is a list of records where the records returned from the API are in ascending order and new records can be
@@ -31,7 +31,7 @@ where
             continuation_query_provider: CQP,
             response_iterator: RI,
             indexer: IN,
-            config: &Arc<CacheManager>,
+            config: &Arc<CacheConfig>,
             request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
         ) -> anyhow::Result<Self>
         where
