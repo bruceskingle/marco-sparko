@@ -404,7 +404,7 @@ where
             R: GraphQLResponse,
             Q: GraphQLQuery<R>,
             IQP: FnOnce(&Date, Option<&V>) -> Result<Q, sparko_graphql::Error>,
-            CQP: Fn(&R) -> Option<Result<Q, sparko_graphql::Error>>,
+            CQP: Fn(&Date, &R) -> Option<Result<Q, sparko_graphql::Error>>,
             RI: Fn(R) -> I,
             IN: Fn(&V) -> (DateTime, bool),
             I: IntoIterator<Item = V>,
@@ -562,7 +562,7 @@ where
             // }
 
             loop {
-                let mut cq = continuation_query_provider(&response);
+                let cq = continuation_query_provider(&start_date, &response);
 
                 // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
 

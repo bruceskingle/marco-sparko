@@ -918,7 +918,7 @@ impl AgreementLineItems {
                         .build()
 
                 };
-                let continuation_query_provider = |last_response: &meter::gas_agreement_line_items::Response| {
+                let continuation_query_provider = |bucket_start: &Date, last_response: &meter::gas_agreement_line_items::Response| {
                     
                     let agreement = last_response.gas_agreement_.as_gas_agreement_ref();
                     if let Some(end_cursor) = agreement.line_items_.page_info.end_cursor.clone() {
@@ -983,7 +983,7 @@ impl AgreementLineItems {
                         .build()
 
                 };
-                let continuation_query_provider = |last_response: &meter::electricity_agreement_line_items::Response| {
+                let continuation_query_provider = |bucket_start: &Date, last_response: &meter::electricity_agreement_line_items::Response| {
                     // let end_cursor = last_response.electricity_agreement_.get_line_items().last().unwrap().cursor;
                 
                     let agreement = last_response.electricity_agreement_.as_electricity_agreement_ref();
@@ -1265,15 +1265,15 @@ impl ConsumptionDataSet {
         let hash_key = format!("{}#{}#ConsumptionRecords", account_number, meter_node_id);
 
 
-
         let initial_query_provider = |bucket_start: &Date, last_record: Option<&meter::meter_consumption::ConsumptionType>| {
-            let start_date = if let Some(last_record) = last_record {
-                last_record.start_at_.clone()
-            }
-            else {
-                bucket_start.at_midnight(billing_timezone)
-            };
+            // let start_date = if let Some(last_record) = last_record {
+            //     last_record.start_at_.clone()
+            // }
+            // else {
+            //     bucket_start.at_midnight(billing_timezone)
+            // };
 
+            let start_date = bucket_start.at_midnight(billing_timezone);
             meter::meter_consumption::Query::builder()
                 .with_meter_id(meter_node_id.clone())
                 .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
@@ -1282,7 +1282,7 @@ impl ConsumptionDataSet {
                 .with_first(50)
                 .build()
         };
-        let continuation_query_provider = |last_response: &meter::meter_consumption::Response| {
+        let continuation_query_provider = |bucket_start: &Date, last_response: &meter::meter_consumption::Response| {
             let page =  match &last_response.node_ {
                 meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
                     &electricity_meter.consumption_
@@ -1297,7 +1297,8 @@ impl ConsumptionDataSet {
 
             if let Some(end_cursor) = &page.page_info.end_cursor {
 
-                let start_date = page.edges.last().unwrap().node.start_at_.clone();
+                let start_date = bucket_start.at_midnight(billing_timezone);
+                // let start_date = page.edges.last().unwrap().node.start_at_.clone();
                 Some(meter::meter_consumption::Query::builder()
                     .with_meter_id(meter_node_id.clone())
                     .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
