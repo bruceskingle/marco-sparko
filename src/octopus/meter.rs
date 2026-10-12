@@ -12,7 +12,7 @@ use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use tokio::time::sleep;
 
-use crate::data_set::{MonthlyDataSet, MultiQueryDataSet, OrderedListDataSet};
+use crate::data_set::{DataSetAttributes, MonthlyDataSet, MultiQueryDataSet, OrderedListDataSet};
 use crate::octopus::property::PropertyDataSet;
 use crate::{CacheManager, NULL};
 
@@ -220,54 +220,94 @@ impl MeterManager {
 
 
 
-    // pub async fn get_consumption(&self, account_number: &String, meter_node_id: &String, date_range: &DateRange, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>>{
-    //     // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
-    //     //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
-    //     // }
+    pub async fn get_consumption(&self, account_number: &String, meter_node_id: &String, from: &DateTime, to: &Option<DateTime>, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<(crate::data_set::DataSetAttributes, meter::meter_consumption::ConsumptionType)>>{
+        // if let std::collections::hash_map::Entry::Vacant(entry) = self.properties.entry(account_number.clone()) {
+        //     entry.insert(PropertyList::new(&self.cache_manager, &self.request_manager, account_number.clone()).await?);
+        // }
         
-    //     // let properties = self.properties.get(account_number).unwrap();
         
-    //     let start_date_time = date_range.start.at_midnight(billing_timezone);
-    //     let end_date_time = date_range.end.at_next_midnight(billing_timezone);
+        // async fn get_line_items2(
+        //     cache_manager: &CacheManager, request_manager: &RequestManager,
+        //     account_number: &String, meter_node_id: &String, start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>> {
+                let mut in_scope_items = Vec::new();
+                let mut bucket_date = from.to_date();
+                let end = if let Some(to) = to {to} else {&DateTime::now_utc()};
+                let end_date = end.date();
 
-    //     //println!("get_consumption {:?} - {:?}", start_date_time, end_date_time);
+                loop {
+                    println!("Get bucket {:?}", bucket_date);
+                    let line_items =ConsumptionDataSet::new(&self.cache_manager, &self.request_manager, account_number.clone(), meter_node_id.clone(), &bucket_date, billing_timezone).await?;
+                    // let line_items = ConsumptionList::new(self.cache_manager, self.request_manager, account_number.clone(), meter_node_id.clone(), &bucket_date, billing_timezone).await?;
 
+                    for (key, item) in line_items.consumption{
+                        //println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
+                        if &key >= end {
+                            // thats it
+                            //println!("Line item has date {:?} so we are done", item.start_at_);
+                            return Ok(in_scope_items)
+                        }
+                        if &key >= from {
+                            //println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
+                            in_scope_items.push(item);
+                        }
+                    }
+
+                    bucket_date = line_items.end_date;
+
+                    println!("New bucket date {:?}", bucket_date);
+
+                    if *bucket_date > end_date {
+                        //println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
+                        return Ok(in_scope_items)
+                    }
+                }
+        // }
         
-    //     async fn get_line_items2(
-    //         cache_manager: &CacheManager, request_manager: &RequestManager,
-    //         account_number: &String, meter_node_id: &String, start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::meter_consumption::ConsumptionType>> {
-    //             let mut in_scope_items = Vec::new();
-    //             let mut bucket_date = start_date_time.to_date();
-    //             loop {
-    //                 //println!("Get bucket {:?}", bucket_date);
-    //                 let line_items = ConsumptionList::new(cache_manager, request_manager, account_number.clone(), meter_node_id.clone(), &bucket_date, billing_timezone).await?;
+        // get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_node_id, &start_date_time, &end_date_time, billing_timezone).await
+    }
 
-    //                 for (_cursor, item) in line_items.consumption{
-    //                     //println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
-    //                     if &item.start_at_ >= end_date_time {
-    //                         // thats it
-    //                         //println!("Line item has date {:?} so we are done", item.start_at_);
-    //                         return Ok(in_scope_items)
-    //                     }
-    //                     if &item.end_at_ >= start_date_time {
-    //                         //println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
-    //                         in_scope_items.push(item);
-    //                     }
-    //                 }
+    pub fn gui_display(data: &Vec<(DataSetAttributes, meter::meter_consumption::ConsumptionType)>) -> Element {
+        // let items = Vec::new();
 
-    //                 bucket_date = line_items.end_date;
+        // for (attr, consumption) in data {
+        //     items.push(consumption.gui_summary_line(attr)?);
+        // }
 
-    //                 //println!("New bucket date {:?}", bucket_date);
+        rsx! {
+            table {
+                {meter::meter_consumption::ConsumptionType::gui_summary_header()}
+                for (attr , consumption) in data {
+                    {consumption.gui_summary_line(attr)?}
+                }
+            }
+        }
+    }
+}
 
-    //                 if *bucket_date > end_date_time.date() {
-    //                     //println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
-    //                     return Ok(in_scope_items)
-    //                 }
-    //             }
-    //     }
-        
-    //     get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_node_id, &start_date_time, &end_date_time, billing_timezone).await
-    // }
+
+impl meter::meter_consumption::ConsumptionType {
+
+     pub fn gui_summary_header() -> Element{
+        rsx!{
+            tr { class: "header",
+                th { "From" }
+                th { "To" }
+                th { "Value" }
+            }
+        }
+    }
+
+    pub fn gui_summary_line(&self, attributes: &DataSetAttributes) -> Element {
+        let row_class = if attributes.cached { "cached"} else {"fetched"};
+
+        rsx!{
+            tr { class: row_class,
+                td { "{self.start_at_}" }
+                td { "{self.end_at_}" }
+                td { "{self.value_}" }
+            }
+        }
+    }
 }
 
 

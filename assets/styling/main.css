@@ -49,6 +49,8 @@ body {
 
 
 :root {
+    /* Render native controls (date pickers, select menus, checkboxes) with their dark variants */
+    color-scheme: dark;
     --sidebar-bg: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
     --border: rgba(0,0,0,0.08);
     --topbar-bg: #f8fafc;
@@ -233,6 +235,7 @@ th.row-header {
 input[type="text"],
 input[type="email"],
 input[type="password"],
+input[type="date"],
 input[type="radio"],
 textarea,
 select {
@@ -248,6 +251,7 @@ select {
 input[type="text"]:focus,
 input[type="email"]:focus,
 input[type="password"]:focus,
+input[type="date"]:focus,
 textarea:focus,
 select:focus {
     background-color: #252530;
@@ -417,4 +421,60 @@ h6 {
     justify-content: center;
     border: 2px solid yellow;
     padding: 20px;
+}
+/* Modal dialog, e.g. the meter consumption date range */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.modal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 360px;
+    padding: 20px;
+    border: 1px solid #404045;
+    border-radius: 8px;
+    background-color: #1a1a1f;
+    color: #d0d0d0;
+}
+
+.modal h3 {
+    margin: 0 0 4px 0;
+}
+
+.modal-row {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-row input:disabled,
+.modal-row select:disabled {
+    opacity: 0.4;
+}
+
+.modal-error {
+    color: #ff8080;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.modal-buttons button:disabled {
+    opacity: 0.4;
+}
+
+.date-range {
+    margin-bottom: 12px;
 }

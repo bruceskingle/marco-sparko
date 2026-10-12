@@ -569,24 +569,28 @@ where
                 for value in response_iterator(response) {
                     let (index, _is_final) = indexer(&value);
 
-                    if index.date() > *end_date {
-                        cq = None;  // force a break from the outer loop
-                        break;
-                    }
+                    // if index.date() > *end_date {
+                    //     cq = None;  // force a break from the outer loop
+                    //     break;
+                    // }
 
-                    let update = if let Some((_attrs, current_value)) = data.get(&index) {
-                        let v = serde_json::to_string(&value)?;
-                        let c = serde_json::to_string(current_value)?;
-                        println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
-                        v != c
-                    }
-                    else {
-                        true
-                    };
+                    let date: time::Date = index.date();
+                    if date >= *start_date && date <= *end_date {
 
-                    if update {
-                        data.insert(index, (DataSetAttributes { cached: false, }, value));
-                        rewrite = true;
+                        let update = if let Some((_attrs, current_value)) = data.get(&index) {
+                            let v = serde_json::to_string(&value)?;
+                            let c = serde_json::to_string(current_value)?;
+                            println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
+                            v != c
+                        }
+                        else {
+                            true
+                        };
+
+                        if update {
+                            data.insert(index, (DataSetAttributes { cached: false, }, value));
+                            rewrite = true;
+                        }
                     }
                 }
 
