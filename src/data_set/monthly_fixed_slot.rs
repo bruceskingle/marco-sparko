@@ -350,6 +350,10 @@ impl<S: SlotSource> OpenMonthlyFixedSlotDataSet<S>
     }
 
     fn is_stale(&self, refresh_after: &Duration) -> anyhow::Result<bool> {
+        if self.data_set.data.len() == 0 {
+            return Ok(true);
+        }
+
         let modified = self.file.metadata()?.modified()?;
         Ok(SystemTime::now()
             .duration_since(modified)
