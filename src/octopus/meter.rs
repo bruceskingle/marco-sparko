@@ -33,15 +33,15 @@ impl Display for MeterType {
 }
 
 pub struct MeterManager {
-    pub cache_manager: Arc<CacheConfig>,
+    pub cache_config: Arc<CacheConfig>,
     pub request_manager: Arc<RequestManager>,
 }
 
 //   Rita the
 impl MeterManager {
-    pub fn new(cache_manager: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>)  -> Self {
+    pub fn new(cache_config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>)  -> Self {
         Self {
-            cache_manager: cache_manager.clone(),
+            cache_config: cache_config.clone(),
             request_manager: request_manager.clone(),
         }
     }
@@ -93,13 +93,13 @@ impl MeterManager {
     // }
 
     pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyDataSet>{
-        PropertyDataSet::new(account_number, &self.cache_manager, &self.request_manager).await
+        PropertyDataSet::new(account_number, &self.cache_config, &self.request_manager).await
     }
 
     pub async fn get_line_items(&self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
         let properties = self.get_properties(account_number).await?;
         let meter_agreements = 
-            MeterAgreementDataSet::new(&self.cache_manager, &self.request_manager, &account_number, &properties.meter_node_ids).await?;
+            MeterAgreementDataSet::new(&self.cache_config, &self.request_manager, &account_number, &properties.meter_node_ids).await?;
 
         let start_date_time = start_date.at_midnight(billing_timezone);
         let end_date_time = end_date.at_next_midnight(billing_timezone);
@@ -109,14 +109,14 @@ impl MeterManager {
         let in_scope_agreements = meter_agreements.get_in_scope(meter_type, is_export, &start_date_time, &end_date_time);
 
         async fn get_line_items2(
-            cache_manager: &CacheConfig, request_manager: &RequestManager,
+            cache_config: &CacheConfig, request_manager: &RequestManager,
             account_number: &String, meter_type: &MeterType, agreement_id: &String,
             start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::electricity_agreement_line_items::LineItemType>> {
                 let mut in_scope_items = Vec::new();
                 let mut bucket_date = start_date_time.to_date();
                 loop {
                     println!("Get bucket {:?}", bucket_date);
-                    let line_items = AgreementLineItems::new(cache_manager, request_manager, account_number.clone(), meter_type, agreement_id.clone(), &bucket_date, billing_timezone).await?;
+                    let line_items = AgreementLineItems::new(cache_config, request_manager, account_number.clone(), meter_type, agreement_id.clone(), &bucket_date, billing_timezone).await?;
 
                     for (_cursor, (_, item)) in line_items.line_items {
                         println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
@@ -145,7 +145,7 @@ impl MeterManager {
         let mut item_map = IndexMap::new();
 
         for (agreement_id, tariff) in in_scope_agreements {
-            let in_scope_items = get_line_items2(&self.cache_manager, &self.request_manager, account_number, meter_type, &agreement_id, &start_date_time, &end_date_time, billing_timezone).await?;
+            let in_scope_items = get_line_items2(&self.cache_config, &self.request_manager, account_number, meter_type, &agreement_id, &start_date_time, &end_date_time, billing_timezone).await?;
 
             if !in_scope_items.is_empty() {
                 //println!("Got {} in scope items", in_scope_items.len());
@@ -180,7 +180,7 @@ impl MeterManager {
         MonthlyFixedSlotDataSet::fetch(
             source,
             tz,
-            &self.cache_manager,
+            &self.cache_config,
             &self.request_manager,
             start,
             end

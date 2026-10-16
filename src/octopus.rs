@@ -94,13 +94,13 @@ struct LoginForm {
 }
 
 impl OctopusModule {
-    async fn new(octopus_args: OctopusArgs, cache_manager: Arc<CacheConfig>, profile: Profile, 
+    async fn new(octopus_args: OctopusArgs, cache_config: Arc<CacheConfig>, profile: Profile, 
         request_manager: Arc<RequestManager>, _verbose: bool) -> anyhow::Result<OctopusModule> {   
 
         let billing_timezone = Self::get_billing_timezone(&profile);
-        let account_manager = AccountManager::new(&cache_manager, &request_manager).await?;
-        let meter_manager = Arc::new(MeterManager::new(&cache_manager, &request_manager));
-        let bill_manager = Arc::new(BillManager::new(&cache_manager, &request_manager, &meter_manager));
+        let account_manager = AccountManager::new(&cache_config, &request_manager).await?;
+        let meter_manager = Arc::new(MeterManager::new(&cache_config, &request_manager));
+        let bill_manager = Arc::new(BillManager::new(&cache_config, &request_manager, &meter_manager));
 
         Ok(OctopusModule {
             octopus_args,
@@ -1083,7 +1083,7 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
 pub struct OctopusModuleFactory {
     context: Arc<MarcoSparkoContext>,
     octopus_args: OctopusArgs,
-    cache_manager: Arc<CacheConfig>,
+    cache_config: Arc<CacheConfig>,
     token_manager: Arc<OctopusTokenManager>,
     request_manager: Arc<sparko_graphql::RequestManager>,
     profile: Profile,
@@ -1095,7 +1095,7 @@ impl OctopusModuleFactory {
 
         let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?);
        
-        let client = OctopusModule::new(self.octopus_args.clone(), self.cache_manager.clone(), self.profile.clone(), 
+        let client = OctopusModule::new(self.octopus_args.clone(), self.cache_config.clone(), self.profile.clone(), 
             authenticated_request_manager, self.verbose
         ).await?;
 
@@ -1450,12 +1450,12 @@ impl OctopusModuleFactoryBuilder {
 
         let verbose = self.context.args.marco_sparko_args.verbose;
         let request_manager = Arc::new(sparko_graphql::RequestManager::new(url, verbose, create_info::USER_AGENT)?);
-        let cache_manager = self.context.create_cache_manager(crate::octopus::MODULE_ID, verbose)?;
+        let cache_config = self.context.create_cache_config(crate::octopus::MODULE_ID, verbose)?;
 
         Ok(OctopusModuleFactory {
             context: self.context.clone(),
             octopus_args: self.octopus_args,
-            cache_manager,
+            cache_config,
             token_manager: Arc::new(OctopusTokenManager::new(
                 self.context,
                  request_manager.clone(),

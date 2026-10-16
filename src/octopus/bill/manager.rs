@@ -21,7 +21,7 @@ use super::super::RequestManager;
  * 
  * Each Data Object is immutable but the types have methods which know how to fetch them so for each
  * fetch_XXX method on the manager the XXX data object has a fetch() method which takes additional parameters
- * which are e.g. the cache_manager and the request_manager. Those manager objects are themselves stateless.
+ * which are e.g. the cache_config and the request_manager. Those manager objects are themselves stateless.
  * 
  * Those data object methods use the local file system cache which currently has imperfect locking so that's something else
  * which needs fixing.
@@ -32,17 +32,17 @@ use super::super::RequestManager;
  * 
  */
 pub struct BillManager {
-    pub cache_manager: Arc<CacheConfig>,
+    pub cache_config: Arc<CacheConfig>,
     pub request_manager: Arc<RequestManager>,
     meter_manager: Arc<MeterManager>,
     pub bills: Mutex<HashMap<String, Arc<BillDataSet>>>,
 }
 
 impl BillManager {
-    pub fn new(cache_manager: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>, meter_manager: &Arc<MeterManager>)  -> Self {
+    pub fn new(cache_config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>, meter_manager: &Arc<MeterManager>)  -> Self {
         Self {
             // account_number,
-            cache_manager: cache_manager.clone(),
+            cache_config: cache_config.clone(),
             request_manager: request_manager.clone(),
             meter_manager: meter_manager.clone(),
             bills: Mutex::new(HashMap::new()),
@@ -56,8 +56,7 @@ impl BillManager {
                 .entry(account_number.clone())
                 .or_insert(
                     Arc::new(
-                        // BillList::fetch(&self.cache_manager, &self.request_manager, &account_number, crate::CHECK_FOR_UPDATES).await?
-                        BillDataSet::new(&account_number, &self.cache_manager, &self.request_manager).await?
+                        BillDataSet::new(&account_number, &self.cache_config, &self.request_manager).await?
                     )
                 )
             ).clone())
@@ -67,7 +66,7 @@ impl BillManager {
 
 
         let mut result = Vec::new();
-        let transactions = StatementTransactionDataSet::new(account_number.clone(), statement_id, &self.cache_manager, &self.request_manager).await?;
+        let transactions = StatementTransactionDataSet::new(account_number.clone(), statement_id, &self.cache_config, &self.request_manager).await?;
 
 
         for (_key, transaction) in transactions.data_set.data {

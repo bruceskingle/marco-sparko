@@ -271,7 +271,7 @@ impl MarcoSparkoContext {
         Ok(path)
     }
       
-    fn create_cache_manager(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheConfig>> {
+    fn create_cache_config(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheConfig>> {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         private_file::create_private_dir(&dir_path)?;
 
