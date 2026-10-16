@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use dioxus::prelude::*;
 use indexmap::IndexMap;
+use rust_decimal::prelude::ToPrimitive;
 use sparko_graphql::types::{Date, DateTime};
 use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
@@ -14,6 +15,7 @@ use crate::data_set::{MonthlyDataSet, MonthlyFixedSlotDataSet, MultiQueryDataSet
 use crate::octopus::property::PropertyDataSet;
 use crate::{CacheConfig, NULL};
 
+use super::consumption_graph::{ConsumptionGraph, GraphPoint, GraphStyle};
 use super::graphql::meter;
 use super::RequestManager;
 use super::{token::OctopusTokenManager};
@@ -240,6 +242,49 @@ impl MeterManager {
                     {item}
                 }
             }
+        }
+    }
+
+    pub fn display_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>, start: &DateTime, end: &Option<DateTime>, style: GraphStyle) -> Element {
+        let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
+        let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
+        let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
+
+        let values: Vec<_> = data.iter()
+            .flat_map(|data_set| data_set.data.range(start..))
+            .filter(|(key, _)| end.as_ref().is_none_or(|end| *key < end))
+            .map(|(_, item)| &item.value)
+            .collect();
+
+        // Label each day, unless there is only one in which case label every 3 hours.
+        let single_day = values.first().map(|v| v.start_at_.to_date()) == values.last().map(|v| v.start_at_.to_date());
+
+        let mut points = Vec::with_capacity(values.len());
+        let mut last_date = None;
+        for value in values {
+            let date = value.start_at_.to_date();
+            let tick_label = if single_day {
+                (value.start_at_.minute() == 0 && value.start_at_.hour() % 3 == 0)
+                    .then(|| value.start_at_.format(&time_format).unwrap())
+            } else {
+                (last_date != Some(date)).then(|| value.start_at_.format(&day_format).unwrap())
+            };
+            last_date = Some(date);
+
+            points.push(GraphPoint {
+                start: value.start_at_.unix_timestamp(),
+                end: value.end_at_.unix_timestamp(),
+                value: value.value_.to_f64().unwrap_or_default(),
+                tick_label,
+                period_label: format!("{} {}–{}",
+                    value.start_at_.format(&date_format).unwrap(),
+                    value.start_at_.format(&time_format).unwrap(),
+                    value.end_at_.format(&time_format).unwrap()),
+            });
+        }
+
+        rsx! {
+            ConsumptionGraph { points, style }
         }
     }
 }

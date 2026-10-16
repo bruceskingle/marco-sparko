@@ -478,3 +478,98 @@ h6 {
 .date-range {
     margin-bottom: 12px;
 }
+
+.view-toggle {
+    margin-left: 12px;
+}
+
+.view-toggle button {
+    border-radius: 0;
+}
+
+.view-toggle button:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.view-toggle button:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.view-toggle button + button {
+    border-left: none;
+}
+
+.view-toggle button.active {
+    background-color: #353540;
+    color: #d0d0d0;
+}
+
+.consumption-graph {
+    display: block;
+    width: 100%;
+    max-width: 1200px;
+    height: auto;
+    font-size: 12px;
+}
+
+.consumption-graph .grid {
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 1;
+}
+
+.consumption-graph .tick {
+    stroke: rgba(255, 255, 255, 0.25);
+    stroke-width: 1;
+}
+
+.consumption-graph .axis-label {
+    fill: var(--muted);
+}
+
+.consumption-graph .line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.consumption-graph .bar {
+    fill: var(--accent);
+    opacity: 0.85;
+}
+
+.consumption-graph .bar.hovered {
+    opacity: 1;
+    stroke: #ffffff;
+    stroke-width: 1;
+}
+
+.consumption-graph .crosshair {
+    stroke: rgba(255, 255, 255, 0.35);
+    stroke-width: 1;
+}
+
+.consumption-graph .marker {
+    fill: var(--accent);
+    stroke: #0f1116;
+    stroke-width: 2;
+}
+
+.consumption-graph .tooltip rect {
+    fill: #1a1a1f;
+    stroke: #404045;
+}
+
+.consumption-graph .tooltip-period {
+    fill: var(--muted);
+}
+
+.consumption-graph .tooltip-value {
+    fill: #ffffff;
+    font-weight: bold;
+}
+
+.consumption-graph .hit {
+    fill: transparent;
+}

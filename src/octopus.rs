@@ -6,6 +6,7 @@ mod account;
 mod property;
 mod bill;
 mod meter;
+mod consumption_graph;
 
 use std::sync::Arc;
 
@@ -17,6 +18,7 @@ use dioxus::prelude::*;
 
 use bill::BillManager;
 use meter::MeterManager;
+use consumption_graph::GraphStyle;
 use serde::{Deserialize, Serialize};
 
 use time_tz::{Tz, timezones};
@@ -894,6 +896,9 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
         }
     });
 
+    // Whether consumption is shown as a table or a graph, kept here so it survives range changes.
+    let mut view = use_signal(|| ConsumptionView::Table);
+
     // The contents of the date range dialog, Some while the dialog is open.
     let mut draft = use_signal::<Option<RangeDraft>>(|| None);
 
@@ -912,6 +917,7 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
             billing_timezone: tz,
             start,
             end,
+            view: view(),
         }
     };
 
@@ -1024,6 +1030,16 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
                 }
                 " {selection}"
             }
+            span { class: "view-toggle",
+                for option in [ConsumptionView::Table, ConsumptionView::LineGraph, ConsumptionView::BarGraph] {
+                    button {
+                        r#type: "button",
+                        class: if view() == option { "active" },
+                        onclick: move |_| view.set(option),
+                        "{option}"
+                    }
+                }
+            }
         }
         {dialog}
         {detail}
@@ -1040,6 +1056,24 @@ struct MeterDetailProps {
     start: DateTime,
     /// None means up to the present
     end: Option<DateTime>,
+    view: ConsumptionView,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum ConsumptionView {
+    Table,
+    LineGraph,
+    BarGraph,
+}
+
+impl std::fmt::Display for ConsumptionView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConsumptionView::Table => write!(f, "Table"),
+            ConsumptionView::LineGraph => write!(f, "Line Graph"),
+            ConsumptionView::BarGraph => write!(f, "Bar Graph"),
+        }
+    }
 }
 
 impl PartialEq for MeterDetailProps {
@@ -1048,6 +1082,7 @@ impl PartialEq for MeterDetailProps {
             && self.meter_id == other.meter_id
             && self.start == other.start
             && self.end == other.end
+            && self.view == other.view
             // && Arc::ptr_eq(&self.property, &other.property)
             && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
@@ -1076,7 +1111,11 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
             {format!("Loading consumption for meter {}...", props.meter_id)}
         },
         Some(Err(error)) => Err(anyhow!("Failed to load consumption for meter {}: {error:?}", props.meter_id))?,
-        Some(Ok(consumption)) => MeterManager::display_consumption(consumption, &props.start, &props.end),
+        Some(Ok(consumption)) => match props.view {
+            ConsumptionView::Table => MeterManager::display_consumption(consumption, &props.start, &props.end),
+            ConsumptionView::LineGraph => MeterManager::display_consumption_graph(consumption, &props.start, &props.end, GraphStyle::Line),
+            ConsumptionView::BarGraph => MeterManager::display_consumption_graph(consumption, &props.start, &props.end, GraphStyle::Bar),
+        },
     }
 }
 
