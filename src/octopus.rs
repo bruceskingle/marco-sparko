@@ -535,8 +535,6 @@ fn PropertiesPage(props: PropertiesPageProps) -> Element {
             // Are we looking at one bill?
             if let Some(property_id) = props.path.first() {
                 if let Some(property) = property_list.property_map.get(property_id) {
-                    // The key causes BillDetail to be re-mounted when the bill changes, which drops
-                    // (and so cancels) any fetch in progress for the previous bill.
                     rsx! {
                         PropertyDetail {
                             key: "{property_id}",
@@ -587,31 +585,6 @@ fn PropertyDetail(props: PropertyDetailProps) -> Element {
     rsx! {
         {props.property.gui_display()?}
     }
-    // // Fetch all transactions for this bill.
-    // let transactions_resource = use_resource({
-    //     let props = props.clone();
-    //     move || {
-    //         let props = props.clone();
-    //         async move {
-    //             props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
-    //                 props.billing_timezone).await
-    //         }
-    //     }
-    // });
-
-    // let Some(bill) = find_bill(&props.bill_id, &props.bills) else {
-    //     return rsx! {
-    //         {format!("No such bill {}", props.bill_id)}
-    //     };
-    // };
-
-    // match &*transactions_resource.read() {
-    //     None => rsx! {
-    //         {format!("Loading transactions for bill {}...", props.bill_id)}
-    //     },
-    //     Some(Err(error)) => Err(anyhow!("Failed to load transactions for bill {}: {error:?}", props.bill_id))?,
-    //     Some(Ok(bill_transactions)) => bill.gui_display(bill_transactions),
-    // }
 }
 
 
@@ -635,23 +608,23 @@ impl PartialEq for MeterPageProps {
 
 #[component]
 fn MeterPage(props: MeterPageProps) -> Element {
-    // // Fetch the list of all meters, this runs once when the component is mounted.
-    // let properties_resource = use_resource({
-    //     let meter_manager = props.meter_manager.clone();
-    //     let account_id = props.account_id.clone();
-    //     move || {
-    //         let meter_manager = meter_manager.clone();
-    //         let account_id = account_id.clone();
-    //         async move { meter_manager.get_properties(&account_id).await }
-    //     }
-    // });
+    // Fetch the list of all meters (properties), this runs once when the component is mounted.
+    let properties_resource = use_resource({
+        let meter_manager = props.meter_manager.clone();
+        let account_id = props.account_id.clone();
+        move || {
+            let meter_manager = meter_manager.clone();
+            let account_id = account_id.clone();
+            async move { meter_manager.get_properties(&account_id).await }
+        }
+    });
 
-    // match &*properties_resource.read() {
-    //     None => rsx! {
-    //         div { "Loading Meter for account {props.account_id}..." }
-    //     },
-    //     Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:?}"))?,
-        // Some(Ok(property_list)) => {
+    match &*properties_resource.read() {
+        None => rsx! {
+            div { "Loading properties for account {props.account_id}..." }
+        },
+        Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:?}"))?,
+        Some(Ok(property_list)) => {
 
             // Are we looking at one meter?
             if let Some(meter_id) = props.path.first() {
@@ -676,11 +649,85 @@ fn MeterPage(props: MeterPageProps) -> Element {
             //     }
             }
             else {
-                rsx! { "ERROR There is no meter page at present" }
+
+                let mut lines = Vec::new();
+
+                for property in property_list.property_map.values() {
+                    for meter_point in &property.electricity_meter_points_ {
+                        for meter in &meter_point.meters_ {
+                            let direction = if meter.import_meter_.is_some() { "Export" } else {"Import"};
+                            let hh_readings = if meter.has_and_allows_hh_readings_ { "True" } else { "False" };
+                            let id = meter.node_id_.clone();
+                            lines.push(rsx!{
+                                tr {
+                                    td {
+                                        div {
+                                            class: "link",
+                                            onclick: move |_| {
+
+                                                let mut path_signal = use_context::<Signal<Vec<String>>>();
+                                                let new_path = vec![String::from("meters"), id.clone()];
+                                                path_signal.set(new_path);
+                                            },
+                                            "{meter.node_id_}"
+                                        }
+                                    }
+                                    td { "{meter.serial_number_}" }
+                                    td { {hh_readings} }
+                                    td { {direction} }
+                                    td { {meter.consumption_units_.clone()} }
+                                }
+                            })
+                        }
+                    }
+
+
+                    for meter_point in &property.gas_meter_points_ {
+                        for meter in &meter_point.meters_ {
+                            let direction = "Import";
+                            let hh_readings = if meter.has_and_allows_hh_readings_ { "True" } else { "False" };
+                            let id = meter.node_id_.clone();
+                            lines.push(rsx!{
+                                tr {
+                                    td {
+                                        div {
+                                            class: "link",
+                                            onclick: move |_| {
+
+                                                let mut path_signal = use_context::<Signal<Vec<String>>>();
+                                                let new_path = vec![String::from("meters"), id.clone()];
+                                                path_signal.set(new_path);
+                                            },
+                                            "{meter.node_id_}"
+                                        }
+                                    }
+                                    td { "{meter.serial_number_}" }
+                                    td { {hh_readings} }
+                                    td { {direction} }
+                                    td { {meter.consumption_units_.clone()} }
+                                }
+                            })
+                        }
+                    }
+                }
+                rsx! {
+                    table {
+                        tr { class: "header",
+                            th { "Node ID" }
+                            th { "Serial Number" }
+                            th { "Has and Allows HH Readings" }
+                            th { "Direction" }
+                            th { "Units" }
+                        }
+
+                        for line in lines {
+                            {line}
+                        }
+                    }
+                }
             }
-        // }
-    //     ,
-    // }
+        },
+    }
 }
 
 #[derive(Props, Clone)]
@@ -1006,11 +1053,6 @@ impl PartialEq for MeterDetailProps {
 
 #[component]
 fn MeterDetail(props: MeterDetailProps) -> Element {
-    // rsx! {
-    //     //TODO fetch meter consumption for the given period and display it
-    //     div { "Meter Consumption for meter {props.meter_id} from {props.start} to {end}" }
-    // }
-
     // Fetch the data
     let transactions_resource = use_resource({
         let props = props.clone();
@@ -1025,13 +1067,6 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
             }
         }
     });
-
-    // let Some(bill) = find_bill(&props.bill_id, &props.bills) else {
-    //     return rsx! {
-    //         {format!("No such bill {}", props.bill_id)}
-    //     };
-    // };
-
 
     match &*transactions_resource.read() {
         None => rsx! {
