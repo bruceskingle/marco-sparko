@@ -19,7 +19,7 @@ use super::DataSetAttributes;
 pub struct MonthlyDataSet<V>
 {
     pub start_date: Date,
-    pub end_date: Date,
+    pub next_date: Date,
     pub data: BTreeMap<DateTime, (DataSetAttributes, V)> ,
 }
 
@@ -48,7 +48,7 @@ where
             IN: Fn(&V) -> (DateTime, bool),
             I: IntoIterator<Item = V>,
     {
-        let (path, start_date, end_date) = config.path_for_month(hash_key, date)?;
+        let month_bucket = config.path_for_month(hash_key, date)?;
         
     //     Self::init(
     //         path,
@@ -86,7 +86,7 @@ where
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)?;
+            .open(&month_bucket.path)?;
         let _guard = file.lock()?;
         let modified = file.metadata()?.modified()?;
         let mut refresh =  SystemTime::now()
@@ -187,7 +187,7 @@ where
             else {
                 None
             };
-            let query = initial_query_provider(&start_date, last_record)?;
+            let query = initial_query_provider(&month_bucket.start, last_record)?;
             let mut response = request_manager.call(&query).await?;
 
             // Self::handle_records(response, response_iterator, indexer, &mut data, &mut file)?;
@@ -201,7 +201,7 @@ where
             // }
 
             loop {
-                let cq = continuation_query_provider(&start_date, &response);
+                let cq = continuation_query_provider(&month_bucket.start, &response);
 
                 // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
 
@@ -214,7 +214,7 @@ where
                     // }
 
                     let date: time::Date = index.date();
-                    if date >= *start_date && date <= *end_date {
+                    if date >= *month_bucket.start && date < *month_bucket.next {
 
                         let update = if let Some((_attrs, current_value)) = data.get(&index) {
                             let v = serde_json::to_string(&value)?;
@@ -252,7 +252,7 @@ where
         if rewrite {
             if config.verbose 
             {
-                println!("REWRITING FILE {}", path.display());
+                println!("REWRITING FILE {}", month_bucket.path.display());
             }
             file.seek(SeekFrom::Start(0))?;
             file.set_len(0)?;
@@ -262,8 +262,8 @@ where
         }
 
         Ok(Self {
-            start_date,
-            end_date,
+            start_date: month_bucket.start,
+            next_date: month_bucket.next,
             data
         })
         

@@ -9,6 +9,16 @@ pub struct CacheConfig {
     pub verbose: bool,
 }
 
+/// The configuration for a monthly bucket
+pub struct MonthBucket {
+    /// Path to the local cache file
+    pub path: PathBuf,
+    /// Start date for this bucket
+    pub start: Date,
+    /// Start date for the next bucket
+    pub next: Date,
+}
+
 impl CacheConfig {
     pub fn path_for_hash_key(&self, hash_key: &str) -> PathBuf {
         let mut path = self.dir_path.clone();
@@ -16,9 +26,9 @@ impl CacheConfig {
         path
     }
 
-    pub fn path_for_month(&self, hash_key: &str, date: &Date) -> anyhow::Result<(PathBuf, Date, Date)> {
-        let start_date = Date::from_calendar_date(date.year(), date.month(), 1)?;
-        let end_date = if date.month() == Month::December {
+    pub fn path_for_month(&self, hash_key: &str, date: &Date) -> anyhow::Result<MonthBucket> {
+        let start = Date::from_calendar_date(date.year(), date.month(), 1)?;
+        let next = if date.month() == Month::December {
             Date::from_calendar_date(date.year() + 1, Month::January, 1)?
         }
         else {
@@ -29,7 +39,7 @@ impl CacheConfig {
 
         Self::path_for_date(&mut path, date);
         Self::path_hash_key_for_date(&mut path, date, hash_key);
-        Ok((path, start_date, end_date))
+        Ok( MonthBucket {path, start, next})
     }
 
     fn path_for_date(path: &mut PathBuf, date: &Date) {

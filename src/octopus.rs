@@ -1038,7 +1038,7 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
             {format!("Loading consumption for meter {}...", props.meter_id)}
         },
         Some(Err(error)) => Err(anyhow!("Failed to load consumption for meter {}: {error:?}", props.meter_id))?,
-        Some(Ok(consumption)) => MeterManager::gui_display(consumption),
+        Some(Ok(consumption)) => MeterManager::display_consumption(consumption, &props.start, &props.end),
     }
 }
 
