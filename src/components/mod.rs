@@ -3,3 +3,4 @@
 //! component  to be used in our app.
 
 pub mod app;
+pub mod date_range_picker;
