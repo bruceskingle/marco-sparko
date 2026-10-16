@@ -674,6 +674,7 @@ fn MeterPage(props: MeterPageProps) -> Element {
                                     }
                                     td { "{meter.serial_number_}" }
                                     td { {hh_readings} }
+                                    td { "Electricity" }
                                     td { {direction} }
                                     td { {meter.consumption_units_.clone()} }
                                 }
@@ -703,6 +704,7 @@ fn MeterPage(props: MeterPageProps) -> Element {
                                     }
                                     td { "{meter.serial_number_}" }
                                     td { {hh_readings} }
+                                    td { "Gas" }
                                     td { {direction} }
                                     td { {meter.consumption_units_.clone()} }
                                 }
@@ -715,7 +717,8 @@ fn MeterPage(props: MeterPageProps) -> Element {
                         tr { class: "header",
                             th { "Node ID" }
                             th { "Serial Number" }
-                            th { "Has and Allows HH Readings" }
+                            th { "HH Readings" }
+                            th { "Type" }
                             th { "Direction" }
                             th { "Units" }
                         }
