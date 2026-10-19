@@ -4,6 +4,7 @@ pub mod token;
 pub mod decimal;
 mod account;
 mod property;
+mod meter_point;
 mod bill;
 mod meter;
 mod consumption_graph;
@@ -19,7 +20,7 @@ use dioxus::prelude::*;
 
 use bill::BillManager;
 use meter::MeterManager;
-use pages::{BillsPage, MeterPage, PropertiesPage};
+use pages::{BillsPage, MeterPage, HomeAndEvPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
 
 use time_tz::timezones;
@@ -181,7 +182,11 @@ impl Module for OctopusModule {
             PageInfo {
                 label: "Meters",
                 path: "meters",
-            }
+            },
+            PageInfo {
+                label: "Home and EV",
+                path: "home_and_ev",
+            },
         )
     }
 
@@ -350,6 +355,16 @@ impl Module for OctopusModule {
             "meters" => {
                 rsx! {
                     MeterPage {
+                        account_id: self.account_id.clone(),
+                        meter_manager: self.meter_manager.clone(),
+                        billing_timezone: self.billing_timezone,
+                        path,
+                    }
+                }
+            },
+            "home_and_ev" => {
+                rsx! {
+                    HomeAndEvPage {
                         account_id: self.account_id.clone(),
                         meter_manager: self.meter_manager.clone(),
                         billing_timezone: self.billing_timezone,

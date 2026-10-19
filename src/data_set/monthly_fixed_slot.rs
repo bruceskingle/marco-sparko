@@ -19,10 +19,10 @@ pub trait SlotSource {
     type Query: GraphQLQuery<Self::Response>;
 
     fn hash_key(&self) -> &str;
-    fn initial_query(&self, start: &DateTime) -> Result<Self::Query, sparko_graphql::Error>;
-    fn continuation_query(&self, start: &DateTime, resp: &Self::Response) -> Option<Result<Self::Query, sparko_graphql::Error>>;
-    fn items(&self, response: Self::Response) -> impl IntoIterator<Item = Self::Value>;
-    fn index(&self, value: &Self::Value) -> (DateTime, DateTime, bool);
+    fn initial_query(&self, start: &DateTime) -> anyhow::Result<Self::Query>;
+    fn continuation_query(&self, start: &DateTime, resp: &Self::Response) -> anyhow::Result<Option<Self::Query>>;
+    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = Self::Value>>;
+    fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)>;
     fn refresh_after(&self) -> Duration;
 }
 
@@ -106,7 +106,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
             match serde_json::from_str(&line) {
                 Ok(value) => {
                     
-                    let (start, end, is_final) = source.index(&value);
+                    let (start, end, is_final) = source.index(&value)?;
                     let item = Item {
                         end,
                         is_final,
@@ -211,8 +211,8 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
                 // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
 
-                for value in source.items(response) {
-                    let (start, end, is_final) = source.index(&value);
+                for value in source.items(response)? {
+                    let (start, end, is_final) = source.index(&value)?;
                     let start_date = start.to_date();
                     let key = Self::key_for(&start_date);
 
@@ -255,10 +255,10 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                     break;
                 }
 
-                if let Some(continuation_query) = cq {
-                    let query = continuation_query?;
+                if let Some(continuation_query) = cq? {
+                    // let query = continuation_query?;
 
-                    response = request_manager.call(&query).await?;
+                    response = request_manager.call(&continuation_query).await?;
 
                     
                 }

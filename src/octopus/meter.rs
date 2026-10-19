@@ -3,15 +3,23 @@ use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
 
+use display_json::DisplayAsJsonPretty;
+use serde::{Deserialize, Serialize};
+
 use dioxus::prelude::*;
 use indexmap::IndexMap;
 use rust_decimal::prelude::ToPrimitive;
-use sparko_graphql::types::{Date, DateTime};
+use sparko_graphql::types::{Date, DateTime, PageOf};
 use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use time_tz::Tz;
+use time_tz::TimeZone;
+use anyhow::anyhow;
 
 use crate::data_set::{MonthlyDataSet, MonthlyFixedSlotDataSet, MultiQueryDataSet, SlotSource};
+use crate::octopus::decimal::Decimal;
+use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput, UtilityFiltersInputBuilder};
+use crate::octopus::meter_point::MeterPointDataSet;
 use crate::octopus::property::PropertyDataSet;
 use crate::{CacheConfig, NULL};
 
@@ -96,6 +104,10 @@ impl MeterManager {
 
     pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyDataSet>{
         PropertyDataSet::new(account_number, &self.cache_config, &self.request_manager).await
+    }
+
+    pub async fn get_meter_points(&self, account_number: &String) -> anyhow::Result<MeterPointDataSet>{
+        MeterPointDataSet::new(account_number, &self.cache_config, &self.request_manager).await
     }
 
     pub async fn get_line_items(&self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
@@ -282,6 +294,169 @@ impl MeterManager {
                     value.end_at_.format(&time_format).unwrap()),
             });
         }
+
+        rsx! {
+            ConsumptionGraph { points, style }
+        }
+    }
+
+
+
+
+
+    pub async fn get_home_and_ev_consumption(
+        &self,
+        account_number: &String,
+        mpan: &String,
+        start: &DateTime,
+        end: &Option<DateTime>,
+        tz: &'static Tz)
+        -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>>
+    {
+
+        let end = if let Some(end) = end { end.clone() } else {DateTime::now(tz)};
+        let source = HomeAndEvConsumptionSource{
+            account_number: account_number.clone(),
+            mpan: mpan.clone(),
+            hash_key: format!("{}#{}#HomeAndEvConsumption", account_number, mpan),
+            end_at: end,
+            tz,
+        };
+        
+        MonthlyFixedSlotDataSet::fetch(
+            source,
+            tz,
+            &self.cache_config,
+            &self.request_manager,
+            start,
+            &Some(end)
+        ).await
+    }
+
+    pub fn display_home_and_ev_consumption(data: &Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>, start: &DateTime, end: &Option<DateTime>) -> Element {
+        let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
+        let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
+
+        let mut items = Vec::new();
+        let mut last_date = Date::from_calendar_date(0, time::Month::January, 1)?;
+        for data_set in data {
+            for (key , item) in &data_set.data {
+                let end_ok = if let Some(end) = end {
+                    key < end
+                }
+                else {
+                    true
+                };
+                
+                if key >= start && end_ok {
+                    
+                    let row_class = if item.attributes.cached { "cached"} else {"fetched"};
+                    let item_start_date = item.value.start.to_date();
+                    let (start_date, start_time) = if last_date == item_start_date {
+                        ("".to_string(), item.value.start.format(&time_format).unwrap())
+                    } else {
+                        (item.value.start.format(&date_format).unwrap(), item.value.start.format(&time_format).unwrap())
+                    };
+                    
+                    let end_time = item.value.end.format(&time_format).unwrap();
+                    // let amount = format!("{:.3}", item.value.value_);
+
+                    items.push(rsx!{
+                        tr { class: row_class,
+                            td { "{start_date}" }
+                            td { "{start_time}" }
+                            td { "{end_time}" }
+                            td { "{item.value.home_standard.units}" }
+                            td { "{item.value.home_standard.cost}" }
+                            td { "{item.value.home_standard.rate}" }
+                            td { "{item.value.home_low.units}" }
+                            td { "{item.value.home_low.cost}" }
+                            td { "{item.value.home_low.rate}" }
+                            td { "{item.value.ev_standard.units}" }
+                            td { "{item.value.ev_standard.cost}" }
+                            td { "{item.value.ev_standard.rate}" }
+                            td { "{item.value.ev_low.units}" }
+                            td { "{item.value.ev_low.cost}" }
+                            td { "{item.value.ev_low.rate}" }
+                            td { "{item.value.standing_charge}" }
+                        }
+                    }
+                    );
+                }
+                last_date = key.to_date();
+            }
+        };
+
+        rsx! {
+            table {
+                tr {
+                    td { colspan: 3 }
+                    th { colspan: 3, class: "header", "Home Standard" }
+                    th { colspan: 3, class: "header", "Home Low" }
+                    th { colspan: 3, class: "header", "EV Standard" }
+                    th { colspan: 3, class: "header", "EV Low" }
+                }
+                tr { class: "header",
+                    th { colspan: 2, "From" }
+                    th { "To" }
+                    th { "Units" }
+                    th { "Cost" }
+                    th { "Rate" }
+                    th { "Units" }
+                    th { "Cost" }
+                    th { "Rate" }
+                    th { "Units" }
+                    th { "Cost" }
+                    th { "Rate" }
+                    th { "Units" }
+                    th { "Cost" }
+                    th { "Rate" }
+                    th { "Standing Charge" }
+                }
+                for item in items {
+                    {item}
+                }
+            }
+        }
+    }
+
+    pub fn display_home_and_ev_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>, start: &DateTime, end: &Option<DateTime>, style: GraphStyle) -> Element {
+        let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
+        let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
+        let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
+
+        let values: Vec<_> = data.iter()
+            .flat_map(|data_set| data_set.data.range(start..))
+            .filter(|(key, _)| end.as_ref().is_none_or(|end| *key < end))
+            .map(|(_, item)| &item.value)
+            .collect();
+
+        // Label each day, unless there is only one in which case label every 3 hours.
+        // let single_day = values.first().map(|v| v.start_at_.to_date()) == values.last().map(|v| v.start_at_.to_date());
+
+        let mut points = Vec::with_capacity(values.len());
+        // let mut last_date = None;
+        // for value in values {
+        //     let date = value.start_at_.to_date();
+        //     let tick_label = if single_day {
+        //         (value.start_at_.minute() == 0 && value.start_at_.hour() % 3 == 0)
+        //             .then(|| value.start_at_.format(&time_format).unwrap())
+        //     } else {
+        //         (last_date != Some(date)).then(|| value.start_at_.format(&day_format).unwrap())
+        //     };
+        //     last_date = Some(date);
+
+        //     points.push(GraphPoint {
+        //         start: value.start_at_.unix_timestamp(),
+        //         end: value.end_at_.unix_timestamp(),
+        //         value: value.value_.to_f64().unwrap_or_default(),
+        //         tick_label,
+        //         period_label: format!("{} {}–{}",
+        //             value.start_at_.format(&date_format).unwrap(),
+        //             value.start_at_.format(&time_format).unwrap(),
+        //             value.end_at_.format(&time_format).unwrap()),
+        //     });
+        // }
 
         rsx! {
             ConsumptionGraph { points, style }
@@ -812,17 +987,17 @@ impl SlotSource for ConsumptionSource {
         &self.hash_key
     }
 
-    fn initial_query(&self, start: &DateTime) -> std::prelude::v1::Result<Self::Query, sparko_graphql::Error> {
-        meter::meter_consumption::Query::builder()
+    fn initial_query(&self, start: &DateTime) -> anyhow::Result<Self::Query> {
+        Ok(meter::meter_consumption::Query::builder()
             .with_meter_id(self.meter_node_id.clone())
             .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
             .with_start_at(start.clone())
             .with_timezone(String::from("Europe/London"))
             .with_first(50)
-            .build()
+            .build()?)
     }
 
-    fn continuation_query(&self, start: &DateTime, last_response: &Self::Response) -> Option<std::prelude::v1::Result<Self::Query, sparko_graphql::Error>> {
+    fn continuation_query(&self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
         let page =  match &last_response.node_ {
             meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
                 &electricity_meter.consumption_
@@ -835,7 +1010,7 @@ impl SlotSource for ConsumptionSource {
             },
         };
 
-        if let Some(end_cursor) = &page.page_info.end_cursor {
+        Ok(if let Some(end_cursor) = &page.page_info.end_cursor {
 
             // let start_date = page.edges.last().unwrap().node.start_at_.clone();
             Some(meter::meter_consumption::Query::builder()
@@ -845,14 +1020,14 @@ impl SlotSource for ConsumptionSource {
                 .with_timezone(String::from("Europe/London"))
                 .with_first(50)
                 .with_after(end_cursor.clone())
-                .build())
+                .build()?)
         }
         else {
             None
-        }
+        })
     }
 
-    fn items(&self, response: Self::Response) -> impl IntoIterator<Item = Self::Value> {
+    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = Self::Value>> {
         let page =  match response.node_ {
             meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
                 electricity_meter.consumption_
@@ -865,11 +1040,264 @@ impl SlotSource for ConsumptionSource {
             },
         };
 
-        page.edges.into_iter().map(|edge| edge.node)
+        Ok(page.edges.into_iter().map(|edge| edge.node))
     }
 
-    fn index(&self, value: &Self::Value) -> (DateTime, DateTime, bool) {
-        (value.start_at_.clone(), value.end_at_.clone(), true)
+    fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)> {
+       Ok((value.start_at_.clone(), value.end_at_.clone(), true))
+    }
+    
+    fn refresh_after(&self) -> Duration {
+        Duration::from_hours(24)
+    }
+}
+
+
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Eq, PartialEq, Clone)]
+pub struct HomeAndEvReadingConsumption {
+    units: Decimal,
+    cost:  Decimal,
+    rate: Decimal,
+}
+
+impl HomeAndEvReadingConsumption {
+    fn from(stat: meter::home_and_ev_consumption_breakdown::StatisticOutput) -> Option<Self> {
+        let estimated_money = stat.cost_incl_tax_?;
+        Some(HomeAndEvReadingConsumption {
+            units: stat.value_?,
+            cost: estimated_money.estimated_amount_,
+            rate: estimated_money.price_per_unit_?.amount_,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Eq, PartialEq, Clone)]
+pub struct HomeAndEvReading {
+    start:  DateTime,
+    end: DateTime,
+    home_standard: HomeAndEvReadingConsumption,
+    ev_standard: HomeAndEvReadingConsumption,
+    home_low: HomeAndEvReadingConsumption,
+    ev_low: HomeAndEvReadingConsumption,
+    standing_charge: Decimal,
+}
+
+impl HomeAndEvReading {
+    fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface) -> Option<Self> {
+        match node {
+            meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
+                println!("Unexpected abstract measurement {:?}", abstract_measurement_interface);
+                None
+            },
+            meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
+                if let Some(meta_data) = interval_measurement_type.measurement_interface_.meta_data_ {
+                    let mut home_standard= None;
+                    let mut ev_standard= None;
+                    let mut home_low= None;
+                    let mut ev_low= None;
+                    let mut standing_charge = None;
+
+                    for stat in meta_data.statistics_ {
+                        match stat.type_.clone()? {
+                            super::graphql::ReadingStatisticTypeEnum::StandingChargeCost => {
+                                standing_charge = Some(stat.cost_incl_tax_?.estimated_amount_)
+                            },
+                            super::graphql::ReadingStatisticTypeEnum::ConsumptionCost => {
+                                if let Some(label) = stat.label_.clone() {
+                                    match label.as_str() {
+                                        "EV Low Rate" => {
+                                            ev_low = HomeAndEvReadingConsumption::from(stat);
+                                        },
+                                        "EV Standard Rate" => {
+                                            ev_standard = HomeAndEvReadingConsumption::from(stat);
+                                        },
+                                        "Home Low Rate" => {
+                                            home_low= HomeAndEvReadingConsumption::from(stat);
+                                        },
+                                        "Home Standard Rate" => {
+                                            home_standard= HomeAndEvReadingConsumption::from(stat);
+                                        },
+                                        _ => {
+                                            println!("Unknown meta data label {}", label);
+                                            return None;
+                                        }
+                                    }
+                                }
+                                else {
+                                    println!("No meta data label");
+                                    return None;
+                                }
+                            },
+                            _ => {
+                                println!("Unexpected statistic type {:?}", stat.type_);
+                                return None;
+                            },
+                        }
+                    }
+
+                    Some(HomeAndEvReading{
+                        start: interval_measurement_type.start_at_,
+                        end: interval_measurement_type.end_at_,
+                        home_standard: home_standard?,
+                        home_low: home_low?,
+                        ev_standard: ev_standard?,
+                        ev_low: ev_low?,
+                        standing_charge: standing_charge?,
+                    })
+                }
+                else {
+                    None
+                }
+            },
+        }
+    }
+}
+
+pub struct HomeAndEvConsumptionSource {
+    pub account_number: String,
+    pub end_at: DateTime,
+    pub tz: &'static Tz,
+    pub mpan:String,
+    pub hash_key: String,
+}
+
+impl HomeAndEvConsumptionSource {
+    fn query_builder(&self) -> anyhow::Result<meter::home_and_ev_consumption_breakdown::QueryBuilder> {
+        let mut utility_filters = Vec::new();
+        let mut modelled_utility_filters = Vec::new();
+
+        utility_filters.push(UtilityFiltersInput::builder()
+            .with_electricity_filters(ElectricityFiltersInput::builder()
+                .with_reading_frequency_type(ReadingFrequencyType::RawInterval)
+                .with_reading_direction(super::graphql::ReadingDirectionType::Consumption)
+                .with_market_supply_point_id(self.mpan.clone())
+                .build()?)
+            .build()?
+        );
+
+        modelled_utility_filters.push(UtilityFiltersInput::builder()
+            .with_electricity_filters(ElectricityFiltersInput::builder()
+                .with_reading_frequency_type(ReadingFrequencyType::RawInterval)
+                .with_reading_direction(super::graphql::ReadingDirectionType::Consumption)
+                .with_market_supply_point_id(self.mpan.clone())
+                .with_modelled_sub_meter_readings(true)
+                .build()?)
+            .build()?
+        );
+
+        Ok(meter::home_and_ev_consumption_breakdown::Query::builder()
+            .with_account_number(self.account_number.clone())
+            .with_end_at(self.end_at)
+            .with_timezone(self.tz.name().to_string())
+            .with_utility_filters(utility_filters)
+            .with_modelled_utility_filters(modelled_utility_filters)
+            .with_first(50)
+        )
+    }
+
+    fn get_measurements(last_response: &meter::home_and_ev_consumption_breakdown::Response) -> anyhow::Result<&PageOf<meter::home_and_ev_consumption_breakdown::MeasurementInterface>> {
+            Ok(&last_response
+                .account_.as_ref()
+                .ok_or(anyhow!("No account in response"))?
+                .properties_.first().ok_or(anyhow!("No property in response"))?
+                // .electricity_meter_points_.first().ok_or("No meter points in response")?
+                .measurements_
+
+            )
+        }
+}
+
+impl SlotSource for HomeAndEvConsumptionSource {
+    type Value = HomeAndEvReading;
+
+    type Response = meter::home_and_ev_consumption_breakdown::Response;
+
+    type Query = meter::home_and_ev_consumption_breakdown::Query;
+
+    fn hash_key(&self) -> &str {
+        &self.hash_key
+    }
+
+    fn initial_query(&self, start: &DateTime) -> anyhow::Result<Self::Query> {
+        Ok(self.query_builder()?
+            .with_start_at(start.clone())
+            .build()?
+        )
+    }
+
+    fn continuation_query(&self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
+
+
+        // fn get_cursor(last_response: &meter::home_and_ev_consumption_breakdown::Response) -> anyhow::Result<Option<String>> {
+        //     Ok(last_response
+        //         .account_.as_ref()
+        //         .ok_or(anyhow!("No account in response"))?
+        //         .properties_.first().ok_or(anyhow!("No property in response"))?
+        //         // .electricity_meter_points_.first().ok_or("No meter points in response")?
+        //         .measurements_.as_ref().ok_or(anyhow!("No measurements in response"))?
+        //         .page_info_
+        //         .end_cursor
+        //         .as_ref()
+        //         .cloned()
+        //     )
+        // }
+
+        Ok(if let Some(end_cursor) = Self::get_measurements(&last_response)?
+            .page_info
+                .end_cursor
+                .as_ref()
+                .cloned()
+        {
+            Some(self.query_builder()?
+                .with_start_at(start.clone())
+                .with_cursor(end_cursor)
+                .build()?)
+        }
+        else {
+            None
+        })
+    }
+
+    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = Self::Value>> {
+        // let measurements = response
+        //         .account_
+        //         .ok_or(anyhow!("No account in response"))?
+        //         .properties_.first().ok_or(anyhow!("No property in response"))?
+        //         // .electricity_meter_points_.first().ok_or("No meter points in response")?
+        //         .measurements_;
+
+        Ok(
+            response
+                .account_
+                .ok_or(anyhow!("No account in response"))?
+                .properties_.into_iter().next().ok_or(anyhow!("No property in response"))?
+                // .electricity_meter_points_.first().ok_or("No meter points in response")?
+                .measurements_
+                .edges
+                .into_iter()
+                .filter_map(|edge| {
+                    HomeAndEvReading::from(edge.node)
+                    // match edge.node {
+                        
+                    //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
+                    //         println!("Unexpected abstract measurement {:?}", abstract_measurement_interface);
+                    //         None
+                    //     },
+                    //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
+                    //         if let Some(meta_data) = interval_measurement_type.measurement_interface_.meta_data_ {
+                    //             for stat in meta_data.statistics_ {
+                    //                 stat.label_
+                    //             }
+                    //         }
+                    //         Some(interval_measurement_type)
+                    //     },
+                    // }
+                })
+        )
+    }
+
+    fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)> {
+        Ok((value.start.clone(), value.end.clone(), true))
     }
     
     fn refresh_after(&self) -> Duration {

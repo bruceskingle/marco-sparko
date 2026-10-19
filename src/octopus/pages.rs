@@ -8,7 +8,9 @@
 mod bills;
 mod meter;
 mod properties;
+mod home_and_ev;
 
 pub use bills::BillsPage;
 pub use meter::MeterPage;
 pub use properties::PropertiesPage;
+pub use home_and_ev::HomeAndEvPage;
