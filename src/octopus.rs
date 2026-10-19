@@ -8,6 +8,7 @@ mod meter_point;
 mod bill;
 mod meter;
 mod consumption_graph;
+mod stacked_bar_graph;
 mod pages;
 
 use std::sync::Arc;

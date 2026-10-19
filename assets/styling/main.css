@@ -114,7 +114,7 @@ body {
     /* background: white; */
 }
 
-.filler:has(.consumption-graph) {
+.filler:has(.consumption-graph, .stacked-consumption-graph) {
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
@@ -486,6 +486,17 @@ h6 {
     margin-bottom: 12px;
 }
 
+.home-ev-date-range {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.home-ev-date-range .view-toggle {
+    margin-left: 0;
+}
+
 .view-toggle {
     margin-left: 12px;
 }
@@ -523,6 +534,70 @@ h6 {
 
 .consumption-graph.ready {
     visibility: visible;
+}
+
+.stacked-consumption-graph {
+    display: block;
+    flex: 1 1 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    font-size: 12px;
+    visibility: hidden;
+}
+
+.stacked-consumption-graph.ready {
+    visibility: visible;
+}
+
+.stacked-consumption-graph .stacked-grid,
+.stacked-consumption-graph .stacked-tick {
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 1;
+}
+
+.stacked-consumption-graph .stacked-axis-label {
+    fill: #c4c4ce;
+}
+
+.stacked-consumption-graph .stacked-bar,
+.stacked-consumption-graph .stacked-legend-swatch {
+    stroke: rgba(0, 0, 0, 0.45);
+    stroke-width: 0.5;
+}
+
+.stacked-consumption-graph .home-standard {
+    fill: #f6671f;
+}
+
+.stacked-consumption-graph .home-low {
+    fill: #46ee43;
+}
+
+.stacked-consumption-graph .ev-standard {
+    fill: #f72525;
+}
+
+.stacked-consumption-graph .ev-low {
+    fill: #271cff;
+}
+
+.stacked-consumption-graph .standing-charge {
+    fill: #b8c0cc;
+}
+
+.stacked-consumption-graph .stacked-tooltip rect {
+    fill: #1a1a1f;
+    stroke: #707080;
+}
+
+.stacked-consumption-graph .stacked-tooltip-period {
+    fill: #c4c4ce;
+    font-weight: bold;
+}
+
+.stacked-consumption-graph .stacked-tooltip-value {
+    fill: #ffffff;
 }
 
 .consumption-graph .grid {

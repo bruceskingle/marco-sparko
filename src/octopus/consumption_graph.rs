@@ -169,7 +169,7 @@ pub fn ConsumptionGraph(points: Vec<GraphPoint>, style: GraphStyle) -> Element {
 
 /// Round a raw axis step up to 1, 2, 2.5 or 5 times a power of ten, returning it with the
 /// number of decimal places needed to display multiples of it.
-fn nice_step(raw: f64) -> (f64, usize) {
+pub(super) fn nice_step(raw: f64) -> (f64, usize) {
     if !(raw > 0.0) {
         return (1.0, 0);
     }

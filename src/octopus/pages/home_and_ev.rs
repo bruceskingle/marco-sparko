@@ -6,8 +6,8 @@ use time_tz::Tz;
 use sparko_graphql::types::DateTime;
 
 use crate::components::date_range_picker::{DateRangePicker, RangeSelection};
-use crate::octopus::consumption_graph::GraphStyle;
 use crate::octopus::meter::MeterManager;
+use crate::octopus::stacked_bar_graph::{StackedBarMode, StackedBarPeriod};
 
 #[derive(Props, Clone)]
 pub struct HomeAndEvPageProps {
@@ -176,6 +176,8 @@ fn HomeAndEvConsumption(props: HomeAndEvConsumptionProps) -> Element {
 
     // Whether consumption is shown as a table or a graph, kept here so it survives range changes.
     let mut view = use_signal(|| ConsumptionView::Table);
+    let mut graph_mode = use_signal(|| StackedBarMode::Cost);
+    let mut graph_period = use_signal(|| StackedBarPeriod::Raw);
 
     let selection = *applied_range.read();
     let (start, end) = selection.to_date_times(tz).map_err(|error| anyhow!(error))?;
@@ -193,19 +195,43 @@ fn HomeAndEvConsumption(props: HomeAndEvConsumptionProps) -> Element {
             start,
             end,
             view: view(),
+            graph_mode: graph_mode(),
+            graph_period: graph_period(),
         }
     };
 
     rsx! {
-        div { class: "date-range",
+        div { class: "date-range home-ev-date-range",
             DateRangePicker { range: applied_range, timezone: tz }
             span { class: "view-toggle",
-                for option in [ConsumptionView::Table, ConsumptionView::LineGraph, ConsumptionView::BarGraph] {
+                for option in [ConsumptionView::Table, ConsumptionView::Graph] {
                     button {
                         r#type: "button",
                         class: if view() == option { "active" },
                         onclick: move |_| view.set(option),
                         "{option}"
+                    }
+                }
+            }
+            if view() == ConsumptionView::Graph {
+                span { class: "view-toggle",
+                    for option in [StackedBarMode::Cost, StackedBarMode::Units] {
+                        button {
+                            r#type: "button",
+                            class: if graph_mode() == option { "active" },
+                            onclick: move |_| graph_mode.set(option),
+                            "{option}"
+                        }
+                    }
+                }
+                span { class: "view-toggle",
+                    for option in [StackedBarPeriod::Raw, StackedBarPeriod::Day, StackedBarPeriod::Week, StackedBarPeriod::Month] {
+                        button {
+                            r#type: "button",
+                            class: if graph_period() == option { "active" },
+                            onclick: move |_| graph_period.set(option),
+                            "{option}"
+                        }
                     }
                 }
             }
@@ -225,21 +251,41 @@ struct HomeAndEvDetailProps {
     /// None means up to the present
     end: Option<DateTime>,
     view: ConsumptionView,
+    graph_mode: StackedBarMode,
+    graph_period: StackedBarPeriod,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum ConsumptionView {
     Table,
-    LineGraph,
-    BarGraph,
+    Graph,
 }
 
 impl std::fmt::Display for ConsumptionView {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConsumptionView::Table => write!(f, "Table"),
-            ConsumptionView::LineGraph => write!(f, "Line Graph"),
-            ConsumptionView::BarGraph => write!(f, "Bar Graph"),
+            ConsumptionView::Graph => write!(f, "Graph"),
+        }
+    }
+}
+
+impl std::fmt::Display for StackedBarMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cost => write!(f, "Cost"),
+            Self::Units => write!(f, "Units"),
+        }
+    }
+}
+
+impl std::fmt::Display for StackedBarPeriod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Raw => write!(f, "Raw"),
+            Self::Day => write!(f, "Day"),
+            Self::Week => write!(f, "Week"),
+            Self::Month => write!(f, "Month"),
         }
     }
 }
@@ -251,6 +297,8 @@ impl PartialEq for HomeAndEvDetailProps {
             && self.start == other.start
             && self.end == other.end
             && self.view == other.view
+            && self.graph_mode == other.graph_mode
+            && self.graph_period == other.graph_period
             // && Arc::ptr_eq(&self.property, &other.property)
             && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
@@ -281,8 +329,14 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
         Some(Err(error)) => Err(anyhow!("Failed to load home_and_ev_consumption for meter {}: {error:?}", props.mpan))?,
         Some(Ok(consumption)) => match props.view {
             ConsumptionView::Table => MeterManager::display_home_and_ev_consumption(consumption, &props.start, &props.end),
-            ConsumptionView::LineGraph => MeterManager::display_home_and_ev_consumption_graph(consumption, &props.start, &props.end, GraphStyle::Line),
-            ConsumptionView::BarGraph => MeterManager::display_home_and_ev_consumption_graph(consumption, &props.start, &props.end, GraphStyle::Bar),
+            ConsumptionView::Graph => MeterManager::display_home_and_ev_consumption_graph(
+                consumption,
+                &props.start,
+                &props.end,
+                props.billing_timezone,
+                props.graph_mode,
+                props.graph_period,
+            ),
         },
     }
 }
