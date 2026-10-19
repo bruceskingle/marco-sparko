@@ -153,7 +153,13 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
     let y_ticks: Vec<(f64, String)> = (0..)
         .map(|i| i as f64 * step)
         .take_while(|value| *value <= y_max + step / 2.0)
-        .map(|value| (y(value), format!("{value:.decimals$}")))
+        .map(|value| {
+            let label = match mode {
+                StackedBarMode::Units => format!("{value:.decimals$}"),
+                StackedBarMode::Cost => format!("£{:.2}", value / 100.0),
+            };
+            (y(value), label)
+        })
         .collect();
 
     let all_x_ticks: Vec<(f64, &String)> = points
