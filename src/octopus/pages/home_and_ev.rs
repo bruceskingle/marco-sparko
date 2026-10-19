@@ -270,26 +270,6 @@ impl std::fmt::Display for ConsumptionView {
     }
 }
 
-impl std::fmt::Display for StackedBarMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Cost => write!(f, "Cost"),
-            Self::Units => write!(f, "Units"),
-        }
-    }
-}
-
-impl std::fmt::Display for StackedBarPeriod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Raw => write!(f, "Raw"),
-            Self::Day => write!(f, "Day"),
-            Self::Week => write!(f, "Week"),
-            Self::Month => write!(f, "Month"),
-        }
-    }
-}
-
 impl PartialEq for HomeAndEvDetailProps {
     fn eq(&self, other: &Self) -> bool {
         self.account_id == other.account_id

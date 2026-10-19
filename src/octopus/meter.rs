@@ -260,10 +260,11 @@ impl MeterManager {
         }
     }
 
-    pub fn display_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>, start: &DateTime, end: &Option<DateTime>, style: GraphStyle) -> Element {
+    pub fn display_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>, start: &DateTime, end: &Option<DateTime>, tz: &'static Tz, period: StackedBarPeriod) -> Element {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
+        let month_format = time::format_description::parse("[month repr:short] [year]").unwrap();
 
         let values: Vec<_> = data.iter()
             .flat_map(|data_set| data_set.data.range(start..))
@@ -271,35 +272,136 @@ impl MeterManager {
             .map(|(_, item)| &item.value)
             .collect();
 
-        // Label each day, unless there is only one in which case label every 3 hours.
-        let single_day = values.first().map(|v| v.start_at_.to_date()) == values.last().map(|v| v.start_at_.to_date());
+        let single_day = period == StackedBarPeriod::Raw
+            && values.first().map(|value| value.start_at_.to_date())
+                == values.last().map(|value| value.start_at_.to_date());
 
         let mut points = Vec::with_capacity(values.len());
         let mut last_date = None;
+        let mut last_bucket_start = None;
         for value in values {
             let date = value.start_at_.to_date();
-            let tick_label = if single_day {
-                (value.start_at_.minute() == 0 && value.start_at_.hour() % 3 == 0)
-                    .then(|| value.start_at_.format(&time_format).unwrap())
-            } else {
-                (last_date != Some(date)).then(|| value.start_at_.format(&day_format).unwrap())
+            let (bucket_start, bucket_end) = match period {
+                StackedBarPeriod::Raw => (value.start_at_, value.end_at_),
+                StackedBarPeriod::Day => {
+                    let bucket_start = date.at_midnight(tz);
+                    (bucket_start, date.next_day().at_midnight(tz))
+                }
+                StackedBarPeriod::Week => {
+                    let days_since_monday = date.weekday().number_days_from_monday() as i64;
+                    let week_start = time::Date::from_calendar_date(
+                        date.year(),
+                        date.month(),
+                        date.day(),
+                    )
+                    .unwrap() - time::Duration::days(days_since_monday);
+                    let week_start = Date::from_calendar_date(
+                        week_start.year(),
+                        week_start.month(),
+                        week_start.day(),
+                    )
+                    .unwrap();
+                    let week_end = week_start.next_day().next_day().next_day().next_day()
+                        .next_day().next_day().next_day();
+                    (week_start.at_midnight(tz), week_end.at_midnight(tz))
+                }
+                StackedBarPeriod::Month => {
+                    let month_start = time::Date::from_calendar_date(
+                        date.year(),
+                        date.month(),
+                        1,
+                    )
+                    .unwrap();
+                    let next_month = if date.month() == time::Month::December {
+                        time::Date::from_calendar_date(date.year() + 1, time::Month::January, 1)
+                    } else {
+                        time::Date::from_calendar_date(
+                            date.year(),
+                            time::Month::try_from(date.month() as u8 + 1).unwrap(),
+                            1,
+                        )
+                    }
+                    .unwrap();
+                    let start_date = Date::from_calendar_date(
+                        month_start.year(),
+                        month_start.month(),
+                        month_start.day(),
+                    )
+                    .unwrap();
+                    let end_date = Date::from_calendar_date(
+                        next_month.year(),
+                        next_month.month(),
+                        next_month.day(),
+                    )
+                    .unwrap();
+                    (start_date.at_midnight(tz), end_date.at_midnight(tz))
+                }
             };
-            last_date = Some(date);
 
-            points.push(GraphPoint {
-                start: value.start_at_.unix_timestamp(),
-                end: value.end_at_.unix_timestamp(),
-                value: value.value_.to_f64().unwrap_or_default(),
-                tick_label,
-                period_label: format!("{} {}–{}",
+            let tick_label = match period {
+                StackedBarPeriod::Raw if single_day => {
+                    (value.start_at_.minute() == 0 && value.start_at_.hour() % 3 == 0)
+                        .then(|| value.start_at_.format(&time_format).unwrap())
+                }
+                StackedBarPeriod::Raw => {
+                    (last_date != Some(date)).then(|| date.format(&day_format).unwrap())
+                }
+                StackedBarPeriod::Day => {
+                    (last_bucket_start != Some(bucket_start.unix_timestamp()))
+                        .then(|| bucket_start.format(&day_format).unwrap())
+                }
+                StackedBarPeriod::Week => {
+                    (last_bucket_start != Some(bucket_start.unix_timestamp())).then(|| {
+                        format!("Week of {}", bucket_start.format(&day_format).unwrap())
+                    })
+                }
+                StackedBarPeriod::Month => {
+                    (last_bucket_start != Some(bucket_start.unix_timestamp()))
+                        .then(|| bucket_start.format(&month_format).unwrap())
+                }
+            };
+
+            let period_label = match period {
+                StackedBarPeriod::Raw => format!(
+                    "{} {}–{}",
                     value.start_at_.format(&date_format).unwrap(),
                     value.start_at_.format(&time_format).unwrap(),
-                    value.end_at_.format(&time_format).unwrap()),
-            });
+                    value.end_at_.format(&time_format).unwrap(),
+                ),
+                StackedBarPeriod::Day => bucket_start.format(&date_format).unwrap(),
+                StackedBarPeriod::Week => format!(
+                    "{} – {}",
+                    bucket_start.format(&date_format).unwrap(),
+                    bucket_end.to_date().previous_day().format(&date_format).unwrap(),
+                ),
+                StackedBarPeriod::Month => bucket_start.format(&month_format).unwrap(),
+            };
+            let point = GraphPoint {
+                start: bucket_start.unix_timestamp(),
+                end: bucket_end.unix_timestamp(),
+                value: value.value_.to_f64().unwrap_or_default(),
+                tick_label,
+                period_label,
+            };
+
+            if period == StackedBarPeriod::Raw {
+                points.push(point);
+            } else if let Some(existing) = points.last_mut() {
+                if existing.start == bucket_start.unix_timestamp() {
+                    existing.value += point.value;
+                } else {
+                    points.push(point);
+                }
+            } else {
+                points.push(point);
+            }
+
+            last_date = Some(date);
+            last_bucket_start = Some(bucket_start.unix_timestamp());
         }
 
         rsx! {
-            ConsumptionGraph { points, style }
+            ConsumptionGraph { points, style: GraphStyle::Bar }
         }
     }
 
