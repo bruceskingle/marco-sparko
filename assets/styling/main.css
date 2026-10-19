@@ -114,6 +114,13 @@ body {
     /* background: white; */
 }
 
+.filler:has(.consumption-graph) {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+}
+
 #hero {
     margin: 0;
     display: flex;
@@ -506,10 +513,16 @@ h6 {
 
 .consumption-graph {
     display: block;
+    flex: 1 1 0;
     width: 100%;
-    max-width: 1200px;
-    height: auto;
+    height: 100%;
+    min-height: 0;
     font-size: 12px;
+    visibility: hidden;
+}
+
+.consumption-graph.ready {
+    visibility: visible;
 }
 
 .consumption-graph .grid {

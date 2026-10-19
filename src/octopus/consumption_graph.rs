@@ -18,9 +18,7 @@ pub enum GraphStyle {
     Bar,
 }
 
-// Geometry of the SVG view box, it is scaled to fit the available width.
-const WIDTH: f64 = 960.0;
-const HEIGHT: f64 = 320.0;
+// Margins are in SVG user units; after mounting one unit corresponds to one screen pixel.
 const LEFT: f64 = 56.0;
 const RIGHT: f64 = 16.0;
 const TOP: f64 = 16.0;
@@ -36,15 +34,17 @@ const BAR_GAP: f64 = 2.0;
 #[component]
 pub fn ConsumptionGraph(points: Vec<GraphPoint>, style: GraphStyle) -> Element {
     let mut hovered = use_signal::<Option<usize>>(|| None);
+    let mut dimensions = use_signal(|| None::<(f64, f64)>);
 
     let (Some(first), Some(last)) = (points.first(), points.last()) else {
         return rsx! { p { "No data for this period" } };
     };
 
+    let (width, height) = dimensions().unwrap_or((960.0, 320.0));
     let t_min = first.start as f64;
     let t_span = ((last.end - first.start) as f64).max(1.0);
-    let plot_width = WIDTH - LEFT - RIGHT;
-    let plot_height = HEIGHT - TOP - BOTTOM;
+    let plot_width = (width - LEFT - RIGHT).max(1.0);
+    let plot_height = (height - TOP - BOTTOM).max(1.0);
     let x = |t: i64| LEFT + (t as f64 - t_min) / t_span * plot_width;
     let mid_x = |p: &GraphPoint| x(p.start + (p.end - p.start) / 2);
 
@@ -107,24 +107,33 @@ pub fn ConsumptionGraph(points: Vec<GraphPoint>, style: GraphStyle) -> Element {
         let px = mid_x(p);
         let py = y(p.value);
         // Keep the tooltip inside the plot by flipping it to the left of the point on the right half.
-        let tx = if px > WIDTH / 2.0 { px - TOOLTIP_WIDTH - 10.0 } else { px + 10.0 };
+        let tx = if px > width / 2.0 { px - TOOLTIP_WIDTH - 10.0 } else { px + 10.0 };
         let value = format!("{:.3}", p.value);
         (px, py, tx, p.period_label.clone(), value)
     });
 
     rsx! {
         svg {
-            class: "consumption-graph",
-            view_box: "0 0 {WIDTH} {HEIGHT}",
+            class: if dimensions().is_some() { "consumption-graph ready" } else { "consumption-graph" },
+            view_box: "0 0 {width} {height}",
             role: "img",
+            onresize: move |event| {
+                match event.data().get_content_box_size() {
+                    Ok(size) if size.width > 0.0 && size.height > 0.0 => {
+                        dimensions.set(Some((size.width, size.height)));
+                    }
+                    Ok(_) => eprintln!("Consumption graph resized to an empty size"),
+                    Err(error) => eprintln!("Failed to read consumption graph size: {error:?}"),
+                }
+            },
             onmouseleave: move |_| hovered.set(None),
             for (ty, label) in y_ticks {
-                line { class: "grid", x1: LEFT, x2: WIDTH - RIGHT, y1: ty, y2: ty }
+                line { class: "grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
                 text { class: "axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
             }
             for (tx, label) in x_ticks {
                 line { class: "tick", x1: tx, x2: tx, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
-                text { class: "axis-label", x: tx, y: HEIGHT - 10.0, text_anchor: "middle", "{label}" }
+                text { class: "axis-label", x: tx, y: height - 10.0, text_anchor: "middle", "{label}" }
             }
             for (class, bx, by, bw, bh) in bars {
                 rect { class, x: bx, y: by, width: bw, height: bh }
