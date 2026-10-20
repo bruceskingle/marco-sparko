@@ -1,6 +1,8 @@
 use std::{
-    collections::{BTreeMap, HashMap}, fs::{File, FileTimes, OpenOptions}, io::{BufRead, BufReader, Seek, SeekFrom, Write}, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH},
+    collections::{BTreeMap, HashMap}, fs::{File, FileTimes, OpenOptions}, io::{BufRead, BufReader, Seek, SeekFrom, Write}, path::PathBuf, pin::pin, time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+use futures::future::{Either, select};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{
@@ -11,7 +13,19 @@ use time_tz::Tz;
 
 use crate::{CacheConfig, octopus::token::OctopusTokenManager};
 
-use super::DataSetAttributes;
+use super::{CancelToken, DataSetAttributes};
+
+/// Make a request, returning None without waiting for the response if the fetch is cancelled first.
+async fn call_unless_cancelled<Q: GraphQLQuery<R>, R: GraphQLResponse>(
+    request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
+    query: &Q,
+    cancel: &CancelToken,
+) -> anyhow::Result<Option<R>> {
+    match select(pin!(request_manager.call(query)), pin!(cancel.cancelled())).await {
+        Either::Left((response, _)) => Ok(Some(response?)),
+        Either::Right(_) => Ok(None),
+    }
+}
 
 pub trait SlotSource {
     type Value: DeserializeOwned + Serialize + Clone;
@@ -143,7 +157,8 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         config: &CacheConfig,
         request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
         start: &DateTime,
-        end: &DateTime
+        end: &DateTime,
+        cancel: &CancelToken,
     ) -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<S>>>
     {
         let mut result_keys = Vec::new();
@@ -206,9 +221,9 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
             if &refresh_start < end {
                 let refresh_start = if &refresh_start < start { start } else {&refresh_start};
                 let query = source.initial_query(refresh_start)?;
-                let mut response = request_manager.call(&query).await?;
+                let mut next_response = call_unless_cancelled(request_manager, &query, cancel).await?;
 
-                loop {
+                while let Some(response) = next_response {
                     let cq = source.continuation_query(&refresh_start, &response);
 
                     // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
@@ -259,11 +274,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                     }
 
                     if let Some(continuation_query) = cq? {
-                        // let query = continuation_query?;
-
-                        response = request_manager.call(&continuation_query).await?;
-
-                        
+                        next_response = call_unless_cancelled(request_manager, &continuation_query, cancel).await?;
                     }
                     else {
                         break;
@@ -273,12 +284,15 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
             }
         }
 
+        // If the fetch was cancelled we return what we have, but the cached buckets may be missing data so are marked stale.
+        let cancelled = cancel.is_cancelled();
         let now = DateTime::now(tz);
 
         for key in result_keys {
             let ods = data_set_map.remove(&key).unwrap();
 
-            let stale = start > &ods.data_set.start_date.at_midnight(tz) ||
+            let stale = cancelled ||
+                start > &ods.data_set.start_date.at_midnight(tz) ||
                 (&now > end && end < &ods.data_set.next_date.at_midnight(tz));
 
             println!("start={} end={} bucket start={} next={} stale={}", start, end, ods.data_set.start_date, ods.data_set.next_date, stale);

@@ -6,6 +6,7 @@ use time_tz::Tz;
 use sparko_graphql::types::DateTime;
 
 use crate::components::date_range_picker::{DateRangePicker, RangeSelection};
+use crate::data_set::CancelToken;
 use crate::octopus::meter::MeterManager;
 use crate::octopus::stacked_bar_graph::StackedBarPeriod;
 
@@ -280,15 +281,20 @@ impl PartialEq for MeterDetailProps {
 
 #[component]
 fn MeterDetail(props: MeterDetailProps) -> Element {
+    // Set by the cancel button, the fetch then stops and returns the data it has so far.
+    let cancel = use_hook(CancelToken::new);
+
     // Fetch the data
     let transactions_resource = use_resource({
         let props = props.clone();
+        let cancel = cancel.clone();
         move || {
             let props = props.clone();
+            let cancel = cancel.clone();
             async move {
                 props.meter_manager.get_consumption(&props.account_id, &props.meter_id,
                     &props.start, &props.end,
-                    props.billing_timezone).await
+                    props.billing_timezone, &cancel).await
                 // props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
                 //     props.billing_timezone).await
             }
@@ -298,6 +304,12 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
     match &*transactions_resource.read() {
         None => rsx! {
             {format!("Loading consumption for meter {}...", props.meter_id)}
+            " "
+            button {
+                r#type: "button",
+                onclick: move |_| cancel.cancel(),
+                "Cancel"
+            }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load consumption for meter {}: {error:?}", props.meter_id))?,
         Some(Ok(consumption)) => match props.view {

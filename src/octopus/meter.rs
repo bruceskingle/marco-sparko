@@ -17,7 +17,7 @@ use time_tz::Tz;
 use time_tz::TimeZone;
 use anyhow::anyhow;
 
-use crate::data_set::{MonthlyDataSet, MonthlyFixedSlotDataSet, MultiQueryDataSet, SlotSource};
+use crate::data_set::{CancelToken, MonthlyDataSet, MonthlyFixedSlotDataSet, MultiQueryDataSet, SlotSource};
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput, UtilityFiltersInputBuilder};
 use crate::octopus::meter_point::MeterPointDataSet;
@@ -186,7 +186,8 @@ impl MeterManager {
         meter_node_id: &String,
         start: &DateTime,
         end: &DateTime,
-        tz: &'static Tz)
+        tz: &'static Tz,
+        cancel: &CancelToken)
         -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>>
     {
 
@@ -201,7 +202,8 @@ impl MeterManager {
             &self.cache_config,
             &self.request_manager,
             start,
-            end
+            end,
+            cancel,
         ).await
     }
 
@@ -412,7 +414,8 @@ impl MeterManager {
         start: &DateTime,
         end: &DateTime,
         tz: &'static Tz,
-        on_progress: Box<dyn Fn(usize)>)
+        on_progress: Box<dyn Fn(usize)>,
+        cancel: &CancelToken)
         -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>>
     {
 
@@ -432,7 +435,8 @@ impl MeterManager {
             &self.cache_config,
             &self.request_manager,
             start,
-            end
+            end,
+            cancel,
         ).await
     }
 

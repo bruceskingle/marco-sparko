@@ -6,6 +6,7 @@ use time_tz::Tz;
 use sparko_graphql::types::DateTime;
 
 use crate::components::date_range_picker::{DateRangePicker, RangeSelection};
+use crate::data_set::CancelToken;
 use crate::octopus::meter::MeterManager;
 use crate::octopus::stacked_bar_graph::{StackedBarMode, StackedBarPeriod};
 
@@ -301,15 +302,21 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
     // Count of rows fetched so far, updated by the fetch as each row arrives.
     let rows_loaded = use_signal(|| 0usize);
 
+    // Set by the cancel button, the fetch then stops and returns the data it has so far.
+    let cancel = use_hook(CancelToken::new);
+
     // Fetch the data
     let transactions_resource = use_resource({
         let props = props.clone();
+        let cancel = cancel.clone();
         move || {
             let props = props.clone();
+            let cancel = cancel.clone();
             async move {
                 props.meter_manager.get_home_and_ev_consumption(&props.account_id, &props.mpan,
                     &props.start, &props.end,
-                    props.billing_timezone, Box::new(move |count| { let mut rows_loaded = rows_loaded; rows_loaded.set(count) })).await
+                    props.billing_timezone, Box::new(move |count| { let mut rows_loaded = rows_loaded; rows_loaded.set(count) }),
+                    &cancel).await
                 // props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id,
                 //     props.billing_timezone).await
             }
@@ -324,6 +331,12 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
                     props.mpan,
                     rows_loaded(),
                 )
+            }
+            " "
+            button {
+                r#type: "button",
+                onclick: move |_| cancel.cancel(),
+                "Cancel"
             }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load home_and_ev_consumption for meter {}: {error:?}", props.mpan))?,

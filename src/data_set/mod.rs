@@ -1,3 +1,4 @@
+mod cancel;
 mod list;
 mod monthly;
 mod monthly_fixed_slot;
@@ -5,6 +6,7 @@ mod multi_query;
 mod ordered_list;
 mod single_record;
 
+pub use cancel::CancelToken;
 pub use list::ListDataSet;
 pub use monthly::MonthlyDataSet;
 pub use monthly_fixed_slot::*;
