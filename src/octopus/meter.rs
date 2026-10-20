@@ -453,6 +453,7 @@ impl MeterManager {
                     true
                 };
                 
+                println!("key={} start={} end_ok={} last_date={} item.value.start={}", key, start, end_ok, last_date, item.value.start);
                 if key >= start && end_ok {
                     
                     let row_class = if item.attributes.cached { "cached"} else {"fetched"};
@@ -466,58 +467,15 @@ impl MeterManager {
                     let end_time = item.value.end.format(&time_format).unwrap();
                     // let amount = format!("{:.3}", item.value.value_);
 
-                    items.push(rsx!{
-                        tr { class: row_class,
-                            td { "{start_date}" }
-                            td { "{start_time}" }
-                            td { "{end_time}" }
-                            td { "{item.value.home_standard.units}" }
-                            td { "{item.value.home_standard.cost}" }
-                            td { "{item.value.home_standard.rate}" }
-                            td { "{item.value.home_low.units}" }
-                            td { "{item.value.home_low.cost}" }
-                            td { "{item.value.home_low.rate}" }
-                            td { "{item.value.ev_standard.units}" }
-                            td { "{item.value.ev_standard.cost}" }
-                            td { "{item.value.ev_standard.rate}" }
-                            td { "{item.value.ev_low.units}" }
-                            td { "{item.value.ev_low.cost}" }
-                            td { "{item.value.ev_low.rate}" }
-                            td { "{item.value.standing_charge}" }
-                        }
-                    }
-                    );
+                    items.push(item.value.summary_line(row_class, &start_date, &start_time, &end_time));
+                    last_date = key.to_date();
                 }
-                last_date = key.to_date();
             }
         };
 
         rsx! {
             table {
-                tr {
-                    td { colspan: 3 }
-                    th { colspan: 3, class: "header", "Home Standard" }
-                    th { colspan: 3, class: "header", "Home Low" }
-                    th { colspan: 3, class: "header", "EV Standard" }
-                    th { colspan: 3, class: "header", "EV Low" }
-                }
-                tr { class: "header",
-                    th { colspan: 2, "From" }
-                    th { "To" }
-                    th { "Units" }
-                    th { "Cost" }
-                    th { "Rate" }
-                    th { "Units" }
-                    th { "Cost" }
-                    th { "Rate" }
-                    th { "Units" }
-                    th { "Cost" }
-                    th { "Rate" }
-                    th { "Units" }
-                    th { "Cost" }
-                    th { "Rate" }
-                    th { "Standing Charge" }
-                }
+                {HomeAndEvReading::summary_headers()}
                 for item in items {
                     {item}
                 }
@@ -1201,7 +1159,7 @@ impl SlotSource for ConsumptionSource {
         &self.hash_key
     }
 
-    fn initial_query(&self, start: &DateTime) -> anyhow::Result<Self::Query> {
+    fn initial_query(&mut self, start: &DateTime) -> anyhow::Result<Self::Query> {
         Ok(meter::meter_consumption::Query::builder()
             .with_meter_id(self.meter_node_id.clone())
             .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
@@ -1211,7 +1169,7 @@ impl SlotSource for ConsumptionSource {
             .build()?)
     }
 
-    fn continuation_query(&self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
+    fn continuation_query(&mut self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
         let page =  match &last_response.node_ {
             meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
                 &electricity_meter.consumption_
@@ -1241,7 +1199,7 @@ impl SlotSource for ConsumptionSource {
         })
     }
 
-    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = Self::Value>> {
+    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = anyhow::Result<Self::Value>>> {
         let page =  match response.node_ {
             meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
                 electricity_meter.consumption_
@@ -1254,7 +1212,7 @@ impl SlotSource for ConsumptionSource {
             },
         };
 
-        Ok(page.edges.into_iter().map(|edge| edge.node))
+        Ok(page.edges.into_iter().map(|edge| Ok(edge.node)))
     }
 
     fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)> {
@@ -1275,13 +1233,48 @@ pub struct HomeAndEvReadingConsumption {
 }
 
 impl HomeAndEvReadingConsumption {
-    fn from(stat: meter::home_and_ev_consumption_breakdown::StatisticOutput) -> Option<Self> {
-        let estimated_money = stat.cost_incl_tax_?;
-        Some(HomeAndEvReadingConsumption {
-            units: stat.value_?,
-            cost: estimated_money.estimated_amount_,
-            rate: estimated_money.price_per_unit_?.amount_,
-        })
+    fn from(stat: meter::home_and_ev_consumption_breakdown::StatisticOutput) -> Self {
+        let cost;
+        let rate;
+
+        if let Some(estimated_money) = stat.cost_incl_tax_ {
+            cost = estimated_money.estimated_amount_;
+            if let Some(price_per_unit) = estimated_money.price_per_unit_ {
+                rate = price_per_unit.amount_;
+            }
+            else {
+                rate = Decimal::ZERO;
+            }
+        }
+        else {
+            cost = Decimal::ZERO;
+            rate = Decimal::ZERO;
+        }
+
+        let units = if let Some(units) = stat.value_ {
+            units
+        }
+        else {
+            Decimal::ZERO
+        };
+
+        HomeAndEvReadingConsumption {
+            units,
+            cost,
+            rate,
+        }
+    }
+
+    fn zero() -> Self {
+        let cost = Decimal::ZERO;
+        let rate = Decimal::ZERO;
+        let units = Decimal::ZERO;
+
+        HomeAndEvReadingConsumption {
+            units,
+            cost,
+            rate,
+        }
     }
 }
 
@@ -1297,11 +1290,65 @@ pub struct HomeAndEvReading {
 }
 
 impl HomeAndEvReading {
-    fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface) -> Option<Self> {
+    fn summary_headers() -> Element {
+        rsx! {
+            tr {
+                td { colspan: 3 }
+                th { colspan: 3, class: "header", "Home Standard" }
+                th { colspan: 3, class: "header", "Home Low" }
+                th { colspan: 3, class: "header", "EV Standard" }
+                th { colspan: 3, class: "header", "EV Low" }
+            }
+            tr { class: "header",
+                th { colspan: 2, "From" }
+                th { "To" }
+                th { "Units" }
+                th { "Cost" }
+                th { "Rate" }
+                th { "Units" }
+                th { "Cost" }
+                th { "Rate" }
+                th { "Units" }
+                th { "Cost" }
+                th { "Rate" }
+                th { "Units" }
+                th { "Cost" }
+                th { "Rate" }
+                th { "Standing Charge" }
+            }
+        }
+    }
+
+    
+    fn summary_line(&self, row_class: &str, start_date: &str, start_time: &str, end_time: &str) -> Element {
+        rsx!{
+            tr { class: row_class,
+                td { "{start_date}" }
+                td { "{start_time}" }
+                td { "{end_time}" }
+                td { "{self.home_standard.units}" }
+                td { "{self.home_standard.cost}" }
+                td { "{self.home_standard.rate}" }
+                td { "{self.home_low.units}" }
+                td { "{self.home_low.cost}" }
+                td { "{self.home_low.rate}" }
+                td { "{self.ev_standard.units}" }
+                td { "{self.ev_standard.cost}" }
+                td { "{self.ev_standard.rate}" }
+                td { "{self.ev_low.units}" }
+                td { "{self.ev_low.cost}" }
+                td { "{self.ev_low.rate}" }
+                td { "{self.standing_charge}" }
+            }
+        }
+    }
+    fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface) -> anyhow::Result<Self> {
+        println!("HomeAndEvReading::from {}", serde_json::to_string_pretty(&node)?);
+
         match node {
             meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
                 println!("Unexpected abstract measurement {:?}", abstract_measurement_interface);
-                None
+                Err(anyhow!(format!("Unexpected abstract measurement {:?}", abstract_measurement_interface)))
             },
             meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
                 if let Some(meta_data) = interval_measurement_type.measurement_interface_.meta_data_ {
@@ -1312,55 +1359,71 @@ impl HomeAndEvReading {
                     let mut standing_charge = None;
 
                     for stat in meta_data.statistics_ {
-                        match stat.type_.clone()? {
-                            super::graphql::ReadingStatisticTypeEnum::StandingChargeCost => {
-                                standing_charge = Some(stat.cost_incl_tax_?.estimated_amount_)
-                            },
-                            super::graphql::ReadingStatisticTypeEnum::ConsumptionCost => {
-                                if let Some(label) = stat.label_.clone() {
-                                    match label.as_str() {
-                                        "EV Low Rate" => {
-                                            ev_low = HomeAndEvReadingConsumption::from(stat);
-                                        },
-                                        "EV Standard Rate" => {
-                                            ev_standard = HomeAndEvReadingConsumption::from(stat);
-                                        },
-                                        "Home Low Rate" => {
-                                            home_low= HomeAndEvReadingConsumption::from(stat);
-                                        },
-                                        "Home Standard Rate" => {
-                                            home_standard= HomeAndEvReadingConsumption::from(stat);
-                                        },
-                                        _ => {
-                                            println!("Unknown meta data label {}", label);
-                                            return None;
+                        if let Some(type_) = &stat.type_ {
+                            match type_.clone() {
+                                super::graphql::ReadingStatisticTypeEnum::StandingChargeCost => {
+                                    if let Some(v) = stat.cost_incl_tax_ {
+                                        standing_charge = Some(v.estimated_amount_)
+                                    }
+                                    else {
+                                        return Err(anyhow!("Null standing charge"));
+                                    }
+                                },
+                                super::graphql::ReadingStatisticTypeEnum::ConsumptionCost => {
+                                    if let Some(label) = stat.label_.clone() {
+                                        match label.as_str() {
+                                            "EV Low Rate" => {
+                                                ev_low = Some(HomeAndEvReadingConsumption::from(stat));
+                                            },
+                                            "EV Standard Rate" => {
+                                                ev_standard = Some(HomeAndEvReadingConsumption::from(stat));
+                                            },
+                                            "Home Low Rate" => {
+                                                home_low= Some(HomeAndEvReadingConsumption::from(stat));
+                                            },
+                                            "Home Standard Rate" => {
+                                                home_standard= Some(HomeAndEvReadingConsumption::from(stat));
+                                            },
+                                            _ => {
+                                                println!("Unknown meta data label {}", label);
+                                                return Err(anyhow!(format!("Unknown meta data label {}", label)));
+                                            }
                                         }
                                     }
-                                }
-                                else {
-                                    println!("No meta data label");
-                                    return None;
-                                }
-                            },
-                            _ => {
-                                println!("Unexpected statistic type {:?}", stat.type_);
-                                return None;
-                            },
+                                    else {
+                                        println!("No meta data label");
+                                        return Err(anyhow!("No meta data label"));
+                                    }
+                                },
+                                _ => {
+                                    println!("Unexpected statistic type {:?}", type_);
+                                    return Err(anyhow!(format!("Unexpected statistic type {:?}", type_)));
+                                },
+                            }
+                        }
+                        else {
+                            return Err(anyhow!("No meta type"));
                         }
                     }
 
-                    Some(HomeAndEvReading{
+                    let home_standard = if let Some(v) = home_standard { v } else { HomeAndEvReadingConsumption::zero()};
+                    let home_low = if let Some(v) = home_low { v } else { HomeAndEvReadingConsumption::zero()};
+                    let ev_standard = if let Some(v) = ev_standard { v } else { HomeAndEvReadingConsumption::zero()};
+                    let ev_low = if let Some(v) = ev_low { v } else { HomeAndEvReadingConsumption::zero()};
+                    let standing_charge = if let Some(v) = standing_charge { v } else { Decimal::ZERO };
+
+                    Ok(HomeAndEvReading{
                         start: interval_measurement_type.start_at_,
                         end: interval_measurement_type.end_at_,
-                        home_standard: home_standard?,
-                        home_low: home_low?,
-                        ev_standard: ev_standard?,
-                        ev_low: ev_low?,
-                        standing_charge: standing_charge?,
+                        home_standard,
+                        home_low,
+                        ev_standard,
+                        ev_low,
+                        standing_charge,
                     })
                 }
                 else {
-                    None
+                    Err(anyhow!(format!("No meta data")))
                 }
             },
         }
@@ -1432,14 +1495,14 @@ impl SlotSource for HomeAndEvConsumptionSource {
         &self.hash_key
     }
 
-    fn initial_query(&self, start: &DateTime) -> anyhow::Result<Self::Query> {
+    fn initial_query(&mut self, start: &DateTime) -> anyhow::Result<Self::Query> {
         Ok(self.query_builder()?
             .with_start_at(start.clone())
             .build()?
         )
     }
 
-    fn continuation_query(&self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
+    fn continuation_query(&mut self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
 
 
         // fn get_cursor(last_response: &meter::home_and_ev_consumption_breakdown::Response) -> anyhow::Result<Option<String>> {
@@ -1472,7 +1535,7 @@ impl SlotSource for HomeAndEvConsumptionSource {
         })
     }
 
-    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = Self::Value>> {
+    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = anyhow::Result<Self::Value>>> {
         // let measurements = response
         //         .account_
         //         .ok_or(anyhow!("No account in response"))?
@@ -1480,33 +1543,32 @@ impl SlotSource for HomeAndEvConsumptionSource {
         //         // .electricity_meter_points_.first().ok_or("No meter points in response")?
         //         .measurements_;
 
-        Ok(
-            response
-                .account_
-                .ok_or(anyhow!("No account in response"))?
-                .properties_.into_iter().next().ok_or(anyhow!("No property in response"))?
-                // .electricity_meter_points_.first().ok_or("No meter points in response")?
-                .measurements_
-                .edges
-                .into_iter()
-                .filter_map(|edge| {
-                    HomeAndEvReading::from(edge.node)
-                    // match edge.node {
-                        
-                    //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
-                    //         println!("Unexpected abstract measurement {:?}", abstract_measurement_interface);
-                    //         None
-                    //     },
-                    //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
-                    //         if let Some(meta_data) = interval_measurement_type.measurement_interface_.meta_data_ {
-                    //             for stat in meta_data.statistics_ {
-                    //                 stat.label_
-                    //             }
-                    //         }
-                    //         Some(interval_measurement_type)
-                    //     },
-                    // }
-                })
+        Ok(response
+            .account_
+            .ok_or(anyhow!("No account in response"))?
+            .properties_.into_iter().next().ok_or(anyhow!("No property in response"))?
+            // .electricity_meter_points_.first().ok_or("No meter points in response")?
+            .measurements_
+            .edges
+            .into_iter()
+            .map(|edge| {
+                HomeAndEvReading::from(edge.node)
+                // match edge.node {
+                    
+                //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
+                //         println!("Unexpected abstract measurement {:?}", abstract_measurement_interface);
+                //         None
+                //     },
+                //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
+                //         if let Some(meta_data) = interval_measurement_type.measurement_interface_.meta_data_ {
+                //             for stat in meta_data.statistics_ {
+                //                 stat.label_
+                //             }
+                //         }
+                //         Some(interval_measurement_type)
+                //     },
+                // }
+            })
         )
     }
 

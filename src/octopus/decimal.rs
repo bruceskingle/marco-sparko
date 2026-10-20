@@ -22,7 +22,9 @@ This implementation is a wrapper around a rust_decimal::Decimal which provides s
 #[derive(Debug, Clone, Copy)]
 pub struct Decimal(rust_decimal::Decimal);
 
+
 impl Decimal {
+    pub const ZERO: Decimal  = Decimal(rust_decimal::Decimal::ZERO);
 
   pub fn new(num: i64, scale: u32) -> Decimal {
     Decimal (rust_decimal::Decimal::new(num, scale))

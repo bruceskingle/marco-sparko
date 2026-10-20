@@ -181,6 +181,12 @@ fn HomeAndEvConsumption(props: HomeAndEvConsumptionProps) -> Element {
 
     let selection = *applied_range.read();
     let (start, end) = selection.to_date_times(tz).map_err(|error| anyhow!(error))?;
+
+    // FIXME: remove this hardcoded test date range
+    // let start = DateTime::from_calendar_date_time(2026, time::Month::October, 1, 5, 0, 0)?;
+    // let end = Some(DateTime::from_calendar_date_time(2026, time::Month::October, 1, 6, 0, 0)?);
+
+
     let end_key = end.as_ref().map(|d| d.to_string()).unwrap_or_default();
 
     // The key causes MeterDetail to be re-mounted when the applied range changes, which drops
@@ -225,7 +231,13 @@ fn HomeAndEvConsumption(props: HomeAndEvConsumptionProps) -> Element {
                     }
                 }
                 span { class: "view-toggle",
-                    for option in [StackedBarPeriod::Raw, StackedBarPeriod::Day, StackedBarPeriod::Week, StackedBarPeriod::Month] {
+                    for option in [
+                        StackedBarPeriod::Raw,
+                        StackedBarPeriod::Day,
+                        StackedBarPeriod::Week,
+                        StackedBarPeriod::Month,
+                    ]
+                    {
                         button {
                             r#type: "button",
                             class: if graph_period() == option { "active" },

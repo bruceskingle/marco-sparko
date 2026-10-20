@@ -19,9 +19,9 @@ pub trait SlotSource {
     type Query: GraphQLQuery<Self::Response>;
 
     fn hash_key(&self) -> &str;
-    fn initial_query(&self, start: &DateTime) -> anyhow::Result<Self::Query>;
-    fn continuation_query(&self, start: &DateTime, resp: &Self::Response) -> anyhow::Result<Option<Self::Query>>;
-    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = Self::Value>>;
+    fn initial_query(&mut self, start: &DateTime) -> anyhow::Result<Self::Query>;
+    fn continuation_query(&mut self, start: &DateTime, resp: &Self::Response) -> anyhow::Result<Option<Self::Query>>;
+    fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = anyhow::Result<Self::Value>>>;
     fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)>;
     fn refresh_after(&self) -> Duration;
 }
@@ -138,7 +138,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
     }
 
     pub async fn fetch(
-        source: S,
+        mut source: S,
         tz: &'static Tz,
         config: &CacheConfig,
         request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
@@ -212,6 +212,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                 // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
 
                 for value in source.items(response)? {
+                    let value = value?;
                     let (start, end, is_final) = source.index(&value)?;
                     let start_date = start.to_date();
                     let key = Self::key_for(&start_date);
