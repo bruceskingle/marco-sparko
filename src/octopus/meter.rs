@@ -185,7 +185,7 @@ impl MeterManager {
         account_number: &String,
         meter_node_id: &String,
         start: &DateTime,
-        end: &Option<DateTime>,
+        end: &DateTime,
         tz: &'static Tz)
         -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>>
     {
@@ -205,7 +205,7 @@ impl MeterManager {
         ).await
     }
 
-    pub fn display_consumption(data: &Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>, start: &DateTime, end: &Option<DateTime>) -> Element {
+    pub fn display_consumption(data: &Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>, start: &DateTime, end: &DateTime) -> Element {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
 
@@ -213,12 +213,7 @@ impl MeterManager {
         let mut last_date = Date::from_calendar_date(0, time::Month::January, 1)?;
         for data_set in data {
             for (key , item) in &data_set.data {
-                let end_ok = if let Some(end) = end {
-                    key < end
-                }
-                else {
-                    true
-                };
+                let end_ok = key < end;
                 
                 if key >= start && end_ok {
                     
@@ -261,7 +256,7 @@ impl MeterManager {
         }
     }
 
-    pub fn display_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>, start: &DateTime, end: &Option<DateTime>, tz: &'static Tz, period: StackedBarPeriod) -> Element {
+    pub fn display_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<ConsumptionSource>>, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> Element {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
@@ -269,7 +264,7 @@ impl MeterManager {
 
         let values: Vec<_> = data.iter()
             .flat_map(|data_set| data_set.data.range(start..))
-            .filter(|(key, _)| end.as_ref().is_none_or(|end| *key < end))
+            .filter(|(key, _)| *key < end)
             .map(|(_, item)| &item.value)
             .collect();
 
@@ -415,18 +410,17 @@ impl MeterManager {
         account_number: &String,
         mpan: &String,
         start: &DateTime,
-        end: &Option<DateTime>,
+        end: &DateTime,
         tz: &'static Tz,
         on_progress: Box<dyn Fn(usize)>)
         -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>>
     {
 
-        let end = if let Some(end) = end { end.clone() } else {DateTime::now(tz)};
         let source = HomeAndEvConsumptionSource{
             account_number: account_number.clone(),
             mpan: mpan.clone(),
             hash_key: format!("{}#{}#HomeAndEvConsumption", account_number, mpan),
-            end_at: end,
+            end_at: end.clone(),
             tz,
             rows_loaded: Cell::new(0),
             on_progress,
@@ -438,11 +432,11 @@ impl MeterManager {
             &self.cache_config,
             &self.request_manager,
             start,
-            &Some(end)
+            end
         ).await
     }
 
-    pub fn display_home_and_ev_consumption(data: &Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>, start: &DateTime, end: &Option<DateTime>) -> Element {
+    pub fn display_home_and_ev_consumption(data: &Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>, start: &DateTime, end: &DateTime) -> Element {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
 
@@ -450,12 +444,7 @@ impl MeterManager {
         let mut last_date = Date::from_calendar_date(0, time::Month::January, 1)?;
         for data_set in data {
             for (key , item) in &data_set.data {
-                let end_ok = if let Some(end) = end {
-                    key < end
-                }
-                else {
-                    true
-                };
+                let end_ok = key < end;
                 
                 println!("key={} start={} end_ok={} last_date={} item.value.start={}", key, start, end_ok, last_date, item.value.start);
                 if key >= start && end_ok {
@@ -487,7 +476,7 @@ impl MeterManager {
         }
     }
 
-    pub fn display_home_and_ev_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>, start: &DateTime, end: &Option<DateTime>, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod) -> Element {
+    pub fn display_home_and_ev_consumption_graph(data: &Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod) -> Element {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
@@ -495,7 +484,7 @@ impl MeterManager {
 
         let values: Vec<_> = data.iter()
             .flat_map(|data_set| data_set.data.range(start..))
-            .filter(|(key, _)| end.as_ref().is_none_or(|end| *key < end))
+            .filter(|(key, _)| *key < end)
             .map(|(_, item)| &item.value)
             .collect();
 

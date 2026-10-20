@@ -188,13 +188,12 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
 
     let selection = *applied_range.read();
     let (start, end) = selection.to_date_times(tz).map_err(|error| anyhow!(error))?;
-    let end_key = end.as_ref().map(|d| d.to_string()).unwrap_or_default();
 
     // The key causes MeterDetail to be re-mounted when the applied range changes, which drops
     // (and so cancels) any fetch in progress for the previous range and starts a new one.
     let detail = rsx! {
         MeterDetail {
-            key: "{start}#{end_key}",
+            key: "{start}#{end}",
             account_id: props.account_id.clone(),
             meter_id: props.meter_id.clone(),
             meter_manager: props.meter_manager.clone(),
@@ -244,8 +243,8 @@ struct MeterDetailProps {
     meter_manager: Arc<MeterManager>,
     billing_timezone: &'static Tz,
     start: DateTime,
-    /// None means up to the present
-    end: Option<DateTime>,
+    /// Exclusive end of the range
+    end: DateTime,
     view: ConsumptionView,
     graph_period: StackedBarPeriod,
 }

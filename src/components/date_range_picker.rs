@@ -58,20 +58,18 @@ impl RangeSelection {
         }
     }
 
-    pub fn to_date_times(&self, tz: &Tz) -> Result<(DateTime, Option<DateTime>), String> {
+    /// The start and exclusive end of the range, up to now is returned as an end of midnight at the start of tomorrow.
+    pub fn to_date_times(&self, tz: &'static Tz) -> Result<(DateTime, DateTime), String> {
         let not_exist = |slot: &LocalSlot| format!("{slot} does not exist because the clocks go forward");
 
         let start = self.start.to_date_time(tz).ok_or_else(|| not_exist(&self.start))?;
         let end = match &self.end {
-            Some(end_slot) => {
-                let end = end_slot.to_date_time(tz).ok_or_else(|| not_exist(end_slot))?;
-                if end <= start {
-                    return Err(String::from("The to time must be after the from time"));
-                }
-                Some(end)
-            },
-            None => None,
+            Some(end_slot) => end_slot.to_date_time(tz).ok_or_else(|| not_exist(end_slot))?,
+            None => Date::today(tz).next_day().at_midnight(tz),
         };
+        if end <= start {
+            return Err(String::from("The to time must be after the from time"));
+        }
         Ok((start, end))
     }
 }
@@ -108,7 +106,7 @@ impl RangeDraft {
         }
     }
 
-    fn to_selection(&self, tz: &Tz) -> Result<RangeSelection, String> {
+    fn to_selection(&self, tz: &'static Tz) -> Result<RangeSelection, String> {
         let start_date = self.start_date.ok_or_else(|| String::from("Select a from date"))?;
         let end = if self.to_now {
             None

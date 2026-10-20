@@ -143,7 +143,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         config: &CacheConfig,
         request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
         start: &DateTime,
-        end: &Option<DateTime>
+        end: &DateTime
     ) -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<S>>>
     {
         let mut result_keys = Vec::new();
@@ -151,11 +151,11 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         let mut data_set_map = HashMap::new();
 
         {
-            // scope this start_date and end_date
+            // scope this start_date
             let mut start_date = start.to_date();
-            let end_date = if let Some(end) = end { end.to_date() } else {Date::today(tz)};
 
-            while start_date <= end_date {
+            // end is exclusive so a bucket starting at end is not needed
+            while start_date.at_midnight(tz) < *end {
                 println!("Load cache for {}", &start_date);
                 let open_data_set: OpenMonthlyFixedSlotDataSet<S> = OpenMonthlyFixedSlotDataSet::new(&source, &config, source.hash_key(), &start_date, tz)?;
                 
@@ -203,77 +203,86 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
 
         if let Some(refresh_start) = all_up_to_date(&refresh_after, &result_keys, &data_set_map)? {
-            let query = source.initial_query(&refresh_start)?;
-            let mut response = request_manager.call(&query).await?;
+            if &refresh_start < end {
+                let refresh_start = if &refresh_start < start { start } else {&refresh_start};
+                let query = source.initial_query(refresh_start)?;
+                let mut response = request_manager.call(&query).await?;
 
-            loop {
-                let cq = source.continuation_query(&refresh_start, &response);
+                loop {
+                    let cq = source.continuation_query(&refresh_start, &response);
 
-                // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
+                    // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
 
-                for value in source.items(response)? {
-                    let value = value?;
-                    let (start, end, is_final) = source.index(&value)?;
-                    let start_date = start.to_date();
-                    let key = Self::key_for(&start_date);
+                    for value in source.items(response)? {
+                        let value = value?;
+                        let (start, end, is_final) = source.index(&value)?;
+                        let start_date = start.to_date();
+                        let key = Self::key_for(&start_date);
 
-                    println!("data_set_map");
-                    for(key, value) in &data_set_map {
-                        println!("  {} {:?}->{:?}", key, &value.data_set.start_date, &value.data_set.next_date)
+                        println!("data_set_map");
+                        for(key, value) in &data_set_map {
+                            println!("  {} {:?}->{:?}", key, &value.data_set.start_date, &value.data_set.next_date)
+                        }
+
+                        let data_set = if let Some(data_set) = data_set_map.get_mut(&key) {
+                            data_set
+                        }
+                        else {
+                            data_set_map.insert(key, OpenMonthlyFixedSlotDataSet::new(&source, &config, source.hash_key(), &start_date, tz)?);
+                            data_set_map.get_mut(&key).unwrap()
+                        };
+
+                        let update = if let Some(item) = data_set.data_set.data.get(&start) {
+                            let v = serde_json::to_string(&value)?;
+                            let c = serde_json::to_string(&item.value)?;
+                            println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
+                            v != c
+                        }
+                        else {
+                            true
+                        };
+
+                        if update {
+                            data_set.data_set.data.insert(start, Item {
+                                    end,
+                                    is_final,
+                                    attributes:DataSetAttributes { cached: false},
+                                    value,
+                                }
+                            );
+                            data_set.is_dirty = true;
+                        }
                     }
 
-                    let data_set = if let Some(data_set) = data_set_map.get_mut(&key) {
-                        data_set
+                    if all_complete(&result_keys, &data_set_map) {
+                        break;
+                    }
+
+                    if let Some(continuation_query) = cq? {
+                        // let query = continuation_query?;
+
+                        response = request_manager.call(&continuation_query).await?;
+
+                        
                     }
                     else {
-                        data_set_map.insert(key, OpenMonthlyFixedSlotDataSet::new(&source, &config, source.hash_key(), &start_date, tz)?);
-                        data_set_map.get_mut(&key).unwrap()
-                    };
-
-                    let update = if let Some(item) = data_set.data_set.data.get(&start) {
-                        let v = serde_json::to_string(&value)?;
-                        let c = serde_json::to_string(&item.value)?;
-                        println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
-                        v != c
+                        break;
                     }
-                    else {
-                        true
-                    };
 
-                    if update {
-                        data_set.data_set.data.insert(start, Item {
-                                end,
-                                is_final,
-                                attributes:DataSetAttributes { cached: false},
-                                value,
-                            }
-                        );
-                        data_set.is_dirty = true;
-                    }
                 }
-
-                if all_complete(&result_keys, &data_set_map) {
-                    break;
-                }
-
-                if let Some(continuation_query) = cq? {
-                    // let query = continuation_query?;
-
-                    response = request_manager.call(&continuation_query).await?;
-
-                    
-                }
-                else {
-                    break;
-                }
-
             }
         }
+
+        let now = DateTime::now(tz);
 
         for key in result_keys {
             let ods = data_set_map.remove(&key).unwrap();
 
-            result.push(ods.flush(&config, false)?);
+            let stale = start > &ods.data_set.start_date.at_midnight(tz) ||
+                (&now > end && end < &ods.data_set.next_date.at_midnight(tz));
+
+            println!("start={} end={} bucket start={} next={} stale={}", start, end, ods.data_set.start_date, ods.data_set.next_date, stale);
+            result.push(ods.flush(&config, stale)?);
         }
 
         for (_key, ods) in data_set_map {

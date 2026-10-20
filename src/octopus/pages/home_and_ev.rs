@@ -187,13 +187,12 @@ fn HomeAndEvConsumption(props: HomeAndEvConsumptionProps) -> Element {
     // let end = Some(DateTime::from_calendar_date_time(2026, time::Month::October, 1, 6, 0, 0)?);
 
 
-    let end_key = end.as_ref().map(|d| d.to_string()).unwrap_or_default();
 
     // The key causes MeterDetail to be re-mounted when the applied range changes, which drops
     // (and so cancels) any fetch in progress for the previous range and starts a new one.
     let detail = rsx! {
         HomeAndEvDetail {
-            key: "{start}#{end_key}",
+            key: "{start}#{end}",
             account_id: props.account_id.clone(),
             mpan: props.mpan.clone(),
             meter_manager: props.meter_manager.clone(),
@@ -260,8 +259,8 @@ struct HomeAndEvDetailProps {
     meter_manager: Arc<MeterManager>,
     billing_timezone: &'static Tz,
     start: DateTime,
-    /// None means up to the present
-    end: Option<DateTime>,
+    /// Exclusive end of the range
+    end: DateTime,
     view: ConsumptionView,
     graph_mode: StackedBarMode,
     graph_period: StackedBarPeriod,
