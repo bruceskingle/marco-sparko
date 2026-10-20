@@ -299,6 +299,9 @@ impl PartialEq for HomeAndEvDetailProps {
 
 #[component]
 fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
+    // Count of rows fetched so far, updated by the fetch as each row arrives.
+    let rows_loaded = use_signal(|| 0usize);
+
     // Fetch the data
     let transactions_resource = use_resource({
         let props = props.clone();
@@ -307,8 +310,8 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
             async move {
                 props.meter_manager.get_home_and_ev_consumption(&props.account_id, &props.mpan,
                     &props.start, &props.end,
-                    props.billing_timezone).await
-                // props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
+                    props.billing_timezone, Box::new(move |count| { let mut rows_loaded = rows_loaded; rows_loaded.set(count) })).await
+                // props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id,
                 //     props.billing_timezone).await
             }
         }
@@ -316,7 +319,13 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
 
     match &*transactions_resource.read() {
         None => rsx! {
-            {format!("Loading home_and_ev_consumption for meter {}...", props.mpan)}
+            {
+                format!(
+                    "Loading home_and_ev_consumption for meter {}... ({} rows loaded)",
+                    props.mpan,
+                    rows_loaded(),
+                )
+            }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load home_and_ev_consumption for meter {}: {error:?}", props.mpan))?,
         Some(Ok(consumption)) => match props.view {

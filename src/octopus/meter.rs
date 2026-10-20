@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
+use std::cell::Cell;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use dioxus::prelude::*;
 use indexmap::IndexMap;
 use rust_decimal::prelude::ToPrimitive;
-use sparko_graphql::types::{Date, DateTime, PageOf};
+use sparko_graphql::types::{Date, DateTime, ForwardPageOf, PageOf};
 use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use time_tz::Tz;
@@ -415,7 +416,8 @@ impl MeterManager {
         mpan: &String,
         start: &DateTime,
         end: &Option<DateTime>,
-        tz: &'static Tz)
+        tz: &'static Tz,
+        on_progress: Box<dyn Fn(usize)>)
         -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>>
     {
 
@@ -426,6 +428,8 @@ impl MeterManager {
             hash_key: format!("{}#{}#HomeAndEvConsumption", account_number, mpan),
             end_at: end,
             tz,
+            rows_loaded: Cell::new(0),
+            on_progress,
         };
         
         MonthlyFixedSlotDataSet::fetch(
@@ -1436,12 +1440,15 @@ pub struct HomeAndEvConsumptionSource {
     pub tz: &'static Tz,
     pub mpan:String,
     pub hash_key: String,
+    /// Count of rows fetched from the API so far
+    rows_loaded: Cell<usize>,
+    /// Called with the updated row count as each row is fetched, for progress display
+    on_progress: Box<dyn Fn(usize)>,
 }
 
 impl HomeAndEvConsumptionSource {
     fn query_builder(&self) -> anyhow::Result<meter::home_and_ev_consumption_breakdown::QueryBuilder> {
         let mut utility_filters = Vec::new();
-        let mut modelled_utility_filters = Vec::new();
 
         utility_filters.push(UtilityFiltersInput::builder()
             .with_electricity_filters(ElectricityFiltersInput::builder()
@@ -1452,22 +1459,22 @@ impl HomeAndEvConsumptionSource {
             .build()?
         );
 
-        modelled_utility_filters.push(UtilityFiltersInput::builder()
-            .with_electricity_filters(ElectricityFiltersInput::builder()
-                .with_reading_frequency_type(ReadingFrequencyType::RawInterval)
-                .with_reading_direction(super::graphql::ReadingDirectionType::Consumption)
-                .with_market_supply_point_id(self.mpan.clone())
-                .with_modelled_sub_meter_readings(true)
-                .build()?)
-            .build()?
-        );
+        // modelled_utility_filters.push(UtilityFiltersInput::builder()
+        //     .with_electricity_filters(ElectricityFiltersInput::builder()
+        //         .with_reading_frequency_type(ReadingFrequencyType::RawInterval)
+        //         .with_reading_direction(super::graphql::ReadingDirectionType::Consumption)
+        //         .with_market_supply_point_id(self.mpan.clone())
+        //         .with_modelled_sub_meter_readings(true)
+        //         .build()?)
+        //     .build()?
+        // );
 
         Ok(meter::home_and_ev_consumption_breakdown::Query::builder()
             .with_account_number(self.account_number.clone())
             .with_end_at(self.end_at)
             .with_timezone(self.tz.name().to_string())
             .with_utility_filters(utility_filters)
-            .with_modelled_utility_filters(modelled_utility_filters)
+            // .with_modelled_utility_filters(modelled_utility_filters)
             .with_first(50)
         )
     }
@@ -1552,6 +1559,8 @@ impl SlotSource for HomeAndEvConsumptionSource {
             .edges
             .into_iter()
             .map(|edge| {
+                self.rows_loaded.set(self.rows_loaded.get() + 1);
+                (self.on_progress)(self.rows_loaded.get());
                 HomeAndEvReading::from(edge.node)
                 // match edge.node {
                     
