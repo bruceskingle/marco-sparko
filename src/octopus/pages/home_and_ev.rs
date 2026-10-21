@@ -8,7 +8,7 @@ use sparko_graphql::types::DateTime;
 use crate::components::date_range_picker::{DateRangePicker, RangeSelection};
 use crate::data_set::CancelToken;
 use crate::octopus::context::OctopusContext;
-use crate::octopus::meter::MeterManager;
+use crate::octopus::home_and_ev::HomeAndEvDataSet;
 use crate::octopus::meter_point::MeterPointDataSet;
 use crate::octopus::stacked_bar_graph::{StackedBarMode, StackedBarPeriod};
 
@@ -44,7 +44,6 @@ pub fn HomeAndEvPage(props: HomeAndEvPageProps) -> Element {
                             key: "{mpan}",
                             account_id: context.account_id.clone(),
                             mpan: mpan.clone(),
-                            meter_manager: context.meter_manager.clone(),
                             billing_timezone: context.billing_timezone,
                         }
                     }
@@ -131,7 +130,6 @@ pub fn HomeAndEvPage(props: HomeAndEvPageProps) -> Element {
 struct HomeAndEvConsumptionProps {
     account_id: String,
     mpan: String,
-    meter_manager: Arc<MeterManager>,
     billing_timezone: &'static Tz,
 }
 
@@ -139,7 +137,6 @@ impl PartialEq for HomeAndEvConsumptionProps {
     fn eq(&self, other: &Self) -> bool {
         self.account_id == other.account_id
             && self.mpan == other.mpan
-            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
     }
 }
@@ -177,7 +174,6 @@ fn HomeAndEvConsumption(props: HomeAndEvConsumptionProps) -> Element {
             key: "{start}#{end}",
             account_id: props.account_id.clone(),
             mpan: props.mpan.clone(),
-            meter_manager: props.meter_manager.clone(),
             billing_timezone: tz,
             start,
             end,
@@ -238,7 +234,6 @@ struct HomeAndEvDetailProps {
     // property: Arc<graphql::meter::account_properties_meters::MeterType>,
     account_id: String,
     mpan: String,
-    meter_manager: Arc<MeterManager>,
     billing_timezone: &'static Tz,
     start: DateTime,
     /// Exclusive end of the range
@@ -273,13 +268,14 @@ impl PartialEq for HomeAndEvDetailProps {
             && self.graph_mode == other.graph_mode
             && self.graph_period == other.graph_period
             // && Arc::ptr_eq(&self.property, &other.property)
-            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
     }
 }
 
 #[component]
 fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
+    let context = use_context::<Arc<OctopusContext>>();
+
     // Count of rows fetched so far, updated by the fetch as each row arrives.
     let rows_loaded = use_signal(|| 0usize);
 
@@ -290,14 +286,16 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
     let transactions_resource = use_resource({
         let props = props.clone();
         let cancel = cancel.clone();
+        let context = context.clone();
         move || {
             let props = props.clone();
             let cancel = cancel.clone();
+            let context = context.clone();
             async move {
-                props.meter_manager.get_home_and_ev_consumption(&props.account_id, &props.mpan,
+                HomeAndEvDataSet::new(&props.account_id, &props.mpan,
                     &props.start, &props.end,
                     props.billing_timezone, Box::new(move |count| { let mut rows_loaded = rows_loaded; rows_loaded.set(count) }),
-                    &cancel).await
+                    &cancel, &context.cache_config, &*context.request_manager).await
             }
         }
     });
@@ -316,9 +314,8 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
         },
         Some(Err(error)) => Err(anyhow!("Failed to load home_and_ev_consumption for meter {}: {error:?}", props.mpan))?,
         Some(Ok(consumption)) => match props.view {
-            ConsumptionView::Table => MeterManager::display_home_and_ev_consumption(consumption, &props.start, &props.end),
-            ConsumptionView::Graph => MeterManager::display_home_and_ev_consumption_graph(
-                consumption,
+            ConsumptionView::Table => consumption.display(&props.start, &props.end),
+            ConsumptionView::Graph => consumption.display_graph(
                 &props.start,
                 &props.end,
                 props.billing_timezone,

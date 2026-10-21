@@ -6,7 +6,6 @@ use crate::CacheConfig;
 
 use super::RequestManager;
 use super::bill::BillManager;
-use super::meter::MeterManager;
 
 /// The state shared by all the pages of the Octopus module, provided to them as a Dioxus context by OctopusRoot.
 /// Pages get it with use_context::<Arc<OctopusContext>>().
@@ -16,7 +15,6 @@ pub struct OctopusContext {
     pub cache_config: Arc<CacheConfig>,
     pub request_manager: Arc<RequestManager>,
     pub bill_manager: Arc<BillManager>,
-    pub meter_manager: Arc<MeterManager>,
 }
 
 #[derive(Props, Clone)]

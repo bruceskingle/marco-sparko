@@ -9,6 +9,8 @@ mod bill;
 mod meter;
 mod line_items;
 mod meter_agreement;
+mod home_and_ev;
+mod consumption;
 mod consumption_graph;
 mod stacked_bar_graph;
 mod context;
@@ -24,7 +26,6 @@ use dioxus::prelude::*;
 
 use bill::BillManager;
 use context::{OctopusContext, OctopusRoot};
-use meter::MeterManager;
 use pages::{BillsPage, MeterPage, HomeAndEvPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
 
@@ -103,7 +104,6 @@ impl OctopusModule {
 
         let billing_timezone = Self::get_billing_timezone(&profile);
         let account_manager = ViewerDataSet::new(&cache_config, &*request_manager).await?;
-        let meter_manager = Arc::new(MeterManager::new(&cache_config, &request_manager));
         let bill_manager = Arc::new(BillManager::new(&cache_config, &request_manager));
 
         let context = Arc::new(OctopusContext {
@@ -112,7 +112,6 @@ impl OctopusModule {
             cache_config,
             request_manager,
             bill_manager,
-            meter_manager,
         });
 
         Ok(OctopusModule {
