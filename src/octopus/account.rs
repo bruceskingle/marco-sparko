@@ -7,12 +7,12 @@ use crate::data_set::{SingleRecordDataSet};
 use super::graphql::account;
 use sparko_graphql::GraphQLCaller;
 
-pub struct AccountManager {
+pub struct ViewerDataSet {
     pub data_set: SingleRecordDataSet<account::viewer::Response>,
     pub default_account_id: String,
 }
 
-impl AccountManager {
+impl ViewerDataSet {
     pub async fn new(config: &Arc<CacheConfig>, request_manager: &impl GraphQLCaller)  -> anyhow::Result<Self> {
         let hash_key = format!("#Viewer");
         let data_set = SingleRecordDataSet::new(

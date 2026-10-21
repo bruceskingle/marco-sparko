@@ -14,7 +14,7 @@ mod pages;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use account::AccountManager;
+use account::ViewerDataSet;
 use async_trait::async_trait;
 
 use dioxus::prelude::*;
@@ -80,7 +80,7 @@ pub struct OctopusModule{
     account_id: String,
     bill_manager: Arc<BillManager>,
     meter_manager: Arc<MeterManager>,
-    account_manager: AccountManager,
+    account_manager: ViewerDataSet,
     billing_timezone: &'static time_tz::Tz,
 }
 
@@ -100,7 +100,7 @@ impl OctopusModule {
         request_manager: Arc<RequestManager>, _verbose: bool) -> anyhow::Result<OctopusModule> {   
 
         let billing_timezone = Self::get_billing_timezone(&profile);
-        let account_manager = AccountManager::new(&cache_config, &*request_manager).await?;
+        let account_manager = ViewerDataSet::new(&cache_config, &*request_manager).await?;
         let meter_manager = Arc::new(MeterManager::new(&cache_config, &request_manager));
         let bill_manager = Arc::new(BillManager::new(&cache_config, &request_manager, &meter_manager));
 
