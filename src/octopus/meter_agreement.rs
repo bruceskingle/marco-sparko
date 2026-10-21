@@ -24,7 +24,7 @@ pub struct MeterAgreementDataSet {
 }
 
 impl MeterAgreementDataSet {
-    pub async fn new(config: CacheConfig, request_manager: &impl GraphQLCaller, account_number: &str, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
+    pub async fn new(config: &CacheConfig, request_manager: &impl GraphQLCaller, account_number: &str, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
         let hash_key = format!("{}#MeterAgreements", account_number);
         let the_beginning: DateTime = DateTime::from_calendar_date(2000, time::Month::January, 1)?;
         let mut queries = Vec::new();

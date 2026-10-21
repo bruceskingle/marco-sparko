@@ -25,7 +25,7 @@ where
             hash_key: &str,
             refresh_after: Duration,
             query_iterator: QI,
-            config: CacheConfig,
+            config: &CacheConfig,
             request_manager: &impl GraphQLCaller
         ) -> anyhow::Result<Self>
         where
