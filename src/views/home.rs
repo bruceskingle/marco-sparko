@@ -68,10 +68,7 @@ pub fn Home(
             }
         },
         crate::profile::ProfileVersionState::Current => {
-            // println!("ZZ2 start id={} ", xid);
-            // println!("ZZ2 start i={} {:?}", xid, modules_signal);
             for module_id in module_registrations.0.keys() {
-                println!("ZZ2 module {}", module_id);
                 let active = if context.profile.active_profile.modules.contains_key(module_id) {
                     "Active"
                 }
@@ -81,9 +78,6 @@ pub fn Home(
 
                 modules.insert(module_id.clone(),active);
             }
-            //  for (module_id, active) in &modules {
-            //         println!("ZZ3 module {}", module_id);
-            //     }
 
             
             let branch = if create_info::GIT_BRANCH.is_empty() {

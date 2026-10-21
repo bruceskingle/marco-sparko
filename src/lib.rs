@@ -185,6 +185,28 @@ impl PartialEq for ModuleRegistrations {
 }
 
 impl ModuleRegistrations {
+    pub async fn module_factory(&self, module_id: &str, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Arc<dyn ModuleFactory + Send>> {
+        if let Some(module_registration) = self.0.get(module_id) {
+            let constructor = module_registration.constructor.as_ref();
+            let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
+                Some(value.clone())
+            }
+            else {
+                None
+            };
+
+            if context.args.marco_sparko_args.verbose {
+                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+            }
+            let builder = constructor(context.clone(), profile)?;
+
+            Ok(builder)
+        }
+        else {
+            return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
+        }
+    }
+
     fn new(verbose: bool) -> ModuleRegistrations {
 
 
@@ -235,6 +257,13 @@ pub struct InitRequested(pub bool);
 // }
 
 impl MarcoSparkoContext {
+    pub fn get_file_path() -> anyhow::Result<PathBuf> {
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
+
+        path.push(".marco-sparko");
+        Ok(path)
+    }
+
     pub fn new(args: Args) -> anyhow::Result<Arc<MarcoSparkoContext>> {
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(CACHE_DIRECTORY_NAME);
@@ -305,187 +334,5 @@ impl MarcoSparkoContext {
         serde_json::to_writer_pretty(private_file::create_private_file(path)?, &profile)?;
 
         Ok(())
-    }
-}
-
-pub struct Cli {
-    context: Arc<MarcoSparkoContext>,
-    module_registrations: ModuleRegistrations,
-    modules: HashMap<String, Box<dyn Module>>,
-    current_module: Option<String>,
-}
-
-
-impl Cli {
-
-    pub fn get_file_path() -> anyhow::Result<PathBuf> {
-        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-
-        path.push(".marco-sparko");
-        Ok(path)
-    }
-
-    pub async fn init_handler(&mut self, mut args: std::str::SplitWhitespace<'_>) -> anyhow::Result<()> {
-        if let Some(module_id) = args.next() {
-            if let Some(module_registration) = self.module_registrations.0.get(module_id) {
-                if self.modules.contains_key(module_id) {
-                    println!("ERROR: module '{}' is already active", module_id); 
-                }
-                else {
-                    let constructor = module_registration.constructor.as_ref();
-                    let profile = if let Some(value) = self.context.profile.active_profile.modules.get(module_id) {
-                        Some(value.clone())
-                    }
-                    else {
-                        None
-                    };
-                    let builder = constructor(self.context.clone(), profile)?;
-                    let module = builder.build().await?;
-                    self.modules.insert(module_id.to_string(),module);
-
-                    if self.current_module.is_none() {
-                        self.current_module = Some(module_id.to_string());
-                    }
-                }
-            }
-            else {
-                println!("ERROR: unknown module '{}'", module_id); 
-            }
-        }
-        Ok(())
-    }
-
-    pub async fn list_handler(&self, mut args: std::str::SplitWhitespace<'_>) -> anyhow::Result<()> {
-        if let Some(target) = args.next() {
-
-            match target.as_ref() {
-                "modules" => {
-                    for reg in &*self.module_registrations.0 {
-                        let status = if let Some(_module) = self.modules.get(reg.0) {
-                            "Active"
-                        }
-                        else {
-                            "Uninitialized"
-                        };
-                        println!("{} [{}]", reg.0, status);
-                    }
-                },
-                "profiles" => {
-                    for profile_name in &self.context.profile.all_profiles {
-                        if profile_name == &self.context.profile.active_profile.name {
-                            println!("{} [Active]", profile_name);
-                        }
-                        else {
-                            println!("{}", profile_name);
-                        }
-                    }
-                },
-                _ => {
-                    println!("ERROR: usage: list modules|profiles");
-                },
-            };
-        }
-        else {
-            println!("ERROR: usage: list modules|profiles");
-        }
-
-        Ok(())
-    }
-
-    pub async fn new(args: Args) -> anyhow::Result<Cli> {
-        let verbose = args.marco_sparko_args.verbose;
-        let mut cli = Cli {
-            context: MarcoSparkoContext::new(args)?,
-            module_registrations: ModuleRegistrations::new(verbose), //Self::load_modules(),
-            modules: HashMap::new(),
-            current_module: None,
-        };
-
-        let list = cli.get_module_list();
-
-        if list.is_empty() {
-            let mut keys = Vec::new();
-            for module_id in cli.context.profile.active_profile.modules.keys() {
-                keys.push(module_id.to_string());
-            }
-            for module_id in &keys {
-                cli.initialize(module_id).await?;
-            }
-        }
-        else {
-            for module_id in &list {
-                cli.initialize(module_id).await?;
-            }
-        }
-
-        Ok(cli)
-    }
-
-    fn get_module_list(&self) -> Vec<String> {
-        self.context.args.marco_sparko_args.modules.clone()
-    }
-
-    pub fn args(&self) -> &Args {
-        &self.context.args
-    }
-    
-    async fn initialize(&mut self, module_id: &String) -> anyhow::Result<()> {
-        let module = Self::do_initialize(module_id, &self.module_registrations, &self.context).await?;
-
-        self.modules.insert(module_id.clone(),module);
-
-        if self.current_module.is_none() {
-            self.current_module = Some(module_id.clone());
-        }
-
-        Ok(())
-    }
-
-    pub async fn do_initialize(module_id: &str, module_registrations: &ModuleRegistrations, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Box<dyn Module + Send>> {
-        if let Some(module_registration) = module_registrations.0.get(module_id) {
-            let constructor = module_registration.constructor.as_ref();
-            let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
-                Some(value.clone())
-            }
-            else {
-                None
-            };
-
-            if context.args.marco_sparko_args.verbose {
-                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
-            }
-            let builder = constructor(context.clone(), profile)?;
-            let module = builder.build().await?;
-            
-            
-            
-
-            Ok(module)
-        }
-        else {
-            return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
-        }
-    }
-
-    pub async fn do_construct(module_id: &str, module_registrations: &ModuleRegistrations, context: &Arc<MarcoSparkoContext>) -> anyhow::Result<Arc<dyn ModuleFactory + Send>> {
-        if let Some(module_registration) = module_registrations.0.get(module_id) {
-            let constructor = module_registration.constructor.as_ref();
-            let profile = if let Some(value) = context.profile.active_profile.modules.get(module_id) {
-                Some(value.clone())
-            }
-            else {
-                None
-            };
-
-            if context.args.marco_sparko_args.verbose {
-                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
-            }
-            let builder = constructor(context.clone(), profile)?;
-
-            Ok(builder)
-        }
-        else {
-            return Err(anyhow!(format!("Unknown module \"{}\"", module_id)))
-        }
     }
 }

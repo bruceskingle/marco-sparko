@@ -132,8 +132,6 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
                 },
                 Err(e) => {
-                    println!("ERROR: failed to read record {:?}", &e);
-
                     file.seek(SeekFrom::Start(0))?;
                     file.set_len(0)?;
                     data.clear();
@@ -147,7 +145,6 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
     fn key_for(start: &Date) -> i32 {
         let key = start.year() * 12 + start.month() as i32 - 1;
-        println!("Key for {:?} is {}", &start, key);
         key
     }
 
@@ -171,7 +168,6 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
             // end is exclusive so a bucket starting at end is not needed
             while start_date.at_midnight(tz) < *end {
-                println!("Load cache for {}", &start_date);
                 let open_data_set: OpenMonthlyFixedSlotDataSet<S> = OpenMonthlyFixedSlotDataSet::new(&source, &config, source.hash_key(), &start_date, tz)?;
                 
                 let key = Self::key_for(&start_date);
@@ -234,11 +230,6 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                         let start_date = start.to_date();
                         let key = Self::key_for(&start_date);
 
-                        println!("data_set_map");
-                        for(key, value) in &data_set_map {
-                            println!("  {} {:?}->{:?}", key, &value.data_set.start_date, &value.data_set.next_date)
-                        }
-
                         let data_set = if let Some(data_set) = data_set_map.get_mut(&key) {
                             data_set
                         }
@@ -250,7 +241,6 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                         let update = if let Some(item) = data_set.data_set.data.get(&start) {
                             let v = serde_json::to_string(&value)?;
                             let c = serde_json::to_string(&item.value)?;
-                            println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
                             v != c
                         }
                         else {
@@ -295,7 +285,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                 start > &ods.data_set.start_date.at_midnight(tz) ||
                 (&now > end && end < &ods.data_set.next_date.at_midnight(tz));
 
-            println!("start={} end={} bucket start={} next={} stale={}", start, end, ods.data_set.start_date, ods.data_set.next_date, stale);
+
             result.push(ods.flush(&config, stale)?);
         }
 
@@ -327,7 +317,7 @@ impl<S: SlotSource> OpenMonthlyFixedSlotDataSet<S>
     ) -> anyhow::Result<Self> 
     {
         let month_bucket = config.path_for_month(hash_key, date)?;
-        println!("Open \"{:?}\"", &month_bucket.path);
+
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)

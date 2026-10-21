@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 
-use crate::{Cli, MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
+use crate::{MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
 
 // const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
 
@@ -71,7 +71,7 @@ pub fn Module(module_id: String) -> Element {
     let mut sidebar_open = use_signal(|| true);
 
     let mut call_construct_module_signal = use_signal::<bool>(|| true);
-    let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { Cli::do_construct(&module_id, &module_registrations, &marco_sparko_context).await});
+    let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { module_registrations.module_factory(&module_id, &marco_sparko_context).await});
 
 
     let mut call_check_ready_module_signal = use_signal::<bool>(|| true);

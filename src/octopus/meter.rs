@@ -133,28 +133,28 @@ impl MeterManager {
                 let mut in_scope_items = Vec::new();
                 let mut bucket_date = start_date_time.to_date();
                 loop {
-                    println!("Get bucket {:?}", bucket_date);
+
                     let line_items = AgreementLineItems::new(cache_config, request_manager, account_number.clone(), meter_type, agreement_id.clone(), &bucket_date, billing_timezone).await?;
 
                     for (_cursor, (_, item)) in line_items.line_items {
-                        println!("Candidate line item {:?}-{:?}", item.start_at_, item.end_at_);
+
                         if &item.start_at_ >= end_date_time {
                             // thats it
-                            println!("Line item has date {:?} so we are done", item.start_at_);
+
                             return Ok(in_scope_items)
                         }
                         if &item.start_at_ >= start_date_time {
-                            println!("Save {:?} - {:?}", item.start_at_, item.end_at_);
+
                             in_scope_items.push(item);
                         }
                     }
 
                     bucket_date = line_items.end_date;
 
-                    println!("New bucket date {:?}", bucket_date);
+
 
                     if *bucket_date > end_date_time.date() {
-                        println!("{:?} > date {:?} so we are done", bucket_date, end_date_time);
+
                         return Ok(in_scope_items)
                     }
                 }
@@ -450,7 +450,7 @@ impl MeterManager {
             for (key , item) in &data_set.data {
                 let end_ok = key < end;
                 
-                println!("key={} start={} end_ok={} last_date={} item.value.start={}", key, start, end_ok, last_date, item.value.start);
+
                 if key >= start && end_ok {
                     
                     let row_class = if item.attributes.cached { "cached"} else {"fetched"};
@@ -1413,11 +1413,9 @@ impl HomeAndEvReading {
         }
     }
     fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface, query_time: &DateTime) -> anyhow::Result<Self> {
-        println!("HomeAndEvReading::from {}", serde_json::to_string_pretty(&node)?);
-
         match node {
             meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
-                println!("Unexpected abstract measurement {:?}", abstract_measurement_interface);
+
                 Err(anyhow!(format!("Unexpected abstract measurement {:?}", abstract_measurement_interface)))
             },
             meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
@@ -1456,13 +1454,13 @@ impl HomeAndEvReading {
                                                 home_standard= Some(HomeAndEvReadingConsumption::from(stat));
                                             },
                                             _ => {
-                                                println!("Unknown meta data label {}", label);
+
                                                 return Err(anyhow!(format!("Unknown meta data label {}", label)));
                                             }
                                         }
                                     }
                                     else {
-                                        println!("No meta data label");
+
                                         return Err(anyhow!("No meta data label"));
                                     }
                                 },
@@ -1477,7 +1475,7 @@ impl HomeAndEvReading {
                                     "OFF_PEAK" => &mut home_low,
                                     "STANDARD_RATE" => &mut home_standard,
                                     _ => {
-                                        println!("Unknown TOU bucket label {}", label);
+
                                         return Err(anyhow!("Unknown TOU bucket label {}", label));
                                     }
                                 };
@@ -1487,7 +1485,7 @@ impl HomeAndEvReading {
                                 *slot = Some(consumption);
                                 },
                                 _ => {
-                                    println!("Unexpected statistic type {:?}", type_);
+
                                     return Err(anyhow!(format!("Unexpected statistic type {:?}", type_)));
                                 },
                             }
