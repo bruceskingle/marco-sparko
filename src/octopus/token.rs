@@ -6,7 +6,7 @@ use crate::MarcoSparkoContext;
 
 use super::graphql::ObtainJsonWebTokenInput;
 
-use sparko_graphql::{RequestManager, TokenManager};
+use sparko_graphql::{GraphQLCaller, RequestManager, TokenManager};
 use super::graphql::login::obtain_kraken_token::ObtainKrakenJsonWebToken;
 
 /*

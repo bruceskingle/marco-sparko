@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +7,7 @@ use display_json::DisplayAsJsonPretty;
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use sparko_graphql::types::{Currency, Date, DateTime, ForwardPageOf};
-use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder};
+use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, ProgressMonitor};
 use time_tz::{TimeZone, Tz};
 
 use crate::CacheConfig;
@@ -31,7 +30,7 @@ impl HomeAndEvDataSet {
         start: &DateTime,
         end: &DateTime,
         tz: &'static Tz,
-        on_progress: Box<dyn Fn(usize)>,
+        progress: &(impl ProgressMonitor + ?Sized),
         cancel: &CancelToken,
         cache_config: &Arc<CacheConfig>,
         request_manager: &impl GraphQLCaller)
@@ -44,8 +43,6 @@ impl HomeAndEvDataSet {
             hash_key: format!("{}#{}#HomeAndEvConsumption", account_number, mpan),
             end_at: end.clone(),
             tz,
-            rows_loaded: Cell::new(0),
-            on_progress,
         };
         
         let data = MonthlyFixedSlotDataSet::fetch(
@@ -56,6 +53,7 @@ impl HomeAndEvDataSet {
             start,
             end,
             cancel,
+            progress,
         ).await?;
 
         Ok(Self { data })
@@ -606,10 +604,6 @@ pub struct HomeAndEvConsumptionSource {
     pub tz: &'static Tz,
     pub mpan:String,
     pub hash_key: String,
-    /// Count of rows fetched from the API so far
-    rows_loaded: Cell<usize>,
-    /// Called with the updated row count as each row is fetched, for progress display
-    on_progress: Box<dyn Fn(usize)>,
 }
 
 impl HomeAndEvConsumptionSource {
@@ -725,8 +719,6 @@ impl SlotSource for HomeAndEvConsumptionSource {
             .edges
             .into_iter()
             .map(move |edge| {
-                self.rows_loaded.set(self.rows_loaded.get() + 1);
-                (self.on_progress)(self.rows_loaded.get());
                 HomeAndEvReading::from(edge.node, &query_time)
                 // match edge.node {
                     

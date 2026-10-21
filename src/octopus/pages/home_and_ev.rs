@@ -277,8 +277,8 @@ impl PartialEq for HomeAndEvDetailProps {
 fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
     let context = use_context::<Arc<OctopusContext>>();
 
-    // Count of rows fetched so far, updated by the fetch as each row arrives.
-    let rows_loaded = use_signal(|| 0usize);
+    // The latest progress message from the fetch.
+    let progress = use_signal(String::new);
 
     // Set by the cancel button, the fetch then stops and returns the data it has so far.
     let cancel = use_hook(CancelToken::new);
@@ -293,9 +293,10 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
             let cancel = cancel.clone();
             let context = context.clone();
             async move {
+                let monitor = move |message: String| { let mut progress = progress; progress.set(message) };
                 HomeAndEvDataSet::new(&props.account_id, &props.mpan,
                     &props.start, &props.end,
-                    props.billing_timezone, Box::new(move |count| { let mut rows_loaded = rows_loaded; rows_loaded.set(count) }),
+                    props.billing_timezone, &monitor,
                     &cancel, &context.cache_config, &*context.request_manager).await
             }
         }
@@ -303,15 +304,12 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
 
     match &*transactions_resource.read() {
         None => rsx! {
-            {
-                format!(
-                    "Loading home_and_ev_consumption for meter {}... ({} rows loaded)",
-                    props.mpan,
-                    rows_loaded(),
-                )
+            div {
+                {format!("Loading home_and_ev_consumption for meter {}...", props.mpan)}
+                " "
+                button { r#type: "button", onclick: move |_| cancel.cancel(), "Cancel" }
             }
-            " "
-            button { r#type: "button", onclick: move |_| cancel.cancel(), "Cancel" }
+            div { "{progress}" }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load home_and_ev_consumption for meter {}: {error:?}", props.mpan))?,
         Some(Ok(consumption)) => match props.view {

@@ -6,7 +6,7 @@ use futures::future::{Either, select};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{
-    GraphQLCaller, GraphQLQuery, GraphQLResponse,
+    GraphQLCaller, GraphQLQuery, GraphQLResponse, ProgressMonitor,
     types::{Date, DateTime},
 };
 use time_tz::Tz;
@@ -16,12 +16,16 @@ use crate::CacheConfig;
 use super::{CancelToken, DataSetAttributes};
 
 /// Make a request, returning None without waiting for the response if the fetch is cancelled first.
+/// Progress messages from the request are passed on to progress with the given prefix.
 async fn call_unless_cancelled<Q: GraphQLQuery<R>, R: GraphQLResponse>(
     request_manager: &impl GraphQLCaller,
     query: &Q,
     cancel: &CancelToken,
+    progress: &(impl ProgressMonitor + ?Sized),
+    prefix: &str,
 ) -> anyhow::Result<Option<R>> {
-    match select(pin!(request_manager.call(query)), pin!(cancel.cancelled())).await {
+    let request_progress = |message: String| progress.progress(format!("{prefix}: {message}"));
+    match select(pin!(request_manager.call3(query, None, &request_progress)), pin!(cancel.cancelled())).await {
         Either::Left((response, _)) => Ok(Some(response?)),
         Either::Right(_) => Ok(None),
     }
@@ -156,6 +160,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         start: &DateTime,
         end: &DateTime,
         cancel: &CancelToken,
+        progress: &(impl ProgressMonitor + ?Sized),
     ) -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<S>>>
     {
         let mut result_keys = Vec::new();
@@ -165,6 +170,8 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         {
             // scope this start_date
             let mut start_date = start.to_date();
+
+            progress.progress(String::from("Loading cached data"));
 
             // end is exclusive so a bucket starting at end is not needed
             while start_date.at_midnight(tz) < *end {
@@ -216,8 +223,13 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         if let Some(refresh_start) = all_up_to_date(&refresh_after, &result_keys, &data_set_map)? {
             if &refresh_start < end {
                 let refresh_start = if &refresh_start < start { start } else {&refresh_start};
+                // The number of requests made and of rows they returned, for progress messages.
+                let mut requests = 1;
+                let mut rows = 0;
+                let prefix = |requests: usize, rows: usize| format!("Request {requests}, {rows} rows loaded");
+
                 let query = source.initial_query(refresh_start)?;
-                let mut next_response = call_unless_cancelled(request_manager, &query, cancel).await?;
+                let mut next_response = call_unless_cancelled(request_manager, &query, cancel, progress, &prefix(requests, rows)).await?;
 
                 while let Some(response) = next_response {
                     let cq = source.continuation_query(&refresh_start, &response);
@@ -226,6 +238,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
                     for value in source.items(response)? {
                         let value = value?;
+                        rows += 1;
                         let (start, end, is_final) = source.index(&value)?;
                         let start_date = start.to_date();
                         let key = Self::key_for(&start_date);
@@ -264,7 +277,8 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                     }
 
                     if let Some(continuation_query) = cq? {
-                        next_response = call_unless_cancelled(request_manager, &continuation_query, cancel).await?;
+                        requests += 1;
+                        next_response = call_unless_cancelled(request_manager, &continuation_query, cancel, progress, &prefix(requests, rows)).await?;
                     }
                     else {
                         break;

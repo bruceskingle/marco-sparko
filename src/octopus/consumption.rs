@@ -4,7 +4,7 @@ use std::time::Duration;
 use dioxus::prelude::*;
 use rust_decimal::prelude::ToPrimitive;
 use sparko_graphql::types::{Date, DateTime};
-use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder};
+use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, NoProgress};
 use time_tz::Tz;
 
 use crate::CacheConfig;
@@ -45,6 +45,7 @@ impl ConsumptionDataSet {
             start,
             end,
             cancel,
+            &NoProgress,
         ).await?;
 
         Ok(Self { data })
