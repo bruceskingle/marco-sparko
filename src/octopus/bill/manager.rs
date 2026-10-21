@@ -8,7 +8,7 @@ use crate::octopus::meter::MeterType;
 use crate::CacheConfig;
 
 use super::super::graphql::bill;
-use super::super::meter::MeterManager;
+use super::super::line_items::LineItemDataSet;
 use bill::get_statement_transactions::TransactionType;
 use super::super::RequestManager;
 
@@ -34,17 +34,15 @@ use super::super::RequestManager;
 pub struct BillManager {
     pub cache_config: Arc<CacheConfig>,
     pub request_manager: Arc<RequestManager>,
-    meter_manager: Arc<MeterManager>,
     pub bills: Mutex<HashMap<String, Arc<BillDataSet>>>,
 }
 
 impl BillManager {
-    pub fn new(cache_config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>, meter_manager: &Arc<MeterManager>)  -> Self {
+    pub fn new(cache_config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>)  -> Self {
         Self {
             // account_number,
             cache_config: cache_config.clone(),
             request_manager: request_manager.clone(),
-            meter_manager: meter_manager.clone(),
             bills: Mutex::new(HashMap::new()),
         }
     }
@@ -82,9 +80,9 @@ impl BillManager {
                             _ => panic!("Unknown consumption type")
                         };
 
-                        let line_items = self.meter_manager.get_line_items(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone).await?;
+                        let line_items = LineItemDataSet::new(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone, &self.cache_config, &*self.request_manager).await?;
 
-                        result.push(BillTransactionBreakDown::from_charge(charge, line_items));
+                        result.push(BillTransactionBreakDown::from_charge(charge, line_items.agreements));
                     }
                 }
             }

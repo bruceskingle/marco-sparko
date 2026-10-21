@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use crate::CacheConfig;
@@ -13,7 +12,7 @@ pub struct ViewerDataSet {
 }
 
 impl ViewerDataSet {
-    pub async fn new(config: &Arc<CacheConfig>, request_manager: &impl GraphQLCaller)  -> anyhow::Result<Self> {
+    pub async fn new(config: &CacheConfig, request_manager: &impl GraphQLCaller)  -> anyhow::Result<Self> {
         let hash_key = format!("#Viewer");
         let data_set = SingleRecordDataSet::new(
             &hash_key,

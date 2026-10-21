@@ -1,7 +1,6 @@
 use std::{
     fs::OpenOptions,
     io::{BufReader, Seek, SeekFrom, Write},
-    sync::Arc,
     time::{Duration, SystemTime},
 };
 
@@ -20,7 +19,7 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
             hash_key: &str,
             refresh_after: Duration,
             query_provider: QP,
-            config: &Arc<CacheConfig>,
+            config: &CacheConfig,
             request_manager: &impl GraphQLCaller
         ) -> anyhow::Result<Self>
         where

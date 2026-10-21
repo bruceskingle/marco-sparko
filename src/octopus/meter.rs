@@ -8,10 +8,9 @@ use display_json::DisplayAsJsonPretty;
 use serde::{Deserialize, Serialize};
 
 use dioxus::prelude::*;
-use indexmap::IndexMap;
 use rust_decimal::prelude::ToPrimitive;
 use sparko_graphql::types::{Currency, Date, DateTime, ForwardPageOf};
-use sparko_graphql::AuthenticatedRequestManager;
+use sparko_graphql::GraphQLCaller;
 use sparko_graphql::GraphQLQueryBuilder;
 use time_tz::Tz;
 use time_tz::TimeZone;
@@ -20,8 +19,6 @@ use anyhow::anyhow;
 use crate::data_set::{CancelToken, MonthlyDataSet, MonthlyFixedSlotDataSet, MultiQueryDataSet, SlotSource};
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput};
-use crate::octopus::meter_point::MeterPointDataSet;
-use crate::octopus::property::PropertyDataSet;
 use crate::{CacheConfig, NULL};
 
 use super::consumption_graph::{ConsumptionGraph, GraphPoint, GraphStyle};
@@ -30,7 +27,6 @@ use super::stacked_bar_graph::{
 };
 use super::graphql::meter;
 use super::RequestManager;
-use super::{token::OctopusTokenManager};
 
 pub enum MeterType {
     Gas,
@@ -105,76 +101,6 @@ impl MeterManager {
 
     //     Ok(())
     // }
-
-    pub async fn get_meter_points(&self, account_number: &String) -> anyhow::Result<MeterPointDataSet>{
-        MeterPointDataSet::new(account_number, &self.cache_config, &*self.request_manager).await
-    }
-
-    pub async fn get_line_items(&self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
-        let properties = PropertyDataSet::new(account_number, &self.cache_config, &*self.request_manager).await?;
-        let meter_agreements = 
-            MeterAgreementDataSet::new(&self.cache_config, &self.request_manager, &account_number, &properties.meter_node_ids).await?;
-
-        let start_date_time = start_date.at_midnight(billing_timezone);
-        let end_date_time = end_date.at_next_midnight(billing_timezone);
-
-        //println!("get_line_items {:?} - {:?}", start_date_time, end_date_time);
-
-        let in_scope_agreements = meter_agreements.get_in_scope(meter_type, is_export, &start_date_time, &end_date_time);
-
-        async fn get_line_items2(
-            cache_config: &CacheConfig, request_manager: &RequestManager,
-            account_number: &String, meter_type: &MeterType, agreement_id: &String,
-            start_date_time: &DateTime, end_date_time: &DateTime, billing_timezone: &time_tz::Tz) -> anyhow::Result<Vec<meter::electricity_agreement_line_items::LineItemType>> {
-                let mut in_scope_items = Vec::new();
-                let mut bucket_date = start_date_time.to_date();
-                loop {
-
-                    let line_items = AgreementLineItems::new(cache_config, request_manager, account_number.clone(), meter_type, agreement_id.clone(), &bucket_date, billing_timezone).await?;
-
-                    for (_cursor, (_, item)) in line_items.line_items {
-
-                        if &item.start_at_ >= end_date_time {
-                            // thats it
-
-                            return Ok(in_scope_items)
-                        }
-                        if &item.start_at_ >= start_date_time {
-
-                            in_scope_items.push(item);
-                        }
-                    }
-
-                    bucket_date = line_items.end_date;
-
-
-
-                    if *bucket_date > end_date_time.date() {
-
-                        return Ok(in_scope_items)
-                    }
-                }
-        }
-        
-        let mut item_map = IndexMap::new();
-
-        for (agreement_id, tariff) in in_scope_agreements {
-            let in_scope_items = get_line_items2(&self.cache_config, &self.request_manager, account_number, meter_type, &agreement_id, &start_date_time, &end_date_time, billing_timezone).await?;
-
-            if !in_scope_items.is_empty() {
-                //println!("Got {} in scope items", in_scope_items.len());
-                //println!("First {}", serde_json::to_string_pretty(in_scope_items.get(0).unwrap())?);
-                //println!("Last {}", serde_json::to_string_pretty(in_scope_items.get(in_scope_items.len() - 1).unwrap())?);
-
-
-                item_map.insert(agreement_id, (tariff, in_scope_items));
-            }
-        }
-
-        Ok(item_map)
-    }
-
-
 
     pub async fn get_consumption(
         &self,
@@ -831,7 +757,7 @@ pub struct MeterAgreementDataSet {
 }
 
 impl MeterAgreementDataSet {
-    pub async fn new(config: &Arc<CacheConfig>, request_manager: &AuthenticatedRequestManager<OctopusTokenManager>, account_number: &str, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
+    pub async fn new(config: &Arc<CacheConfig>, request_manager: &impl GraphQLCaller, account_number: &str, meter_node_ids: &Vec<String>) -> anyhow::Result<Self> {
         let hash_key = format!("{}#MeterAgreements", account_number);
         let the_beginning: DateTime = DateTime::from_calendar_date(2000, time::Month::January, 1)?;
         let mut queries = Vec::new();
@@ -880,7 +806,7 @@ impl MeterAgreementDataSet {
         })
     }
 
-    fn get_in_scope(self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<(String, Tariff)> {
+    pub fn get_in_scope(self, meter_type: &MeterType, is_export: bool, start_date: &DateTime, end_date: &DateTime) -> Vec<(String, Tariff)> {
         let mut in_scope_agreements = Vec::new();
 
         match meter_type {
@@ -979,14 +905,14 @@ pub struct AgreementLineItems {
     pub account_number: String,
     pub agreement_id: String,
     start_date: Date,
-    end_date: Date,
+    pub(crate) end_date: Date,
     pub line_items: BTreeMap<DateTime, (crate::data_set::DataSetAttributes, meter::electricity_agreement_line_items::LineItemType)>,
 }
 
 impl AgreementLineItems {
-    async fn new(
+    pub(crate) async fn new(
         config: &CacheConfig,
-        request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
+        request_manager: &impl GraphQLCaller,
         account_number: String,
         meter_type: &MeterType,
         agreement_id: String,
