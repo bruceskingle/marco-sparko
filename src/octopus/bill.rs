@@ -15,10 +15,9 @@ use crate::{CacheConfig, NONE, NULL};
 
 use super::graphql::bill;
 use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder};
-use super::line_items::TariffLineItems;
+use super::line_items::{LineItemDataSet, TariffLineItems};
+use super::meter::MeterType;
 use bill::get_statement_transactions::{Charge, TransactionType};
-mod manager;
-pub use manager::BillManager;
 
 // const one_hundred: Decimal = Decimal::new(100, 0);
 // const format: time::format_description = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
@@ -404,6 +403,42 @@ pub enum BillTransactionBreakDown {
 }
 
 impl BillTransactionBreakDown {
+    /// The transactions of a statement, with the line items making up each charge.
+    pub async fn for_statement(account_number: String, statement_id: String, billing_timezone: &time_tz::Tz,
+        cache_config: &Arc<CacheConfig>, request_manager: &impl GraphQLCaller)  -> anyhow::Result<Vec<BillTransactionBreakDown>> {
+
+
+        let mut result = Vec::new();
+        let transactions = StatementTransactionDataSet::new(account_number.clone(), statement_id, cache_config, request_manager).await?;
+
+
+        for (_key, transaction) in transactions.data_set.data {
+            if let TransactionType::Charge(charge_ref) = &transaction && charge_ref.consumption_.is_some() {
+                        // print the line items making up this charge
+                        //println!("Get line items {:?} - {:?}",  &consumption.start_date_, &consumption.end_date_);
+
+                if let TransactionType::Charge(charge) = transaction {
+                    if let Some(consumption) = &charge.consumption_ {
+                        let meter_type = match charge.as_transaction_type().title_.as_str() {
+                            "Gas" => MeterType::Gas,
+                            "Electricity" => MeterType::Electricity,
+                            _ => panic!("Unknown consumption type")
+                        };
+
+                        let line_items = LineItemDataSet::new(&account_number, &meter_type, charge.is_export_, &consumption.start_date_, &consumption.end_date_, billing_timezone, cache_config, request_manager).await?;
+
+                        result.push(BillTransactionBreakDown::from_charge(charge, line_items.agreements));
+                    }
+                }
+            }
+            else  {
+                result.push(BillTransactionBreakDown::from_abstract(transaction));
+            }
+        }
+
+        Ok(result)
+    }
+
     pub fn from_charge(charge: Charge, line_item_map: IndexMap<String, TariffLineItems>) -> Self {
         if !line_item_map.is_empty() && let Some(consumption) = charge.consumption_  {
             return BillTransactionBreakDown::Charge {

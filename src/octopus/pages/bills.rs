@@ -4,41 +4,31 @@ use anyhow::anyhow;
 use dioxus::prelude::*;
 use time_tz::Tz;
 
-use crate::octopus::bill::{AbstractBill, BillDataSet, BillManager};
+use crate::octopus::bill::{AbstractBill, BillDataSet, BillTransactionBreakDown};
+use crate::octopus::context::OctopusContext;
 
-#[derive(Props, Clone)]
+#[derive(Props, Clone, PartialEq)]
 pub struct BillsPageProps {
-    account_id: String,
-    bill_manager: Arc<BillManager>,
-    billing_timezone: &'static Tz,
     path: Vec<String>,
-}
-
-impl PartialEq for BillsPageProps {
-    fn eq(&self, other: &Self) -> bool {
-        self.account_id == other.account_id
-            && Arc::ptr_eq(&self.bill_manager, &other.bill_manager)
-            && std::ptr::eq(self.billing_timezone, other.billing_timezone)
-            && self.path == other.path
-    }
 }
 
 #[component]
 pub fn BillsPage(props: BillsPageProps) -> Element {
+    let context = use_context::<Arc<OctopusContext>>();
+
     // Fetch the list of all bills, this runs once when the component is mounted.
+    // The bills are shared with BillDetail, so they are held in an Arc.
     let bills_resource = use_resource({
-        let bill_manager = props.bill_manager.clone();
-        let account_id = props.account_id.clone();
+        let context = context.clone();
         move || {
-            let bill_manager = bill_manager.clone();
-            let account_id = account_id.clone();
-            async move { bill_manager.fetch_bills(account_id).await }
+            let context = context.clone();
+            async move { BillDataSet::new(&context.account_id, &context.cache_config, &*context.request_manager).await.map(Arc::new) }
         }
     });
 
     match &*bills_resource.read() {
         None => rsx! {
-            div { "Loading Bills for account {props.account_id}..." }
+            div { "Loading Bills for account {context.account_id}..." }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load bills: {error:?}"))?,
         Some(Ok(bills)) => {
@@ -49,11 +39,10 @@ pub fn BillsPage(props: BillsPageProps) -> Element {
                 rsx! {
                     BillDetail {
                         key: "{bill_id}",
-                        account_id: props.account_id.clone(),
+                        account_id: context.account_id.clone(),
                         bill_id: bill_id.clone(),
                         bills: bills.clone(),
-                        bill_manager: props.bill_manager.clone(),
-                        billing_timezone: props.billing_timezone,
+                        billing_timezone: context.billing_timezone,
                     }
                 }
             }
@@ -76,7 +65,6 @@ struct BillDetailProps {
     account_id: String,
     bill_id: String,
     bills: Arc<BillDataSet>,
-    bill_manager: Arc<BillManager>,
     billing_timezone: &'static Tz,
 }
 
@@ -85,21 +73,24 @@ impl PartialEq for BillDetailProps {
         self.account_id == other.account_id
             && self.bill_id == other.bill_id
             && Arc::ptr_eq(&self.bills, &other.bills)
-            && Arc::ptr_eq(&self.bill_manager, &other.bill_manager)
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
     }
 }
 
 #[component]
 fn BillDetail(props: BillDetailProps) -> Element {
+    let context = use_context::<Arc<OctopusContext>>();
+
     // Fetch all transactions for this bill.
     let transactions_resource = use_resource({
         let props = props.clone();
+        let context = context.clone();
         move || {
             let props = props.clone();
+            let context = context.clone();
             async move {
-                props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
-                    props.billing_timezone).await
+                BillTransactionBreakDown::for_statement(props.account_id, props.bill_id,
+                    props.billing_timezone, &context.cache_config, &*context.request_manager).await
             }
         }
     });

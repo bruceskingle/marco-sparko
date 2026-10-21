@@ -207,7 +207,13 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
             }
             if view() == ConsumptionView::Graph {
                 span { class: "view-toggle",
-                    for option in [StackedBarPeriod::Raw, StackedBarPeriod::Day, StackedBarPeriod::Week, StackedBarPeriod::Month] {
+                    for option in [
+                        StackedBarPeriod::Raw,
+                        StackedBarPeriod::Day,
+                        StackedBarPeriod::Week,
+                        StackedBarPeriod::Month,
+                    ]
+                    {
                         button {
                             r#type: "button",
                             class: if graph_period() == option { "active" },
@@ -283,8 +289,6 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
                 ConsumptionDataSet::new(&props.account_id, &props.meter_id,
                     &props.start, &props.end,
                     props.billing_timezone, &cancel, &context.cache_config, &*context.request_manager).await
-                // props.bill_manager.fetch_bill_transaction_breakdown(props.account_id, props.bill_id, 
-                //     props.billing_timezone).await
             }
         }
     });
@@ -293,11 +297,7 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
         None => rsx! {
             {format!("Loading consumption for meter {}...", props.meter_id)}
             " "
-            button {
-                r#type: "button",
-                onclick: move |_| cancel.cancel(),
-                "Cancel"
-            }
+            button { r#type: "button", onclick: move |_| cancel.cancel(), "Cancel" }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load consumption for meter {}: {error:?}", props.meter_id))?,
         Some(Ok(consumption)) => match props.view {

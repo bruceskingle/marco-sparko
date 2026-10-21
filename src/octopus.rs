@@ -24,7 +24,6 @@ use async_trait::async_trait;
 
 use dioxus::prelude::*;
 
-use bill::BillManager;
 use context::{OctopusContext, OctopusRoot};
 use pages::{BillsPage, MeterPage, HomeAndEvPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
@@ -104,14 +103,12 @@ impl OctopusModule {
 
         let billing_timezone = Self::get_billing_timezone(&profile);
         let account_manager = ViewerDataSet::new(&cache_config, &*request_manager).await?;
-        let bill_manager = Arc::new(BillManager::new(&cache_config, &request_manager));
 
         let context = Arc::new(OctopusContext {
             account_id: account_manager.get_default_account_id().to_string(),
             billing_timezone,
             cache_config,
             request_manager,
-            bill_manager,
         });
 
         Ok(OctopusModule {
@@ -343,12 +340,7 @@ impl Module for OctopusModule {
             },
             "bills" => {
                 rsx! {
-                    BillsPage {
-                        account_id: self.context.account_id.clone(),
-                        bill_manager: self.context.bill_manager.clone(),
-                        billing_timezone: self.context.billing_timezone,
-                        path,
-                    }
+                    BillsPage { path }
                 }
             },
             "properties" => {

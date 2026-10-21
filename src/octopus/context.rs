@@ -5,7 +5,6 @@ use dioxus::prelude::*;
 use crate::CacheConfig;
 
 use super::RequestManager;
-use super::bill::BillManager;
 
 /// The state shared by all the pages of the Octopus module, provided to them as a Dioxus context by OctopusRoot.
 /// Pages get it with use_context::<Arc<OctopusContext>>().
@@ -14,7 +13,6 @@ pub struct OctopusContext {
     pub billing_timezone: &'static time_tz::Tz,
     pub cache_config: Arc<CacheConfig>,
     pub request_manager: Arc<RequestManager>,
-    pub bill_manager: Arc<BillManager>,
 }
 
 #[derive(Props, Clone)]
