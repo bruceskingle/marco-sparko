@@ -137,7 +137,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                     file.seek(SeekFrom::Start(0))?;
                     file.set_len(0)?;
                     data.clear();
-                    return Err(e.into());
+                    break;
                 },
             }
         }

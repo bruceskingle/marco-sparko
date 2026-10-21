@@ -1262,6 +1262,35 @@ impl HomeAndEvReadingConsumption {
         }
     }
 
+    fn from_tou(stat: meter::home_and_ev_consumption_breakdown::StatisticOutput) -> anyhow::Result<Self> {
+        let excl = stat.cost_excl_tax_.as_ref()
+            .ok_or_else(|| anyhow!("TouBucketCost with no costExclTax"))?;
+        let price_excl = excl.price_per_unit_.as_ref()
+            .ok_or_else(|| anyhow!("TouBucketCost with no pricePerUnit"))?
+            .amount_;
+        let cost_excl = excl.estimated_amount_;
+        let cost_incl = stat.cost_incl_tax_.as_ref()
+            .map(|c| c.estimated_amount_)
+            .unwrap_or(cost_excl);
+
+        let units = if price_excl.is_zero() {
+            Decimal::ZERO
+        } else {
+            (cost_excl / price_excl).normalize()
+        };
+
+        // Express the rate incl. tax, to match your cost column and the new format.
+        // A zero-cost slot gives no tax ratio, so fall back to the excl price.
+        // Units are 0 there, so it only affects the rate shown.
+        let rate = if cost_excl.is_zero() {
+            price_excl
+        } else {
+            (price_excl * cost_incl / cost_excl).round_dp(4)
+        };
+
+        Ok(HomeAndEvReadingConsumption { units, cost: cost_incl, rate })
+    }
+
     fn zero() -> Self {
         let cost = Decimal::ZERO;
         let rate = Decimal::ZERO;
@@ -1279,6 +1308,7 @@ impl HomeAndEvReadingConsumption {
 pub struct HomeAndEvReading {
     start:  DateTime,
     end: DateTime,
+    is_final: bool,
     home_standard: HomeAndEvReadingConsumption,
     ev_standard: HomeAndEvReadingConsumption,
     home_low: HomeAndEvReadingConsumption,
@@ -1287,6 +1317,8 @@ pub struct HomeAndEvReading {
 }
 
 impl HomeAndEvReading {
+    const FINAL_DELAY: Duration = Duration::from_hours(3 * 24);
+
     fn summary_headers() -> Element {
         rsx! {
             tr {
@@ -1339,7 +1371,7 @@ impl HomeAndEvReading {
             }
         }
     }
-    fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface) -> anyhow::Result<Self> {
+    fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface, query_time: &DateTime) -> anyhow::Result<Self> {
         println!("HomeAndEvReading::from {}", serde_json::to_string_pretty(&node)?);
 
         match node {
@@ -1392,6 +1424,26 @@ impl HomeAndEvReading {
                                         return Err(anyhow!("No meta data label"));
                                     }
                                 },
+                                super::graphql::ReadingStatisticTypeEnum::TouBucketCost => {
+
+                                let label = stat.label_.clone()
+                                    .ok_or_else(|| anyhow!("No meta data label"))?;
+                                let consumption = HomeAndEvReadingConsumption::from_tou(stat)?;
+
+                                // Old format: one whole-house line per slot, no EV split, so it all goes to Home.
+                                let slot = match label.as_str() {
+                                    "OFF_PEAK" => &mut home_low,
+                                    "STANDARD_RATE" => &mut home_standard,
+                                    _ => {
+                                        println!("Unknown TOU bucket label {}", label);
+                                        return Err(anyhow!("Unknown TOU bucket label {}", label));
+                                    }
+                                };
+                                if slot.is_some() {
+                                    return Err(anyhow!("Duplicate {} bucket in slot {}", label, interval_measurement_type.start_at_));
+                                }
+                                *slot = Some(consumption);
+                                },
                                 _ => {
                                     println!("Unexpected statistic type {:?}", type_);
                                     return Err(anyhow!(format!("Unexpected statistic type {:?}", type_)));
@@ -1409,9 +1461,11 @@ impl HomeAndEvReading {
                     let ev_low = if let Some(v) = ev_low { v } else { HomeAndEvReadingConsumption::zero()};
                     let standing_charge = if let Some(v) = standing_charge { v } else { Decimal::ZERO };
 
+                    let is_final = **query_time - *interval_measurement_type.end_at_ > HomeAndEvReading::FINAL_DELAY;
                     Ok(HomeAndEvReading{
                         start: interval_measurement_type.start_at_,
                         end: interval_measurement_type.end_at_,
+                        is_final,
                         home_standard,
                         home_low,
                         ev_standard,
@@ -1468,7 +1522,7 @@ impl HomeAndEvConsumptionSource {
             .with_timezone(self.tz.name().to_string())
             .with_utility_filters(utility_filters)
             // .with_modelled_utility_filters(modelled_utility_filters)
-            .with_first(50)
+            .with_first(1500)
         )
     }
 
@@ -1542,7 +1596,7 @@ impl SlotSource for HomeAndEvConsumptionSource {
         //         .properties_.first().ok_or(anyhow!("No property in response"))?
         //         // .electricity_meter_points_.first().ok_or("No meter points in response")?
         //         .measurements_;
-
+        let query_time = DateTime::now(self.tz);
         Ok(response
             .account_
             .ok_or(anyhow!("No account in response"))?
@@ -1551,10 +1605,10 @@ impl SlotSource for HomeAndEvConsumptionSource {
             .measurements_
             .edges
             .into_iter()
-            .map(|edge| {
+            .map(move |edge| {
                 self.rows_loaded.set(self.rows_loaded.get() + 1);
                 (self.on_progress)(self.rows_loaded.get());
-                HomeAndEvReading::from(edge.node)
+                HomeAndEvReading::from(edge.node, &query_time)
                 // match edge.node {
                     
                 //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
@@ -1575,7 +1629,7 @@ impl SlotSource for HomeAndEvConsumptionSource {
     }
 
     fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)> {
-        Ok((value.start.clone(), value.end.clone(), true))
+        Ok((value.start.clone(), value.end.clone(), value.is_final))
     }
     
     fn refresh_after(&self) -> Duration {

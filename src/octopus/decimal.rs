@@ -49,6 +49,10 @@ impl Decimal {
   pub fn round_dp_with_strategy(&self, dp: u32, strategy: rust_decimal::RoundingStrategy) -> Decimal {
     Decimal(self.0.round_dp_with_strategy(dp, strategy))
   }
+
+  pub fn normalize(&self) -> Decimal {
+    Decimal(self.0.normalize())
+  }
 }
 
 // impl Div for Decimal {
