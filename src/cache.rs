@@ -38,6 +38,8 @@ impl CacheConfig {
         let mut path = self.dir_path.clone();
 
         Self::path_for_date(&mut path, date);
+        // The year directory does not exist the first time a month in that year is cached.
+        crate::private_file::create_private_dir(&path)?;
         Self::path_hash_key_for_date(&mut path, date, hash_key);
         Ok( MonthBucket {path, start, next})
     }

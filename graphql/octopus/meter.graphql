@@ -332,6 +332,7 @@ query homeAndEvConsumptionBreakdown(
         edges {
           cursor
           node {
+            unit
             ... on IntervalMeasurementType {
               startAt
               endAt
@@ -339,12 +340,14 @@ query homeAndEvConsumptionBreakdown(
             metaData {
               statistics {
                 costExclTax {
+                  costCurrency @ms_currency
                   pricePerUnit {
                     amount
                   }
                   estimatedAmount
                 }
                 costInclTax {
+                  costCurrency @ms_currency
                   pricePerUnit {
                     amount
                   }

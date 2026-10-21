@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use sparko_graphql::types::Currency;
 
 use super::consumption_graph::nice_step;
 
@@ -61,6 +62,10 @@ pub struct StackedBarPoint {
     pub ev_standard_cost: f64,
     pub ev_low_cost: f64,
     pub standing_charge: f64,
+    /// The currency of the costs, which are in its minor units, e.g. pence
+    pub currency: Currency,
+    /// The unit of the consumption values, e.g. kwh
+    pub unit: String,
 }
 
 impl StackedBarPoint {
@@ -93,7 +98,22 @@ impl StackedBarPoint {
         self.ev_standard_cost += other.ev_standard_cost;
         self.ev_low_cost += other.ev_low_cost;
         self.standing_charge += other.standing_charge;
+        if self.currency == Currency::NONE {
+            self.currency = other.currency;
+        }
+        if self.unit.is_empty() {
+            self.unit = other.unit.clone();
+        }
     }
+}
+
+/// Format an amount in minor units (e.g. pence) in the major units of the currency, e.g. £1.23
+fn format_money(minor_units: f64, currency: Currency) -> String {
+    let decimals = currency.minor_units() as usize;
+    let major = minor_units / 10f64.powi(decimals as i32);
+    let sign = if major < 0.0 { "-" } else { "" };
+    let symbol = if currency == Currency::NONE { String::new() } else { currency.symbol() };
+    format!("{sign}{symbol}{:.decimals$}", major.abs())
 }
 
 const UNIT_SEGMENTS: [(&str, &str); 4] = [
@@ -135,6 +155,20 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
         .map(|point| point.segments(mode).iter().map(|value| value.max(0.0)).sum())
         .collect();
     let max_value = totals.iter().copied().fold(0.0, f64::max);
+    let currency = points
+        .iter()
+        .map(|point| point.currency)
+        .find(|currency| *currency != Currency::NONE)
+        .unwrap_or(Currency::NONE);
+    let unit = points
+        .iter()
+        .map(|point| point.unit.as_str())
+        .find(|unit| !unit.is_empty())
+        .unwrap_or_default();
+    let format_value = move |value: f64| match mode {
+        StackedBarMode::Units => format!("{value:.3} {unit}"),
+        StackedBarMode::Cost => format_money(value, currency),
+    };
     let (step, decimals) = nice_step(max_value / Y_TICKS);
     let y_max = (max_value / step).ceil().max(1.0) * step;
     let y = |value: f64| TOP + plot_height - value / y_max * plot_height;
@@ -175,8 +209,8 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
         .take_while(|value| *value <= y_max + step / 2.0)
         .map(|value| {
             let label = match mode {
-                StackedBarMode::Units => format!("{value:.decimals$}"),
-                StackedBarMode::Cost => format!("£{:.2}", value / 100.0),
+                StackedBarMode::Units => format!("{value:.decimals$} {unit}"),
+                StackedBarMode::Cost => format_money(value, currency),
             };
             (y(value), label)
         })
@@ -209,8 +243,8 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
                 bar_x + 10.0
             }
             .clamp(LEFT, (width - TOOLTIP_WIDTH - RIGHT).max(LEFT));
-            let segments = point.segments(mode);
-            (tooltip_x, point.period_label.clone(), segments, totals[index])
+            let segments = point.segments(mode).map(format_value);
+            (tooltip_x, point.period_label.clone(), segments, format_value(totals[index]))
         })
     });
 
@@ -256,9 +290,9 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
                 g { class: "stacked-tooltip",
                     rect { x: tx, y: TOP, width: TOOLTIP_WIDTH, height: TOOLTIP_HEIGHT, rx: 4 }
                     text { class: "stacked-tooltip-period", x: tx + 8.0, y: TOP + 16.0, "{period}" }
-                    text { class: "stacked-tooltip-value", x: tx + 8.0, y: TOP + 34.0, "Total: {total:.3}" }
+                    text { class: "stacked-tooltip-value", x: tx + 8.0, y: TOP + 34.0, "Total: {total}" }
                     for (index, (label, _)) in segment_names.iter().enumerate() {
-                        text { class: "stacked-tooltip-value", x: tx + 8.0, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {segments[index]:.3}" }
+                        text { class: "stacked-tooltip-value", x: tx + 8.0, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {segments[index]}" }
                     }
                 }
 
@@ -269,7 +303,9 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
 
 #[cfg(test)]
 mod tests {
-    use super::{StackedBarMode, StackedBarPoint};
+    use sparko_graphql::types::Currency;
+
+    use super::{StackedBarMode, StackedBarPoint, format_money};
 
     fn sample_point() -> StackedBarPoint {
         StackedBarPoint {
@@ -286,7 +322,18 @@ mod tests {
             ev_standard_cost: 7.0,
             ev_low_cost: 8.0,
             standing_charge: 9.0,
+            currency: Currency::NONE,
+            unit: String::from("kwh"),
         }
+    }
+
+    #[test]
+    fn money_is_formatted_in_major_units_with_the_currency_symbol() {
+        let gbp = Currency::from_code("GBP").unwrap();
+        assert_eq!(format_money(123.0, gbp), "£1.23");
+        assert_eq!(format_money(-5.5, gbp), "-£0.06");
+        assert_eq!(format_money(1234.0, Currency::from_code("JPY").unwrap()), "¥1234");
+        assert_eq!(format_money(12.0, Currency::NONE), "12");
     }
 
     #[test]

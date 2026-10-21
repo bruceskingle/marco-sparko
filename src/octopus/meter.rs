@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use dioxus::prelude::*;
 use indexmap::IndexMap;
 use rust_decimal::prelude::ToPrimitive;
-use sparko_graphql::types::{Date, DateTime, ForwardPageOf, PageOf};
+use sparko_graphql::types::{Currency, Date, DateTime, ForwardPageOf, PageOf};
 use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use time_tz::Tz;
@@ -609,6 +609,8 @@ impl MeterManager {
                 ev_standard_cost: value.ev_standard.cost.to_f64().unwrap_or_default(),
                 ev_low_cost: value.ev_low.cost.to_f64().unwrap_or_default(),
                 standing_charge: value.standing_charge.to_f64().unwrap_or_default(),
+                currency: value.currency(),
+                unit: value.unit.clone(),
             };
 
             if matches!(period, StackedBarPeriod::Raw) {
@@ -1227,10 +1229,25 @@ pub struct HomeAndEvReadingConsumption {
     units: Decimal,
     cost:  Decimal,
     rate: Decimal,
+    ccy: sparko_graphql::types::Currency,
 }
 
 impl HomeAndEvReadingConsumption {
     fn from(stat: meter::home_and_ev_consumption_breakdown::StatisticOutput) -> Self {
+
+
+        let ccy = if let Some(ex_cost) = &stat.cost_excl_tax_ {
+            ex_cost.cost_currency_
+        }
+        else {
+            if let Some(inc_cost) = &stat.cost_incl_tax_ {
+                inc_cost.cost_currency_
+            }
+            else {
+                sparko_graphql::types::Currency::NONE
+            }
+        };
+
         let cost;
         let rate;
 
@@ -1259,10 +1276,23 @@ impl HomeAndEvReadingConsumption {
             units,
             cost,
             rate,
+            ccy,
         }
     }
 
     fn from_tou(stat: meter::home_and_ev_consumption_breakdown::StatisticOutput) -> anyhow::Result<Self> {
+        let ccy = if let Some(ex_cost) = &stat.cost_excl_tax_ {
+            ex_cost.cost_currency_
+        }
+        else {
+            if let Some(inc_cost) = &stat.cost_incl_tax_ {
+                inc_cost.cost_currency_
+            }
+            else {
+                sparko_graphql::types::Currency::NONE
+            }
+        };
+
         let excl = stat.cost_excl_tax_.as_ref()
             .ok_or_else(|| anyhow!("TouBucketCost with no costExclTax"))?;
         let price_excl = excl.price_per_unit_.as_ref()
@@ -1288,7 +1318,7 @@ impl HomeAndEvReadingConsumption {
             (price_excl * cost_incl / cost_excl).round_dp(4)
         };
 
-        Ok(HomeAndEvReadingConsumption { units, cost: cost_incl, rate })
+        Ok(HomeAndEvReadingConsumption { units, cost: cost_incl, rate, ccy})
     }
 
     fn zero() -> Self {
@@ -1300,6 +1330,7 @@ impl HomeAndEvReadingConsumption {
             units,
             cost,
             rate,
+            ccy: Currency::NONE,
         }
     }
 }
@@ -1314,10 +1345,20 @@ pub struct HomeAndEvReading {
     home_low: HomeAndEvReadingConsumption,
     ev_low: HomeAndEvReadingConsumption,
     standing_charge: Decimal,
+    unit: String,
 }
 
 impl HomeAndEvReading {
     const FINAL_DELAY: Duration = Duration::from_hours(3 * 24);
+
+    /// The currency of the costs, a consumption with no cost (e.g. zero()) has no currency so the first real one is used.
+    fn currency(&self) -> Currency {
+        [&self.home_standard, &self.home_low, &self.ev_standard, &self.ev_low]
+            .into_iter()
+            .map(|consumption| consumption.ccy)
+            .find(|ccy| *ccy != Currency::NONE)
+            .unwrap_or(Currency::NONE)
+    }
 
     fn summary_headers() -> Element {
         rsx! {
@@ -1386,6 +1427,7 @@ impl HomeAndEvReading {
                     let mut home_low= None;
                     let mut ev_low= None;
                     let mut standing_charge = None;
+                    let unit = interval_measurement_type.measurement_interface_.unit_;
 
                     for stat in meta_data.statistics_ {
                         if let Some(type_) = &stat.type_ {
@@ -1471,6 +1513,7 @@ impl HomeAndEvReading {
                         ev_standard,
                         ev_low,
                         standing_charge,
+                        unit
                     })
                 }
                 else {
