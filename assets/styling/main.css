@@ -586,7 +586,7 @@ h6 {
     fill: #b8c0cc;
 }
 
-.stacked-consumption-graph .stacked-tooltip rect {
+.stacked-consumption-graph .stacked-tooltip-background {
     fill: #1a1a1f;
     stroke: #707080;
 }

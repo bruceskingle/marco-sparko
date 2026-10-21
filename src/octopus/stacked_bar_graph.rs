@@ -10,7 +10,9 @@ const BOTTOM: f64 = 32.0;
 const MAX_X_TICKS: usize = 12;
 const Y_TICKS: f64 = 4.0;
 const BAR_GAP: f64 = 2.0;
-const TOOLTIP_WIDTH: f64 = 210.0;
+const TOOLTIP_WIDTH: f64 = 226.0;
+/// The tooltip text starts after a column of colour swatches.
+const TOOLTIP_TEXT_X: f64 = 24.0;
 const TOOLTIP_HEIGHT: f64 = 112.0;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -72,18 +74,18 @@ impl StackedBarPoint {
     fn segments(&self, mode: StackedBarMode) -> [f64; 5] {
         match mode {
             StackedBarMode::Units => [
-                self.home_standard_units,
                 self.home_low_units,
-                self.ev_standard_units,
+                self.home_standard_units,
                 self.ev_low_units,
+                self.ev_standard_units,
                 0.0,
             ],
             StackedBarMode::Cost => [
                 self.standing_charge,
-                self.home_standard_cost,
                 self.home_low_cost,
-                self.ev_standard_cost,
+                self.home_standard_cost,
                 self.ev_low_cost,
+                self.ev_standard_cost,
             ],
         }
     }
@@ -117,17 +119,17 @@ fn format_money(minor_units: f64, currency: Currency) -> String {
 }
 
 const UNIT_SEGMENTS: [(&str, &str); 4] = [
-    ("Home standard", "home-standard"),
     ("Home low", "home-low"),
-    ("EV standard", "ev-standard"),
+    ("Home standard", "home-standard"),
     ("EV low", "ev-low"),
+    ("EV standard", "ev-standard"),
 ];
 const COST_SEGMENTS: [(&str, &str); 5] = [
     ("Standing charge", "standing-charge"),
-    ("Home standard", "home-standard"),
     ("Home low", "home-low"),
-    ("EV standard", "ev-standard"),
+    ("Home standard", "home-standard"),
     ("EV low", "ev-low"),
+    ("EV standard", "ev-standard"),
 ];
 
 #[component]
@@ -288,11 +290,12 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
 
             if let Some((tx, period, segments, total)) = tooltip {
                 g { class: "stacked-tooltip",
-                    rect { x: tx, y: TOP, width: TOOLTIP_WIDTH, height: TOOLTIP_HEIGHT, rx: 4 }
-                    text { class: "stacked-tooltip-period", x: tx + 8.0, y: TOP + 16.0, "{period}" }
-                    text { class: "stacked-tooltip-value", x: tx + 8.0, y: TOP + 34.0, "Total: {total}" }
-                    for (index, (label, _)) in segment_names.iter().enumerate() {
-                        text { class: "stacked-tooltip-value", x: tx + 8.0, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {segments[index]}" }
+                    rect { class: "stacked-tooltip-background", x: tx, y: TOP, width: TOOLTIP_WIDTH, height: TOOLTIP_HEIGHT, rx: 4 }
+                    text { class: "stacked-tooltip-period", x: tx + TOOLTIP_TEXT_X, y: TOP + 16.0, "{period}" }
+                    text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 34.0, "Total: {total}" }
+                    for (index, (label, color_class)) in segment_names.iter().enumerate() {
+                        rect { class: "stacked-legend-swatch {color_class}", x: tx + 8.0, y: TOP + 43.0 + index as f64 * 14.0, width: 10.0, height: 10.0 }
+                        text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {segments[index]}" }
                     }
                 }
 
@@ -340,7 +343,7 @@ mod tests {
     fn cost_segments_put_standing_charge_at_the_bottom() {
         assert_eq!(
             sample_point().segments(StackedBarMode::Cost),
-            [9.0, 5.0, 6.0, 7.0, 8.0]
+            [9.0, 6.0, 5.0, 8.0, 7.0]
         );
     }
 
@@ -348,7 +351,7 @@ mod tests {
     fn units_segments_contain_only_the_four_consumption_values() {
         assert_eq!(
             sample_point().segments(StackedBarMode::Units),
-            [1.0, 2.0, 3.0, 4.0, 0.0]
+            [2.0, 1.0, 4.0, 3.0, 0.0]
         );
     }
 
@@ -357,7 +360,7 @@ mod tests {
         let mut total = sample_point();
         total.add_values_from(&sample_point());
 
-        assert_eq!(total.segments(StackedBarMode::Units), [2.0, 4.0, 6.0, 8.0, 0.0]);
-        assert_eq!(total.segments(StackedBarMode::Cost), [18.0, 10.0, 12.0, 14.0, 16.0]);
+        assert_eq!(total.segments(StackedBarMode::Units), [4.0, 2.0, 8.0, 6.0, 0.0]);
+        assert_eq!(total.segments(StackedBarMode::Cost), [18.0, 12.0, 10.0, 16.0, 14.0]);
     }
 }

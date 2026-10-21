@@ -129,6 +129,7 @@ pub fn HomeAndEvPage(props: HomeAndEvPageProps) -> Element {
 
 
                 rsx! {
+                    h1 { "Meter Points" }
                     table {
                         tr { class: "header",
                             th { "MPAN" }
@@ -333,11 +334,7 @@ fn HomeAndEvDetail(props: HomeAndEvDetailProps) -> Element {
                 )
             }
             " "
-            button {
-                r#type: "button",
-                onclick: move |_| cancel.cancel(),
-                "Cancel"
-            }
+            button { r#type: "button", onclick: move |_| cancel.cancel(), "Cancel" }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load home_and_ev_consumption for meter {}: {error:?}", props.mpan))?,
         Some(Ok(consumption)) => match props.view {
