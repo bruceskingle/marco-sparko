@@ -114,16 +114,30 @@ impl HomeAndEvDataSet {
             .collect();
 
         let mut points = Vec::with_capacity(values.len());
-        let single_day = period == StackedBarPeriod::Raw
+        let single_day = matches!(period, StackedBarPeriod::Raw | StackedBarPeriod::Rate)
             && values.first().map(|value| value.start.to_date())
                 == values.last().map(|value| value.start.to_date());
         let mut last_date = None;
         let mut last_bucket_start = None;
 
+        // For Rate, the rates and start of the run of readings in the last point, and the date of the last run start.
+        let mut last_rates = None;
+        let mut run_start = None;
+        let mut last_run_date = None;
+        let range_label = |from: &DateTime, to: &DateTime| {
+            if from.to_date() == to.to_date() || *to == from.to_date().next_day().at_midnight(tz) {
+                format!("{} {}–{}", from.format(&date_format).unwrap(), from.format(&time_format).unwrap(), to.format(&time_format).unwrap())
+            }
+            else {
+                format!("{} {} – {} {}", from.format(&date_format).unwrap(), from.format(&time_format).unwrap(),
+                    to.format(&date_format).unwrap(), to.format(&time_format).unwrap())
+            }
+        };
+
         for value in values {
             let date = value.start.to_date();
             let (bucket_start, bucket_end) = match period {
-                StackedBarPeriod::Raw => (value.start, value.end),
+                StackedBarPeriod::Raw | StackedBarPeriod::Rate => (value.start, value.end),
                 StackedBarPeriod::Day => {
                     let bucket_start = date.at_midnight(tz);
                     (bucket_start, date.next_day().at_midnight(tz))
@@ -187,6 +201,8 @@ impl HomeAndEvDataSet {
                 StackedBarPeriod::Raw => {
                     (last_date != Some(date)).then(|| date.format(&day_format).unwrap())
                 }
+                // Set below when a new run starts.
+                StackedBarPeriod::Rate => None,
                 StackedBarPeriod::Day => {
                     (last_bucket_start != Some(bucket_start.unix_timestamp()))
                         .then(|| bucket_start.format(&day_format).unwrap())
@@ -208,6 +224,7 @@ impl HomeAndEvDataSet {
                     value.start.format(&time_format).unwrap(),
                     value.end.format(&time_format).unwrap(),
                 ),
+                StackedBarPeriod::Rate => range_label(&value.start, &value.end),
                 StackedBarPeriod::Day => bucket_start.format(&date_format).unwrap(),
                 StackedBarPeriod::Week => format!(
                     "{} – {}",
@@ -236,6 +253,31 @@ impl HomeAndEvDataSet {
 
             if matches!(period, StackedBarPeriod::Raw) {
                 points.push(point);
+            } else if period == StackedBarPeriod::Rate {
+                // Extend the last run if this reading follows on from it with the same rates, otherwise start a new run.
+                let rates = value.rates();
+                match points.last_mut() {
+                    Some(existing) if last_rates == Some(rates) && existing.end == point.start => {
+                        existing.end = point.end;
+                        existing.add_values_from(&point);
+                        if let Some(run_start) = &run_start {
+                            existing.period_label = range_label(run_start, &value.end);
+                        }
+                    },
+                    _ => {
+                        let mut point = point;
+                        point.tick_label = if single_day {
+                            Some(value.start.format(&time_format).unwrap())
+                        }
+                        else {
+                            (last_run_date != Some(date)).then(|| date.format(&day_format).unwrap())
+                        };
+                        run_start = Some(value.start);
+                        last_run_date = Some(date);
+                        points.push(point);
+                    },
+                }
+                last_rates = Some(rates);
             } else if let Some(existing) = points.last_mut() {
                 if existing.start == bucket_start.unix_timestamp() {
                     existing.add_values_from(&point);
@@ -250,7 +292,7 @@ impl HomeAndEvDataSet {
         }
 
         rsx! {
-            StackedBarGraph { points, mode }
+            StackedBarGraph { points, mode, per_hour: period == StackedBarPeriod::Rate }
         }
     }
 }
@@ -381,6 +423,11 @@ pub struct HomeAndEvReading {
 
 impl HomeAndEvReading {
     const FINAL_DELAY: Duration = Duration::from_hours(3 * 24);
+
+    /// The unit rates of the four consumption types, readings with the same rates are grouped by StackedBarPeriod::Rate.
+    fn rates(&self) -> [Decimal; 4] {
+        [self.home_standard.rate, self.home_low.rate, self.ev_standard.rate, self.ev_low.rate]
+    }
 
     /// The currency of the costs, a consumption with no cost (e.g. zero()) has no currency so the first real one is used.
     fn currency(&self) -> Currency {

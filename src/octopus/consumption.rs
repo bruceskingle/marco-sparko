@@ -113,7 +113,8 @@ impl ConsumptionDataSet {
             .map(|(_, item)| &item.value)
             .collect();
 
-        let single_day = period == StackedBarPeriod::Raw
+        // Plain consumption has no rates, so Rate is the same as Raw.
+        let single_day = matches!(period, StackedBarPeriod::Raw | StackedBarPeriod::Rate)
             && values.first().map(|value| value.start_at_.to_date())
                 == values.last().map(|value| value.start_at_.to_date());
 
@@ -123,7 +124,7 @@ impl ConsumptionDataSet {
         for value in values {
             let date = value.start_at_.to_date();
             let (bucket_start, bucket_end) = match period {
-                StackedBarPeriod::Raw => (value.start_at_, value.end_at_),
+                StackedBarPeriod::Raw | StackedBarPeriod::Rate => (value.start_at_, value.end_at_),
                 StackedBarPeriod::Day => {
                     let bucket_start = date.at_midnight(tz);
                     (bucket_start, date.next_day().at_midnight(tz))
@@ -180,11 +181,11 @@ impl ConsumptionDataSet {
             };
 
             let tick_label = match period {
-                StackedBarPeriod::Raw if single_day => {
+                StackedBarPeriod::Raw | StackedBarPeriod::Rate if single_day => {
                     (value.start_at_.minute() == 0 && value.start_at_.hour() % 3 == 0)
                         .then(|| value.start_at_.format(&time_format).unwrap())
                 }
-                StackedBarPeriod::Raw => {
+                StackedBarPeriod::Raw | StackedBarPeriod::Rate => {
                     (last_date != Some(date)).then(|| date.format(&day_format).unwrap())
                 }
                 StackedBarPeriod::Day => {
@@ -203,7 +204,7 @@ impl ConsumptionDataSet {
             };
 
             let period_label = match period {
-                StackedBarPeriod::Raw => format!(
+                StackedBarPeriod::Raw | StackedBarPeriod::Rate => format!(
                     "{} {}–{}",
                     value.start_at_.format(&date_format).unwrap(),
                     value.start_at_.format(&time_format).unwrap(),
@@ -225,7 +226,7 @@ impl ConsumptionDataSet {
                 period_label,
             };
 
-            if period == StackedBarPeriod::Raw {
+            if matches!(period, StackedBarPeriod::Raw | StackedBarPeriod::Rate) {
                 points.push(point);
             } else if let Some(existing) = points.last_mut() {
                 if existing.start == bucket_start.unix_timestamp() {

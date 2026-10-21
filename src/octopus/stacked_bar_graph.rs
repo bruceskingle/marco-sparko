@@ -24,6 +24,8 @@ pub enum StackedBarMode {
 #[derive(Clone, Copy, PartialEq)]
 pub enum StackedBarPeriod {
     Raw,
+    /// Consecutive readings with the same unit rates, so the bars have different widths.
+    Rate,
     Day,
     Week,
     Month,
@@ -42,6 +44,7 @@ impl std::fmt::Display for StackedBarPeriod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Raw => write!(f, "Raw"),
+            Self::Rate => write!(f, "Rate"),
             Self::Day => write!(f, "Day"),
             Self::Week => write!(f, "Week"),
             Self::Month => write!(f, "Month"),
@@ -133,7 +136,13 @@ const COST_SEGMENTS: [(&str, &str); 5] = [
 ];
 
 #[component]
-pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> Element {
+pub fn StackedBarGraph(
+    points: Vec<StackedBarPoint>,
+    mode: StackedBarMode,
+    /// Draw a histogram, where bar heights are per hour so that the area of each bar is its total. Needed when the bars
+    /// have different widths.
+    #[props(default)] per_hour: bool,
+) -> Element {
     let mut hovered = use_signal::<Option<usize>>(|| None);
     let mut dimensions = use_signal(|| None::<(f64, f64)>);
 
@@ -152,11 +161,20 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
         StackedBarMode::Cost => &COST_SEGMENTS[..],
     };
 
+    // The factor from a bar's values to its height.
+    let scale = move |point: &StackedBarPoint| {
+        if per_hour { 3600.0 / (point.end - point.start).max(1) as f64 } else { 1.0 }
+    };
     let totals: Vec<f64> = points
         .iter()
         .map(|point| point.segments(mode).iter().map(|value| value.max(0.0)).sum())
         .collect();
-    let max_value = totals.iter().copied().fold(0.0, f64::max);
+    let max_value = points
+        .iter()
+        .zip(&totals)
+        .map(|(point, total)| total * scale(point))
+        .fold(0.0, f64::max);
+    let per_hour_suffix = if per_hour { "/h" } else { "" };
     let currency = points
         .iter()
         .map(|point| point.currency)
@@ -183,6 +201,7 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
             let gap = if slot_width > 3.0 * BAR_GAP { BAR_GAP } else { 0.0 };
             let bar_x = x(point.start) + gap / 2.0;
             let bar_width = (slot_width - gap).max(0.0);
+            let bar_scale = scale(point);
             let mut baseline = 0.0;
 
             point
@@ -190,7 +209,7 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
                 .into_iter()
                 .zip(segment_names.iter())
                 .map(move |(value, (_, class))| {
-                    let value = value.max(0.0);
+                    let value = value.max(0.0) * bar_scale;
                     let top = y(baseline + value);
                     let segment = (
                         i,
@@ -211,8 +230,8 @@ pub fn StackedBarGraph(points: Vec<StackedBarPoint>, mode: StackedBarMode) -> El
         .take_while(|value| *value <= y_max + step / 2.0)
         .map(|value| {
             let label = match mode {
-                StackedBarMode::Units => format!("{value:.decimals$} {unit}"),
-                StackedBarMode::Cost => format_money(value, currency),
+                StackedBarMode::Units => format!("{value:.decimals$} {unit}{per_hour_suffix}"),
+                StackedBarMode::Cost => format!("{}{per_hour_suffix}", format_money(value, currency)),
             };
             (y(value), label)
         })

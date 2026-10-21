@@ -210,6 +210,7 @@ fn HomeAndEvConsumption(props: HomeAndEvConsumptionProps) -> Element {
                 span { class: "view-toggle",
                     for option in [
                         StackedBarPeriod::Raw,
+                        StackedBarPeriod::Rate,
                         StackedBarPeriod::Day,
                         StackedBarPeriod::Week,
                         StackedBarPeriod::Month,
