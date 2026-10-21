@@ -363,8 +363,6 @@ query homeAndEvConsumptionBreakdown(
         pageInfo {
           hasNextPage
           endCursor
-          hasPreviousPage
-          startCursor
         }
         __typename
       }

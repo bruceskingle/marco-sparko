@@ -1569,7 +1569,7 @@ impl HomeAndEvConsumptionSource {
         )
     }
 
-    fn get_measurements(last_response: &meter::home_and_ev_consumption_breakdown::Response) -> anyhow::Result<&PageOf<meter::home_and_ev_consumption_breakdown::MeasurementInterface>> {
+    fn get_measurements(last_response: &meter::home_and_ev_consumption_breakdown::Response) -> anyhow::Result<&ForwardPageOf<meter::home_and_ev_consumption_breakdown::MeasurementInterface>> {
             Ok(&last_response
                 .account_.as_ref()
                 .ok_or(anyhow!("No account in response"))?

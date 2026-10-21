@@ -10,6 +10,9 @@ pub mod profile;
 
 pub mod private_file;
 
+#[cfg(feature = "desktop")]
+pub mod window_state;
+
 mod data_set;
 mod cache;
 use cache::CacheConfig;

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use crate::{Args, InitRequested, MarcoSparkoContext, ModuleRegistrations, views::*};
-use dioxus::desktop::{use_window, LogicalSize};
 
 // use crate::views::{Blog, Home, Navbar};
 
@@ -58,10 +57,6 @@ pub fn App() -> Element {
     use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
 
     use_context_provider::<ModuleRegistrations>(move || ModuleRegistrations::new(verbose));
-
-    let window = use_window();
-    window.set_inner_size(LogicalSize::new(1400, 768));
-    window.set_title("Marco Sparko");
 
     // let window_icon =dioxus_desktop::tao::window::Icon::from_file(&std::path::Path::new("icons/icon.ico")).unwrap();
     // window.set_window_icon(window_icon);
