@@ -13,9 +13,9 @@ use crate::octopus::graphql::bill::get_statement_transactions::{AbstractTransact
 use crate::util::as_decimal;
 use crate::{CacheConfig, NONE, NULL};
 
-use super::graphql::{bill, meter};
+use super::graphql::bill;
 use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder};
-use super::meter::Tariff;
+use super::line_items::TariffLineItems;
 use bill::get_statement_transactions::{Charge, TransactionType};
 mod manager;
 pub use manager::BillManager;
@@ -396,7 +396,7 @@ pub enum BillTransactionBreakDown {
         transaction: AbstractTransactionType,
         consumption: Consumption,
         is_export: bool,
-        line_item_map: IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>,
+        line_item_map: IndexMap<String, TariffLineItems>,
     },
     Abstract{
         transaction: TransactionType,
@@ -404,7 +404,7 @@ pub enum BillTransactionBreakDown {
 }
 
 impl BillTransactionBreakDown {
-    pub fn from_charge(charge: Charge, line_item_map: IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>) -> Self {
+    pub fn from_charge(charge: Charge, line_item_map: IndexMap<String, TariffLineItems>) -> Self {
         if !line_item_map.is_empty() && let Some(consumption) = charge.consumption_  {
             return BillTransactionBreakDown::Charge {
                 transaction: charge.transaction_type_,
@@ -616,7 +616,7 @@ impl BillTransactionBreakDown {
         match self{
             BillTransactionBreakDown::Charge{transaction, consumption, is_export: _, line_item_map  }=> {
                 
-                for (_agreement_id, (tariff, line_items)) in line_item_map {
+                for (_agreement_id, TariffLineItems { tariff, line_items }) in line_item_map {
 
                     let mut amount_map = BTreeMap::new();
                     let mut total_amount = Decimal::new(0,0);

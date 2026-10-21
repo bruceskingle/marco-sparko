@@ -8,6 +8,7 @@ mod meter_point;
 mod bill;
 mod meter;
 mod line_items;
+mod meter_agreement;
 mod consumption_graph;
 mod stacked_bar_graph;
 mod context;

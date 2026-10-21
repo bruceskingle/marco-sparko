@@ -1,7 +1,6 @@
 use std::{
     fs::OpenOptions,
     io::{BufRead, BufReader, Seek, SeekFrom, Write},
-    sync::Arc,
     time::{Duration, SystemTime},
 };
 
@@ -26,7 +25,7 @@ where
             hash_key: &str,
             refresh_after: Duration,
             query_iterator: QI,
-            config: &Arc<CacheConfig>,
+            config: CacheConfig,
             request_manager: &impl GraphQLCaller
         ) -> anyhow::Result<Self>
         where

@@ -7,15 +7,23 @@ use sparko_graphql::types::{Date, DateTime};
 use crate::CacheConfig;
 
 use super::graphql::meter;
-use super::meter::{AgreementLineItems, MeterAgreementDataSet, MeterType, Tariff};
+use super::meter::{AgreementLineItems, MeterType, Tariff};
+use super::meter_agreement::MeterAgreementDataSet;
 use super::property::PropertyDataSet;
 
 pub type LineItem = meter::electricity_agreement_line_items::LineItemType;
 
+/// The tariff of one agreement and its line items in a period.
+#[derive(Debug)]
+pub struct TariffLineItems {
+    pub tariff: Tariff,
+    pub line_items: Vec<LineItem>,
+}
+
 /// The line items for a period, for each agreement in scope during that period.
 pub struct LineItemDataSet {
     /// The tariff and line items for each agreement which has line items in the period, indexed by agreement id.
-    pub agreements: IndexMap<String, (Tariff, Vec<LineItem>)>,
+    pub agreements: IndexMap<String, TariffLineItems>,
 }
 
 impl LineItemDataSet {
@@ -40,11 +48,11 @@ impl LineItemDataSet {
 
         let mut agreements = IndexMap::new();
 
-        for (agreement_id, tariff) in in_scope_agreements {
-            let in_scope_items = Self::agreement_line_items(cache_config, request_manager, account_number, meter_type, &agreement_id, &start_date_time, &end_date_time, billing_timezone).await?;
+        for agreement in in_scope_agreements {
+            let in_scope_items = Self::agreement_line_items(cache_config, request_manager, account_number, meter_type, &agreement.agreement_id, &start_date_time, &end_date_time, billing_timezone).await?;
 
             if !in_scope_items.is_empty() {
-                agreements.insert(agreement_id, (tariff, in_scope_items));
+                agreements.insert(agreement.agreement_id, TariffLineItems { tariff: agreement.tariff, line_items: in_scope_items });
             }
         }
 
