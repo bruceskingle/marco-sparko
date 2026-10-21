@@ -3,41 +3,31 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use dioxus::prelude::*;
 
-use crate::octopus::meter::MeterManager;
-use crate::octopus::property::Property;
+use crate::octopus::context::OctopusContext;
+use crate::octopus::property::{Property, PropertyDataSet};
 use crate::octopus::graphql;
 
-#[derive(Props, Clone)]
+#[derive(Props, Clone, PartialEq)]
 pub struct PropertiesPageProps {
-    account_id: String,
-    meter_manager: Arc<MeterManager>,
     path: Vec<String>,
-}
-
-impl PartialEq for PropertiesPageProps {
-    fn eq(&self, other: &Self) -> bool {
-        self.account_id == other.account_id
-            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
-            && self.path == other.path
-    }
 }
 
 #[component]
 pub fn PropertiesPage(props: PropertiesPageProps) -> Element {
+    let context = use_context::<Arc<OctopusContext>>();
+
     // Fetch the list of all properties, this runs once when the component is mounted.
     let properties_resource = use_resource({
-        let meter_manager = props.meter_manager.clone();
-        let account_id = props.account_id.clone();
+        let context = context.clone();
         move || {
-            let meter_manager = meter_manager.clone();
-            let account_id = account_id.clone();
-            async move { meter_manager.get_properties(&account_id).await }
+            let context = context.clone();
+            async move { PropertyDataSet::new(&context.account_id, &context.cache_config, &*context.request_manager).await }
         }
     });
 
     match &*properties_resource.read() {
         None => rsx! {
-            div { "Loading Properties for account {props.account_id}..." }
+            div { "Loading Properties for account {context.account_id}..." }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:?}"))?,
         Some(Ok(property_list)) => {
@@ -48,9 +38,7 @@ pub fn PropertiesPage(props: PropertiesPageProps) -> Element {
                     rsx! {
                         PropertyDetail {
                             key: "{property_id}",
-                            account_id: props.account_id.clone(),
                             property: property.clone(),
-                            meter_manager: props.meter_manager.clone(),
                         }
                     }
                 }
@@ -77,15 +65,11 @@ pub fn PropertiesPage(props: PropertiesPageProps) -> Element {
 #[derive(Props, Clone)]
 struct PropertyDetailProps {
     property: Arc<graphql::meter::account_properties_meters::PropertyType>,
-    account_id: String,
-    meter_manager: Arc<MeterManager>,
 }
 
 impl PartialEq for PropertyDetailProps {
     fn eq(&self, other: &Self) -> bool {
-        self.account_id == other.account_id
-            && Arc::ptr_eq(&self.property, &other.property)
-            && Arc::ptr_eq(&self.meter_manager, &other.meter_manager)
+        Arc::ptr_eq(&self.property, &other.property)
     }
 }
 

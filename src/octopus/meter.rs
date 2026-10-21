@@ -61,7 +61,7 @@ impl MeterManager {
     }
 
     // pub async fn demand_handler(&self, _args: std::str::SplitWhitespace<'_>, account_number: &String) ->  anyhow::Result<()> {
-    //     let properties = self.get_properties(account_number).await?;
+    //     let properties = PropertyDataSet::new(account_number, &self.cache_config, &*self.request_manager).await?;
     //     for property in &properties.data_set.data.account_.properties_ {
     //         for network in &property.smart_device_networks_ {
     //             for device in &network.smart_devices_ {
@@ -106,16 +106,12 @@ impl MeterManager {
     //     Ok(())
     // }
 
-    pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyDataSet>{
-        PropertyDataSet::new(account_number, &self.cache_config, &*self.request_manager).await
-    }
-
     pub async fn get_meter_points(&self, account_number: &String) -> anyhow::Result<MeterPointDataSet>{
         MeterPointDataSet::new(account_number, &self.cache_config, &*self.request_manager).await
     }
 
     pub async fn get_line_items(&self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
-        let properties = self.get_properties(account_number).await?;
+        let properties = PropertyDataSet::new(account_number, &self.cache_config, &*self.request_manager).await?;
         let meter_agreements = 
             MeterAgreementDataSet::new(&self.cache_config, &self.request_manager, &account_number, &properties.meter_node_ids).await?;
 

@@ -9,6 +9,7 @@ mod bill;
 mod meter;
 mod consumption_graph;
 mod stacked_bar_graph;
+mod context;
 mod pages;
 
 use std::sync::Arc;
@@ -20,6 +21,7 @@ use async_trait::async_trait;
 use dioxus::prelude::*;
 
 use bill::BillManager;
+use context::{OctopusContext, OctopusRoot};
 use meter::MeterManager;
 use pages::{BillsPage, MeterPage, HomeAndEvPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
@@ -77,11 +79,9 @@ impl Profile {
 
 pub struct OctopusModule{
     octopus_args: OctopusArgs,
-    account_id: String,
-    bill_manager: Arc<BillManager>,
-    meter_manager: Arc<MeterManager>,
     account_manager: ViewerDataSet,
-    billing_timezone: &'static time_tz::Tz,
+    /// Shared with the pages, see OctopusRoot.
+    context: Arc<OctopusContext>,
 }
 
 const MODULE_ID: &str = "octopus";
@@ -104,13 +104,19 @@ impl OctopusModule {
         let meter_manager = Arc::new(MeterManager::new(&cache_config, &request_manager));
         let bill_manager = Arc::new(BillManager::new(&cache_config, &request_manager, &meter_manager));
 
-        Ok(OctopusModule {
-            octopus_args,
+        let context = Arc::new(OctopusContext {
             account_id: account_manager.get_default_account_id().to_string(),
-            account_manager,
+            billing_timezone,
+            cache_config,
+            request_manager,
             bill_manager,
             meter_manager,
-            billing_timezone,
+        });
+
+        Ok(OctopusModule {
+            octopus_args,
+            account_manager,
+            context,
         })
     }
 
@@ -154,7 +160,7 @@ impl OctopusModule {
 impl Module for OctopusModule {
     fn cli_debug(&self) -> Result<(), anyhow::Error> {
         println!("Args: {:?}", self.octopus_args);
-        println!("Octopus Module: account_id={}", self.account_id);
+        println!("Octopus Module: account_id={}", self.context.account_id);
         Ok(())
     }
 
@@ -192,7 +198,7 @@ impl Module for OctopusModule {
     }
 
     fn get_component(&self, page_id: &str, path: Vec<String>) -> Element {
-        match page_id {
+        let page = match page_id {
             "user" => {
                 // let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
                 let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
@@ -337,38 +343,29 @@ impl Module for OctopusModule {
             "bills" => {
                 rsx! {
                     BillsPage {
-                        account_id: self.account_id.clone(),
-                        bill_manager: self.bill_manager.clone(),
-                        billing_timezone: self.billing_timezone,
+                        account_id: self.context.account_id.clone(),
+                        bill_manager: self.context.bill_manager.clone(),
+                        billing_timezone: self.context.billing_timezone,
                         path,
                     }
                 }
             },
             "properties" => {
                 rsx! {
-                    PropertiesPage {
-                        account_id: self.account_id.clone(),
-                        meter_manager: self.meter_manager.clone(),
-                        path,
-                    }
+                    PropertiesPage { path }
                 }
             },
             "meters" => {
                 rsx! {
-                    MeterPage {
-                        account_id: self.account_id.clone(),
-                        meter_manager: self.meter_manager.clone(),
-                        billing_timezone: self.billing_timezone,
-                        path,
-                    }
+                    MeterPage { path }
                 }
             },
             "home_and_ev" => {
                 rsx! {
                     HomeAndEvPage {
-                        account_id: self.account_id.clone(),
-                        meter_manager: self.meter_manager.clone(),
-                        billing_timezone: self.billing_timezone,
+                        account_id: self.context.account_id.clone(),
+                        meter_manager: self.context.meter_manager.clone(),
+                        billing_timezone: self.context.billing_timezone,
                         path,
                     }
                 }
@@ -378,6 +375,12 @@ impl Module for OctopusModule {
                     div { "Unknown page_id, {page_id}" }
                 }
             },
+        };
+
+        // The key changes if the module is rebuilt, so that OctopusRoot is re-created and provides the new context.
+        let context_key = format!("{:p}", Arc::as_ptr(&self.context));
+        rsx! {
+            OctopusRoot { key: "{context_key}", context: self.context.clone(), {page} }
         }
     }
 }
