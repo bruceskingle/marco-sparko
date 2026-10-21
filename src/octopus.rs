@@ -2,7 +2,7 @@
 
 mod token;
 mod decimal;
-mod account;
+mod viewer_data_set;
 mod property;
 mod meter_point;
 mod bill;
@@ -17,7 +17,7 @@ mod pages;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use account::ViewerDataSet;
+use viewer_data_set::ViewerDataSet;
 use async_trait::async_trait;
 
 use dioxus::prelude::*;
