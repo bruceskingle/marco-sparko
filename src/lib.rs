@@ -4,11 +4,11 @@ pub use ordered_map::OrderedMap;
 
 mod octopus;
 mod util;
-pub mod views;
+mod views;
 pub mod components;
-pub mod profile;
+mod profile;
 
-pub mod private_file;
+mod private_file;
 
 #[cfg(feature = "desktop")]
 pub mod window_state;
@@ -28,9 +28,8 @@ use clap::{Parser};
 
 use crate::profile::ActiveProfile;
 
-pub const CHECK_FOR_UPDATES: bool = true;
-pub const NONE: &'static str = "None";
-pub const NULL: &'static str = "Null";
+const NONE: &'static str = "None";
+const NULL: &'static str = "Null";
 const CACHE_DIRECTORY_NAME: &'static str = ".marco-sparko-cache";
 
 /*

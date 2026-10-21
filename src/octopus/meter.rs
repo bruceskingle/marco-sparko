@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use dioxus::prelude::*;
 use indexmap::IndexMap;
 use rust_decimal::prelude::ToPrimitive;
-use sparko_graphql::types::{Currency, Date, DateTime, ForwardPageOf, PageOf};
+use sparko_graphql::types::{Currency, Date, DateTime, ForwardPageOf};
 use sparko_graphql::AuthenticatedRequestManager;
 use sparko_graphql::GraphQLQueryBuilder;
 use time_tz::Tz;
@@ -19,7 +19,7 @@ use anyhow::anyhow;
 
 use crate::data_set::{CancelToken, MonthlyDataSet, MonthlyFixedSlotDataSet, MultiQueryDataSet, SlotSource};
 use crate::octopus::decimal::Decimal;
-use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput, UtilityFiltersInputBuilder};
+use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput};
 use crate::octopus::meter_point::MeterPointDataSet;
 use crate::octopus::property::PropertyDataSet;
 use crate::{CacheConfig, NULL};
@@ -107,11 +107,11 @@ impl MeterManager {
     // }
 
     pub async fn get_properties(&self, account_number: &String) -> anyhow::Result<PropertyDataSet>{
-        PropertyDataSet::new(account_number, &self.cache_config, &self.request_manager).await
+        PropertyDataSet::new(account_number, &self.cache_config, &*self.request_manager).await
     }
 
     pub async fn get_meter_points(&self, account_number: &String) -> anyhow::Result<MeterPointDataSet>{
-        MeterPointDataSet::new(account_number, &self.cache_config, &self.request_manager).await
+        MeterPointDataSet::new(account_number, &self.cache_config, &*self.request_manager).await
     }
 
     pub async fn get_line_items(&self, account_number: &String, meter_type: &MeterType, is_export: bool, start_date: &Date, end_date: &Date, billing_timezone: &time_tz::Tz) -> anyhow::Result<IndexMap<String, (Tariff, Vec<meter::electricity_agreement_line_items::LineItemType>)>>{
@@ -200,7 +200,7 @@ impl MeterManager {
             source,
             tz,
             &self.cache_config,
-            &self.request_manager,
+            &*self.request_manager,
             start,
             end,
             cancel,
@@ -433,7 +433,7 @@ impl MeterManager {
             source,
             tz,
             &self.cache_config,
-            &self.request_manager,
+            &*self.request_manager,
             start,
             end,
             cancel,

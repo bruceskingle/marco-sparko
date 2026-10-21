@@ -94,7 +94,7 @@ impl Decimal {
 // }
 
 
-macro_rules! forward_ref_binop {
+macro_rules! forward_ref_binary_op {
     ($imp:ident, $method:ident) => {
         impl $imp<&Decimal> for Decimal {
             type Output = Decimal;
@@ -117,7 +117,7 @@ macro_rules! forward_ref_binop {
     };
 }
 
-macro_rules! forward_ref_assignop {
+macro_rules! forward_ref_assign_op {
     ($imp:ident, $method:ident) => {
         impl $imp<&Decimal> for Decimal {
             fn $method(&mut self, rhs: &Decimal) {
@@ -133,7 +133,7 @@ impl Div for Decimal {
         Decimal(self.0.div(rhs.0))
     }
 }
-forward_ref_binop!(Div, div);
+forward_ref_binary_op!(Div, div);
 
 impl Mul for Decimal {
     type Output = Decimal;
@@ -141,7 +141,7 @@ impl Mul for Decimal {
         Decimal(self.0.mul(rhs.0))
     }
 }
-forward_ref_binop!(Mul, mul);
+forward_ref_binary_op!(Mul, mul);
 
 impl Add for Decimal {
     type Output = Decimal;
@@ -149,7 +149,7 @@ impl Add for Decimal {
         Decimal(self.0.add(rhs.0))
     }
 }
-forward_ref_binop!(Add, add);
+forward_ref_binary_op!(Add, add);
 
 impl Sub for Decimal {
     type Output = Decimal;
@@ -157,35 +157,35 @@ impl Sub for Decimal {
         Decimal(self.0.sub(rhs.0))
     }
 }
-forward_ref_binop!(Sub, sub);
+forward_ref_binary_op!(Sub, sub);
 
 impl AddAssign for Decimal {
     fn add_assign(&mut self, rhs: Self) {
         self.0.add_assign(rhs.0);
     }
 }
-forward_ref_assignop!(AddAssign, add_assign);
+forward_ref_assign_op!(AddAssign, add_assign);
 
 impl SubAssign for Decimal {
     fn sub_assign(&mut self, rhs: Self) {
         self.0.sub_assign(rhs.0);
     }
 }
-forward_ref_assignop!(SubAssign, sub_assign);
+forward_ref_assign_op!(SubAssign, sub_assign);
 
 impl MulAssign for Decimal {
     fn mul_assign(&mut self, rhs: Self) {
         self.0.mul_assign(rhs.0);
     }
 }
-forward_ref_assignop!(MulAssign, mul_assign);
+forward_ref_assign_op!(MulAssign, mul_assign);
 
 impl DivAssign for Decimal {
     fn div_assign(&mut self, rhs: Self) {
         self.0.div_assign(rhs.0);
     }
 }
-forward_ref_assignop!(DivAssign, div_assign);
+forward_ref_assign_op!(DivAssign, div_assign);
 
 impl Display for Decimal {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

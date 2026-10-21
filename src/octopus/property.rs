@@ -7,10 +7,9 @@ use std::time::Duration;
 
 use crate::CacheConfig;
 use crate::data_set::SingleRecordDataSet;
-use sparko_graphql::GraphQLQueryBuilder;
+use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder};
 
 use super::graphql::meter;
-use super::RequestManager;
 
 
 /*
@@ -330,7 +329,7 @@ pub struct PropertyDataSet {
 }
 
 impl PropertyDataSet {
-    pub async fn new(account_number: &String, config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>)  -> anyhow::Result<Self> {
+    pub async fn new(account_number: &String, config: &Arc<CacheConfig>, request_manager: &impl GraphQLCaller)  -> anyhow::Result<Self> {
         let hash_key = format!("{}#Properties", account_number);
         let query_provider = || {
             meter::account_properties_meters::Query::builder()

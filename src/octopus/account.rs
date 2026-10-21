@@ -5,7 +5,7 @@ use crate::CacheConfig;
 use crate::data_set::{SingleRecordDataSet};
 
 use super::graphql::account;
-use super::RequestManager;
+use sparko_graphql::GraphQLCaller;
 
 pub struct AccountManager {
     pub data_set: SingleRecordDataSet<account::viewer::Response>,
@@ -13,7 +13,7 @@ pub struct AccountManager {
 }
 
 impl AccountManager {
-    pub async fn new(config: &Arc<CacheConfig>, request_manager: &Arc<RequestManager>)  -> anyhow::Result<Self> {
+    pub async fn new(config: &Arc<CacheConfig>, request_manager: &impl GraphQLCaller)  -> anyhow::Result<Self> {
         let hash_key = format!("#Viewer");
         let data_set = SingleRecordDataSet::new(
             &hash_key,

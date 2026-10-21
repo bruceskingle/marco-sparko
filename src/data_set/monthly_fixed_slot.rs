@@ -6,18 +6,18 @@ use futures::future::{Either, select};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{
-    AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse,
+    GraphQLCaller, GraphQLQuery, GraphQLResponse,
     types::{Date, DateTime},
 };
 use time_tz::Tz;
 
-use crate::{CacheConfig, octopus::token::OctopusTokenManager};
+use crate::CacheConfig;
 
 use super::{CancelToken, DataSetAttributes};
 
 /// Make a request, returning None without waiting for the response if the fetch is cancelled first.
 async fn call_unless_cancelled<Q: GraphQLQuery<R>, R: GraphQLResponse>(
-    request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
+    request_manager: &impl GraphQLCaller,
     query: &Q,
     cancel: &CancelToken,
 ) -> anyhow::Result<Option<R>> {
@@ -131,7 +131,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                     data.insert(start, item);
 
                 },
-                Err(e) => {
+                Err(_) => {
                     file.seek(SeekFrom::Start(0))?;
                     file.set_len(0)?;
                     data.clear();
@@ -152,7 +152,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         mut source: S,
         tz: &'static Tz,
         config: &CacheConfig,
-        request_manager: &AuthenticatedRequestManager<OctopusTokenManager>,
+        request_manager: &impl GraphQLCaller,
         start: &DateTime,
         end: &DateTime,
         cancel: &CancelToken,

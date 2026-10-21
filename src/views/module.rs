@@ -5,8 +5,6 @@ use dioxus::prelude::*;
 
 use crate::{MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
 
-// const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
-
 // Simple HTML escaper
 fn escape_html(input: &str) -> String {
     input
@@ -84,21 +82,7 @@ pub fn Module(module_id: String) -> Element {
         call_construct_module_signal.set(false);
         construct_module_action.call(module_registrations.clone(), context.clone(), module_id.clone());
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
     
-
     if let Some(result) = construct_module_action.value() {
         let builder_signal = result?;
         let builder = (*builder_signal.read()).clone();
@@ -149,8 +133,6 @@ pub fn Module(module_id: String) -> Element {
                     };
 
                     rsx! {
-                        // document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
-                        // div { class: "layout-root",
                         // Main container
                         div { class: "container",
                             // Sidebar
@@ -177,7 +159,6 @@ pub fn Module(module_id: String) -> Element {
                                             "{page_info.label}"
                                         }
                                     }
-                                                                // }
                                 }
                             }
 
@@ -193,8 +174,6 @@ pub fn Module(module_id: String) -> Element {
                                 {body}
                             }
                         }
-                        // div { class: "bottombar" }
-                        // }
                     }
                 }
                 else {

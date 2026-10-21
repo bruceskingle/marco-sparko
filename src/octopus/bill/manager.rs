@@ -56,7 +56,7 @@ impl BillManager {
                 .entry(account_number.clone())
                 .or_insert(
                     Arc::new(
-                        BillDataSet::new(&account_number, &self.cache_config, &self.request_manager).await?
+                        BillDataSet::new(&account_number, &self.cache_config, &*self.request_manager).await?
                     )
                 )
             ).clone())
@@ -66,7 +66,7 @@ impl BillManager {
 
 
         let mut result = Vec::new();
-        let transactions = StatementTransactionDataSet::new(account_number.clone(), statement_id, &self.cache_config, &self.request_manager).await?;
+        let transactions = StatementTransactionDataSet::new(account_number.clone(), statement_id, &self.cache_config, &*self.request_manager).await?;
 
 
         for (_key, transaction) in transactions.data_set.data {

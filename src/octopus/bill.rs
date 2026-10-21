@@ -14,10 +14,9 @@ use crate::util::as_decimal;
 use crate::{CacheConfig, NONE, NULL};
 
 use super::graphql::{bill, meter};
-use sparko_graphql::GraphQLQueryBuilder;
+use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder};
 use super::meter::Tariff;
 use bill::get_statement_transactions::{Charge, TransactionType};
-use super::RequestManager;
 mod manager;
 pub use manager::BillManager;
 
@@ -864,7 +863,7 @@ impl BillDataSet {
     pub async fn new(
         account_number: &String,
         config: &Arc<CacheConfig>,
-        request_manager: &Arc<RequestManager>,
+        request_manager: &impl GraphQLCaller,
     ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#Bills", account_number);
 
@@ -941,7 +940,7 @@ impl StatementTransactionDataSet {
         account_number: String,
         statement_id: String,
         config: &Arc<CacheConfig>,
-        request_manager: &Arc<RequestManager>,
+        request_manager: &impl GraphQLCaller,
     ) -> anyhow::Result<Self> {
         let hash_key = format!("{}#{}#StatementTransactions", account_number, statement_id);
 

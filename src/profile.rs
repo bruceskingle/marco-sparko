@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::{collections::HashMap};
 use std::fs;
-use std::sync::Mutex;
 use indexmap::IndexMap;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -260,90 +259,6 @@ impl Profile {
             name: DEFAULT_PROFILE.to_string(),
             version: CURRENT_VERSION.to_string(),
             modules: ModuleProfiles::new(),
-        }
-    }
-}
-
-struct ProfileMap {
-    map: IndexMap<String, Profile>,
-    updated: bool,
-}
-
-pub struct ProfileManager {
-    profile_map:    Mutex<ProfileMap>,
-    pub active_profile: Profile,
-    pub profile_names: Vec<String>,
-}
-
-impl PartialEq for ProfileManager {
-    fn eq(&self, _: &Self) -> bool {
-        false
-    }
-}
-
-impl ProfileManager {
-    pub fn new(selector: &Option<String>) -> anyhow::Result<ProfileManager>  {
-        let mut map: IndexMap<String, Profile> = IndexMap::new();
-        let mut profile_names: Vec<String> = Vec::new();
-
-        if let Ok(file)= fs::File::open(&MarcoSparkoContext::get_file_path()?) {
-            let profile_file: ProfileFile = serde_json::from_reader(file)?;
-
-            for profile in profile_file {
-                if map.keys().any(|name| profile_names_equal(name, &profile.name)) {
-                    return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
-                }
-                profile_names.push(profile.name.clone());
-                map.insert(profile.name.clone(), profile);
-            }
-        }
-
-        if map.is_empty() {
-            let profile = Profile::new();
-            map.insert(profile.name.clone(), profile);
-        }
-
-        let active_name = if let Some(name) = selector {
-            &name
-        }
-        else {
-            DEFAULT_PROFILE
-        };
-
-        let active_profile = if let Some(profile) = map.get(active_name) {
-            profile.clone()
-        }
-        else {
-            return Err(anyhow!("No such profile \"{}\"", active_name));
-        };      
-
-        Ok(ProfileManager {
-            profile_map: Mutex::new(ProfileMap {
-                map,
-                updated: true,
-            }),
-            active_profile,
-            profile_names,
-        })
-    }
-
-    pub fn save_updated_profile(&self) -> anyhow::Result<()> {
-        let profile_map = match self.profile_map.lock() {
-            Ok(p) => p,
-            Err(_) => return Err(anyhow!("Profile manager mutex is poisoned")),
-        };
-
-        if profile_map.updated  {
-            let mut profiles = Vec::new();
-            
-            profiles.extend(profile_map.map.values().map(|p| p.clone()));
-           
-            serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
-            
-            return Ok(())
-        }
-        else {
-            Ok(())
         }
     }
 }

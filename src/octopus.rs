@@ -1,7 +1,7 @@
 
 
-pub mod token;
-pub mod decimal;
+mod token;
+mod decimal;
 mod account;
 mod property;
 mod meter_point;
@@ -100,7 +100,7 @@ impl OctopusModule {
         request_manager: Arc<RequestManager>, _verbose: bool) -> anyhow::Result<OctopusModule> {   
 
         let billing_timezone = Self::get_billing_timezone(&profile);
-        let account_manager = AccountManager::new(&cache_config, &request_manager).await?;
+        let account_manager = AccountManager::new(&cache_config, &*request_manager).await?;
         let meter_manager = Arc::new(MeterManager::new(&cache_config, &request_manager));
         let bill_manager = Arc::new(BillManager::new(&cache_config, &request_manager, &meter_manager));
 

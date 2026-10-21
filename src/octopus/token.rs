@@ -208,7 +208,7 @@ impl TokenManager for OctopusTokenManager {
                     .build()?;
 
                 let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-                let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call(&mutation, None).await?;
+                let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call2(&mutation, None).await?;
         
                 let token = OctopusToken::from(response.obtain_kraken_token_);
 
@@ -238,7 +238,7 @@ impl TokenManager for OctopusTokenManager {
                     }
 
                     let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-                    let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call(&mutation, None).await?;
+                    let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call2(&mutation, None).await?;
             
                     let token = OctopusToken::from(response.obtain_kraken_token_);
             

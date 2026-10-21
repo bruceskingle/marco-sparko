@@ -6,9 +6,9 @@ use std::{
 };
 
 use serde::{Serialize, de::DeserializeOwned};
-use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
+use sparko_graphql::{GraphQLCaller, GraphQLQuery, GraphQLResponse};
 
-use crate::{CacheConfig, OrderedMap, octopus::token::OctopusTokenManager};
+use crate::{CacheConfig, OrderedMap};
 use super::DataSetAttributes;
 
 /// A DataSet which is a list of records where the records returned from the API are in ascending order and new records can be
@@ -32,7 +32,7 @@ where
             response_iterator: RI,
             indexer: IN,
             config: &Arc<CacheConfig>,
-            request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+            request_manager: &impl GraphQLCaller
         ) -> anyhow::Result<Self>
         where
             R: GraphQLResponse,
@@ -64,7 +64,7 @@ where
     //         response_iterator: RI,
     //         indexer: IN,
     //         config: &Arc<CacheManager>,
-    //         request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+    //         request_manager: &impl GraphQLCaller
     //     ) -> anyhow::Result<Self>
     //     where
     //         R: GraphQLResponse,

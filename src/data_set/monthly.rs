@@ -7,11 +7,11 @@ use std::{
 
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{
-    AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse,
+    GraphQLCaller, GraphQLQuery, GraphQLResponse,
     types::{Date, DateTime},
 };
 
-use crate::{CacheConfig, octopus::token::OctopusTokenManager};
+use crate::CacheConfig;
 use super::DataSetAttributes;
 
 /// A DataSet which is a monthly bucket containing a list of records where each record has a DateTime ordering and the records 
@@ -37,7 +37,7 @@ where
             response_iterator: RI,
             indexer: IN,
             config: &CacheConfig,
-            request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+            request_manager: &impl GraphQLCaller
         ) -> anyhow::Result<Self>
         where
             R: GraphQLResponse,
@@ -70,7 +70,7 @@ where
     //         response_iterator: RI,
     //         indexer: IN,
     //         config: &Arc<CacheManager>,
-    //         request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+    //         request_manager: &impl GraphQLCaller
     //     ) -> anyhow::Result<Self>
     //     where
     //         R: GraphQLResponse,

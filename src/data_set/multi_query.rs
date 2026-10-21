@@ -6,9 +6,9 @@ use std::{
 };
 
 use anyhow::anyhow;
-use sparko_graphql::{AuthenticatedRequestManager, GraphQLQuery, GraphQLResponse};
+use sparko_graphql::{GraphQLCaller, GraphQLQuery, GraphQLResponse};
 
-use crate::{CacheConfig, octopus::token::OctopusTokenManager};
+use crate::CacheConfig;
 use super::DataSetAttributes;
 
 /// A DataSet which is a list of records where each record is returned from the API in a single call
@@ -27,7 +27,7 @@ where
             refresh_after: Duration,
             query_iterator: QI,
             config: &Arc<CacheConfig>,
-            request_manager: &AuthenticatedRequestManager<OctopusTokenManager>
+            request_manager: &impl GraphQLCaller
         ) -> anyhow::Result<Self>
         where
             Q: GraphQLQuery<R>,
