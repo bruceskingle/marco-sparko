@@ -20,7 +20,8 @@ use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, Uti
 use super::graphql::meter;
 use super::category_filter::{CategoryFilter, CategoryValues, KNOWN_LABELS, STANDING_CHARGE_LABEL};
 use super::stacked_bar_graph::{StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries};
-use super::trend_graph::{TrendGraph, TrendLegendItem, TrendLine, YEAR_LEGEND_COLOR, year_dash, year_positions};
+use super::category_filter::SOLID;
+use super::trend_graph::{CATEGORY_LEGEND_COLOR, TrendGraph, TrendLegendItem, TrendLine, TrendSmoothing, cumulative_by_year, moving_average, range_years, year_positions};
 
 /// The readings in a period of a graph added together, e.g. a day.
 struct AggregatedPoint {
@@ -75,6 +76,7 @@ impl MeasurementsDataSet {
     pub async fn new(
         account_number: &String,
         mpan: &String,
+        export: bool,
         start: &DateTime,
         end: &DateTime,
         tz: &'static Tz,
@@ -90,6 +92,7 @@ impl MeasurementsDataSet {
             mpan: mpan.clone(),
             hash_key: format!("{}#{}#MeasurementsConsumption", account_number, mpan),
             tz,
+            export,
         };
         
         let data = MonthlyFixedSlotDataSet::fetch(
@@ -233,7 +236,10 @@ impl MeasurementsDataSet {
     }
 
     /// A line graph over one year, with a line for each category (or the total) in each year from start to end.
-    pub fn display_trend(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod, filter: &CategoryFilter) -> Element {
+    /// smoothing other than None is worked out from daily totals, so period is then not used.
+    pub fn display_trend(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod,
+        smoothing: TrendSmoothing, filter: &CategoryFilter) -> Element {
+        let period = if smoothing == TrendSmoothing::None { period } else { StackedBarPeriod::Day };
         let (labels, aggregated) = self.graph_points(start, end, tz, period);
         let categories = Self::filtered_categories(&labels, &aggregated, mode, filter);
         let (unit, currency) = self.graph_units(start, end);
@@ -241,34 +247,59 @@ impl MeasurementsDataSet {
 
         // The year of each point and the position of its middle in that year.
         let positions = year_positions(aggregated.iter().map(|point| (point.start, point.end)), tz)?;
-        let years: BTreeSet<i32> = positions.iter().map(|(year, _)| *year).collect();
+        let point_years: Vec<i32> = positions.iter().map(|(year, _)| *year).collect();
+        let times: Vec<i64> = aggregated.iter().map(|point| point.start).collect();
 
-        // Each year has its own dash pattern, in order of year.
-        let mut lines = Vec::new();
-        for (year_index, year) in years.iter().enumerate() {
-            let dash = year_dash(year_index);
-            for category in &categories {
-                let points: Vec<(f64, f64)> = aggregated.iter()
-                    .zip(&positions)
-                    .zip(&category.values)
-                    .filter(|((_, (point_year, _)), _)| point_year == year)
-                    .map(|((point, (_, position)), value)| {
+        // The values to draw for a category, one for each point.
+        let line_values = |values: &[f64]| -> Vec<f64> {
+            match smoothing {
+                TrendSmoothing::None => aggregated.iter()
+                    .zip(values)
+                    .map(|(point, value)| {
                         // Rate periods have different lengths, so their values are per hour.
                         let scale = if per_hour { 3600.0 / (point.end - point.start).max(1) as f64 } else { 1.0 };
-                        (*position, value * scale)
+                        value * scale
                     })
+                    .collect(),
+                TrendSmoothing::MovingAverage(days) => moving_average(&times, values, days),
+                TrendSmoothing::Cumulative => cumulative_by_year(&point_years, values),
+            }
+        };
+        let suffix = match smoothing {
+            TrendSmoothing::None if per_hour => "/h",
+            TrendSmoothing::MovingAverage(_) => "/day",
+            _ => "",
+        };
+
+        // Each year has its own colour and each category its own line style, a single category is a solid line. The
+        // colours are for every year in the range, as in the category menu, so that they match it.
+        let years = range_years(start, end);
+        let year_colors = filter.year_colors(&years);
+        let single = categories.len() == 1;
+        let mut lines = Vec::new();
+        for (year, color) in years.iter().zip(&year_colors) {
+            for category in &categories {
+                let points: Vec<(f64, f64)> = positions.iter()
+                    .zip(line_values(&category.values))
+                    .filter(|((point_year, _), _)| point_year == year)
+                    .map(|((_, position), value)| (*position, value))
                     .collect();
-                lines.push(TrendLine { color: category.color.clone(), dash: String::from(dash), points });
+                if !points.is_empty() {
+                    let dash = if single { String::from(SOLID) } else { category.dash.clone() };
+                    let label = if single { year.to_string() } else { format!("{year} {}", category.label) };
+                    lines.push(TrendLine { label, color: color.clone(), dash, points });
+                }
             }
         }
 
+        // The legend shows the line style of each category, unless there is only one, and the colour of each year.
+        let shown_years: BTreeSet<i32> = positions.iter().map(|(year, _)| *year).collect();
         let legend = categories.iter()
-            .map(|category| TrendLegendItem { label: category.label.clone(), color: category.color.clone(), dash: String::from("none") })
-            .chain(years.iter().enumerate().map(|(year_index, year)| TrendLegendItem {
-                label: year.to_string(),
-                color: String::from(YEAR_LEGEND_COLOR),
-                dash: String::from(year_dash(year_index)),
-            }))
+            .filter(|_| !single)
+            .map(|category| TrendLegendItem { label: category.label.clone(), color: String::from(CATEGORY_LEGEND_COLOR), dash: category.dash.clone() })
+            .chain(years.iter().zip(&year_colors)
+                .filter(|(year, _)| shown_years.contains(year))
+                .map(|(year, color)| TrendLegendItem { label: year.to_string(), color: color.clone(), dash: String::from(SOLID) }))
             .collect();
 
         rsx! {
@@ -278,7 +309,7 @@ impl MeasurementsDataSet {
                 mode,
                 currency,
                 unit,
-                per_hour,
+                suffix: String::from(suffix),
             }
         }
     }
@@ -752,6 +783,8 @@ impl MeasurementsReading {
                     let mut consumption = BTreeMap::new();
                     let mut standing_charge = None;
                     let unit = interval_measurement_type.measurement_interface_.unit_;
+                    // The total units of the measurement, e.g. the kWh exported.
+                    let measured_value = interval_measurement_type.measurement_interface_.value_;
 
                     for stat in meta_data.statistics_ {
                         if let Some(type_) = &stat.type_ {
@@ -775,6 +808,17 @@ impl MeasurementsReading {
                                     let label = stat.label_.clone()
                                         .ok_or_else(|| anyhow!("No meta data label"))?;
                                     Self::insert_consumption(&mut consumption, label, MeasurementsReadingConsumption::from_tou(stat)?, &interval_measurement_type.start_at_)?;
+                                },
+                                // The value of what an export meter point exported, which may not have a label. The statistic only
+                                // has the value, the units are those of the measurement and the rate is worked out from them.
+                                super::graphql::ReadingStatisticTypeEnum::GenerationValue => {
+                                    let label = stat.label_.clone().unwrap_or_else(|| String::from("Generation"));
+                                    let mut generation = MeasurementsReadingConsumption::from(stat);
+                                    generation.units = measured_value;
+                                    if !measured_value.is_zero() {
+                                        generation.rate = (generation.cost / measured_value).round_dp(4);
+                                    }
+                                    Self::insert_consumption(&mut consumption, label, generation, &interval_measurement_type.start_at_)?;
                                 },
                                 _ => {
 
@@ -812,6 +856,8 @@ pub struct MeasurementsConsumptionSource {
     pub tz: &'static Tz,
     pub mpan:String,
     pub hash_key: String,
+    /// Whether the meter point is an export meter point, whose readings are generation rather than consumption.
+    pub export: bool,
 }
 
 impl MeasurementsConsumptionSource {
@@ -822,7 +868,11 @@ impl MeasurementsConsumptionSource {
         utility_filters.push(UtilityFiltersInput::builder()
             .with_electricity_filters(ElectricityFiltersInput::builder()
                 .with_reading_frequency_type(ReadingFrequencyType::RawInterval)
-                .with_reading_direction(super::graphql::ReadingDirectionType::Consumption)
+                .with_reading_direction(if self.export {
+                    super::graphql::ReadingDirectionType::Generation
+                } else {
+                    super::graphql::ReadingDirectionType::Consumption
+                })
                 .with_market_supply_point_id(self.mpan.clone())
                 .build()?)
             .build()?

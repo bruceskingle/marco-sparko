@@ -332,6 +332,7 @@ query homeAndEvConsumptionBreakdown(
         edges {
           cursor
           node {
+            value
             unit
             ... on IntervalMeasurementType {
               startAt

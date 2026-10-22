@@ -9,6 +9,7 @@ use crate::components::date_range_picker::{DateRangePicker, RangeSelection};
 use crate::components::export::{ExportButton, export_file_name};
 use crate::data_set::CancelToken;
 use crate::octopus::category_filter::{CategoryFilter, CategoryFilterMenu};
+use crate::octopus::trend_graph::{TrendSmoothing, range_years};
 use crate::octopus::context::OctopusContext;
 use crate::octopus::measurements::MeasurementsDataSet;
 use crate::octopus::meter_point::MeterPointDataSet;
@@ -41,11 +42,16 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
 
             // Are we looking at one meter?
             if let Some(mpan) = props.path.first() {
+                    // Export meter points have generation readings rather than consumption.
+                    let export = meter_point_list.meter_points.iter()
+                        .find(|meter_point| &meter_point.mpan_ == mpan)
+                        .is_some_and(|meter_point| matches!(meter_point.direction_, Some(crate::octopus::graphql::ElectricityDirection::Export)));
                     rsx! {
                         MeasurementsConsumption {
                             key: "{mpan}",
                             account_id: context.account_id.clone(),
                             mpan: mpan.clone(),
+                            export,
                             billing_timezone: context.billing_timezone,
                         }
                     }
@@ -74,13 +80,8 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
                         
                     let direction = meter_point.direction_.as_ref().map_or("UNKNOWN".to_string(), |v| v.to_string());
                     let id = meter_point.mpan_.clone();
-                    let mpan_link = if match &meter_point.direction_ {
-                        Some(dir) => match dir {
-                            crate::octopus::graphql::ElectricityDirection::Import => true,
-                            crate::octopus::graphql::ElectricityDirection::Export => false,
-                        },
-                        None => false,
-                    } {
+                    // Import and export meter points both have measurements, the direction is needed to fetch them.
+                    let mpan_link = if meter_point.direction_.is_some() {
                         rsx! {
                             div {
                                 class: "link",
@@ -132,6 +133,8 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
 struct MeasurementsConsumptionProps {
     account_id: String,
     mpan: String,
+    /// Whether this is an export meter point.
+    export: bool,
     billing_timezone: &'static Tz,
 }
 
@@ -139,6 +142,7 @@ impl PartialEq for MeasurementsConsumptionProps {
     fn eq(&self, other: &Self) -> bool {
         self.account_id == other.account_id
             && self.mpan == other.mpan
+            && self.export == other.export
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
     }
 }
@@ -159,6 +163,7 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
     let mut view = use_signal(|| ConsumptionView::Table);
     let mut graph_mode = use_signal(|| StackedBarMode::Cost);
     let mut graph_period = use_signal(|| StackedBarPeriod::Raw);
+    let mut smoothing = use_signal(|| TrendSmoothing::None);
 
     // The colour and visibility of each category in the graphs, kept here so it survives range changes.
     let category_filter = use_signal(CategoryFilter::default);
@@ -197,12 +202,14 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
             key: "{start}#{end}",
             account_id: props.account_id.clone(),
             mpan: props.mpan.clone(),
+            export: props.export,
             billing_timezone: tz,
             start,
             end,
             view: view(),
             graph_mode: graph_mode(),
             graph_period: graph_period(),
+            smoothing: smoothing(),
             category_filter: category_filter(),
             exportable,
         }
@@ -244,8 +251,22 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
                         button {
                             r#type: "button",
                             class: if graph_period() == option { "active" },
+                            // Smoothing works from daily totals, so the period is not used.
+                            disabled: view() == ConsumptionView::Trend && smoothing() != TrendSmoothing::None,
                             onclick: move |_| graph_period.set(option),
                             "{option}"
+                        }
+                    }
+                }
+                if view() == ConsumptionView::Trend {
+                    span { class: "view-toggle", title: "Smooth the daily totals",
+                        for option in TrendSmoothing::ALL {
+                            button {
+                                r#type: "button",
+                                class: if smoothing() == option { "active" },
+                                onclick: move |_| smoothing.set(option),
+                                "{option}"
+                            }
                         }
                     }
                 }
@@ -253,6 +274,8 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
                     filter: category_filter,
                     disabled: categories.is_empty(),
                     categories,
+                    years: range_years(&start, &end),
+                    trend: view() == ConsumptionView::Trend,
                 }
             }
             ExportButton {
@@ -270,6 +293,7 @@ struct MeasurementsDetailProps {
     // property: Arc<graphql::meter::account_properties_meters::MeterType>,
     account_id: String,
     mpan: String,
+    export: bool,
     billing_timezone: &'static Tz,
     start: DateTime,
     /// Exclusive end of the range
@@ -277,6 +301,7 @@ struct MeasurementsDetailProps {
     view: ConsumptionView,
     graph_mode: StackedBarMode,
     graph_period: StackedBarPeriod,
+    smoothing: TrendSmoothing,
     category_filter: CategoryFilter,
     /// Set to the data once it has loaded, so that the parent can export it.
     exportable: Signal<Option<Arc<MeasurementsDataSet>>>,
@@ -304,11 +329,13 @@ impl PartialEq for MeasurementsDetailProps {
     fn eq(&self, other: &Self) -> bool {
         self.account_id == other.account_id
             && self.mpan == other.mpan
+            && self.export == other.export
             && self.start == other.start
             && self.end == other.end
             && self.view == other.view
             && self.graph_mode == other.graph_mode
             && self.graph_period == other.graph_period
+            && self.smoothing == other.smoothing
             && self.category_filter == other.category_filter
             && self.exportable == other.exportable
             // && Arc::ptr_eq(&self.property, &other.property)
@@ -337,7 +364,7 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
             let context = context.clone();
             async move {
                 let monitor = move |message: String| { let mut progress = progress; progress.set(message) };
-                MeasurementsDataSet::new(&props.account_id, &props.mpan,
+                MeasurementsDataSet::new(&props.account_id, &props.mpan, props.export,
                     &props.start, &props.end,
                     props.billing_timezone, &monitor,
                     &cancel, &context.cache_config, &*context.request_manager).await.map(Arc::new)
@@ -381,6 +408,7 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
                 props.billing_timezone,
                 props.graph_mode,
                 props.graph_period,
+                props.smoothing,
                 &props.category_filter,
             ),
         },

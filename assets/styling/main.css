@@ -114,7 +114,7 @@ body {
     /* background: white; */
 }
 
-.filler:has(.consumption-graph, .stacked-consumption-graph) {
+.filler:has(.stacked-consumption-graph) {
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
@@ -586,6 +586,15 @@ h6 {
     cursor: pointer;
 }
 
+.category-row select {
+    padding: 2px 4px;
+    font-size: 13px;
+}
+
+.line-style-sample {
+    flex: none;
+}
+
 .category-row label {
     display: flex;
     align-items: center;
@@ -596,6 +605,16 @@ h6 {
 .trend-line {
     fill: none;
     stroke-width: 1.5;
+}
+
+/* The columns over the trend graph which show the tooltip for each day, and the line marking the day. */
+.trend-hit {
+    fill: transparent;
+}
+
+.trend-crosshair {
+    stroke: rgba(255, 255, 255, 0.35);
+    stroke-width: 1;
 }
 
 .view-toggle {
@@ -618,23 +637,20 @@ h6 {
     border-left: none;
 }
 
+.view-toggle button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.view-toggle button:disabled:hover {
+    background-color: #2a2a2f;
+    color: var(--accent);
+    border-color: #404045;
+}
+
 .view-toggle button.active {
     background-color: #353540;
     color: #d0d0d0;
-}
-
-.consumption-graph {
-    display: block;
-    flex: 1 1 0;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    font-size: 12px;
-    visibility: hidden;
-}
-
-.consumption-graph.ready {
-    visibility: visible;
 }
 
 .stacked-consumption-graph {
@@ -681,64 +697,3 @@ h6 {
     fill: #ffffff;
 }
 
-.consumption-graph .grid {
-    stroke: rgba(255, 255, 255, 0.08);
-    stroke-width: 1;
-}
-
-.consumption-graph .tick {
-    stroke: rgba(255, 255, 255, 0.25);
-    stroke-width: 1;
-}
-
-.consumption-graph .axis-label {
-    fill: var(--muted);
-}
-
-.consumption-graph .line {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 2;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-}
-
-.consumption-graph .bar {
-    fill: var(--accent);
-    opacity: 0.85;
-}
-
-.consumption-graph .bar.hovered {
-    opacity: 1;
-    stroke: #ffffff;
-    stroke-width: 1;
-}
-
-.consumption-graph .crosshair {
-    stroke: rgba(255, 255, 255, 0.35);
-    stroke-width: 1;
-}
-
-.consumption-graph .marker {
-    fill: var(--accent);
-    stroke: #0f1116;
-    stroke-width: 2;
-}
-
-.consumption-graph .tooltip rect {
-    fill: #1a1a1f;
-    stroke: #404045;
-}
-
-.consumption-graph .tooltip-period {
-    fill: var(--muted);
-}
-
-.consumption-graph .tooltip-value {
-    fill: #ffffff;
-    font-weight: bold;
-}
-
-.consumption-graph .hit {
-    fill: transparent;
-}

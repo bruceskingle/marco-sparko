@@ -1,8 +1,6 @@
 use dioxus::prelude::*;
 use sparko_graphql::types::Currency;
 
-use super::consumption_graph::nice_step;
-
 const LEFT: f64 = 64.0;
 const RIGHT: f64 = 16.0;
 const TOP: f64 = 44.0;
@@ -69,6 +67,24 @@ pub struct StackedBarPoint {
     pub values: Vec<f64>,
 }
 
+/// A readable step between y axis ticks of at least raw, e.g. 0.25 or 50, and the number of decimal places it needs.
+pub(super) fn nice_step(raw: f64) -> (f64, usize) {
+    if !(raw > 0.0) {
+        return (1.0, 0);
+    }
+    let magnitude = 10f64.powf(raw.log10().floor());
+    let step = [1.0, 2.0, 2.5, 5.0, 10.0]
+        .into_iter()
+        .map(|m| m * magnitude)
+        .find(|s| *s >= raw)
+        .unwrap_or(10.0 * magnitude);
+    let mut decimals = 0;
+    while decimals < 6 && ((step * 10f64.powi(decimals as i32)).round() - step * 10f64.powi(decimals as i32)).abs() > 1e-9 {
+        decimals += 1;
+    }
+    (step, decimals)
+}
+
 /// Format an amount in minor units (e.g. pence) in the major units of the currency, e.g. £1.23
 pub(crate) fn format_money(minor_units: f64, currency: Currency) -> String {
     let decimals = currency.minor_units() as usize;
@@ -78,12 +94,11 @@ pub(crate) fn format_money(minor_units: f64, currency: Currency) -> String {
     format!("{sign}{symbol}{:.decimals$}", major.abs())
 }
 
-/// A y axis label for the value, with decimal places for units.
-pub(crate) fn axis_label(value: f64, decimals: usize, mode: StackedBarMode, currency: Currency, unit: &str, per_hour: bool) -> String {
-    let per_hour_suffix = if per_hour { "/h" } else { "" };
+/// A y axis label for the value, with decimal places for units, followed by suffix, e.g. "/h".
+pub(crate) fn axis_label(value: f64, decimals: usize, mode: StackedBarMode, currency: Currency, unit: &str, suffix: &str) -> String {
     match mode {
-        StackedBarMode::Units => format!("{value:.decimals$} {unit}{per_hour_suffix}"),
-        StackedBarMode::Cost => format!("{}{per_hour_suffix}", format_money(value, currency)),
+        StackedBarMode::Units => format!("{value:.decimals$} {unit}{suffix}"),
+        StackedBarMode::Cost => format!("{}{suffix}", format_money(value, currency)),
     }
 }
 
@@ -177,7 +192,7 @@ pub fn StackedBarGraph(
         .map(|i| i as f64 * step)
         .take_while(|value| *value <= y_max + step / 2.0)
         .map(|value| {
-            (y(value), axis_label(value, decimals, mode, currency, &unit, per_hour))
+            (y(value), axis_label(value, decimals, mode, currency, &unit, if per_hour { "/h" } else { "" }))
         })
         .collect();
 
@@ -279,7 +294,16 @@ pub fn StackedBarGraph(
 mod tests {
     use sparko_graphql::types::Currency;
 
-    use super::format_money;
+    use super::{format_money, nice_step};
+
+    #[test]
+    fn nice_step_rounds_up_to_readable_values() {
+        assert_eq!(nice_step(0.0), (1.0, 0));
+        assert_eq!(nice_step(0.3), (0.5, 1));
+        assert_eq!(nice_step(0.21), (0.25, 2));
+        assert_eq!(nice_step(1.7), (2.0, 0));
+        assert_eq!(nice_step(42.0), (50.0, 0));
+    }
 
     #[test]
     fn money_is_formatted_in_major_units_with_the_currency_symbol() {

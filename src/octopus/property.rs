@@ -158,6 +158,20 @@ impl Property {
         let mut meters = Vec::new();
 
         for meter_point in &self.electricity_meter_points_ {
+            // Meter points link to their measurements, consumption for import and generation for export.
+            let mpan = meter_point.mpan_.clone();
+            let mpan_cell = {
+                rsx! {
+                    div {
+                        class: "link",
+                        onclick: move |_| {
+                            let mut path_signal = use_context::<Signal<Vec<String>>>();
+                            path_signal.set(vec![String::from("measurements"), mpan.clone()]);
+                        },
+                        "{meter_point.mpan_}"
+                    }
+                }
+            };
             meters.push(rsx!{
                 h2 { "Electricity Meter Point" }
                 table { class: "display",
@@ -168,7 +182,7 @@ impl Property {
                     }
                     tr {
                         th { class: "row-header", "MPAN" }
-                        td { "{meter_point.mpan_}" }
+                        td { {mpan_cell} }
                     }
                     tr {
                         th { class: "row-header", "Status" }
@@ -183,26 +197,12 @@ impl Property {
 
             for meter in &meter_point.meters_ {
                 let direction = if meter.import_meter_.is_none() { "Import" } else { "Export" };
-                let id = meter.node_id_.clone();
                 meters.push(rsx!{
                     h3 { "Electricity Meter" }
                     table { class: "display",
                         tr {
                             th { class: "row-header", "Node ID" }
-
-                            td {
-
-                                div {
-                                    class: "link",
-                                    onclick: move |_| {
-
-                                        let mut path_signal = use_context::<Signal<Vec<String>>>();
-                                        let new_path = vec![String::from("meters"), id.clone()];
-                                        path_signal.set(new_path);
-                                    },
-                                    "{meter.node_id_}"
-                                }
-                            }
+                            td { "{meter.node_id_}" }
                         }
                         tr {
                             th { class: "row-header", "Serial Number" }

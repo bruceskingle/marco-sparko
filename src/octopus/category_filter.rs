@@ -1,5 +1,5 @@
 //! The categories of measurement shown in graphs, e.g. the standing charge or the consumption at one rate, with the
-//! colour and visibility chosen for each.
+//! colour, line style and visibility chosen for each, and the colour chosen for each year in the trend graph.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +26,25 @@ pub const KNOWN_LABELS: [(&str, &str); 4] = [
 /// Default colours for labels which are not in KNOWN_LABELS, used in turn.
 const OTHER_COLORS: [&str; 6] = ["#f2c94c", "#bb6bd9", "#2dd4bf", "#f472b6", "#a3e635", "#60a5fa"];
 
+/// The line styles of categories in the trend graph, as a name and an SVG stroke-dasharray, used in turn by default.
+pub const LINE_STYLES: [(&str, &str); 6] = [
+    ("Solid", "none"),
+    ("Dashed", "8 4"),
+    ("Dotted", "2 3"),
+    ("Dash dot", "12 4 2 4"),
+    ("Short dash", "4 4"),
+    ("Sparse dots", "1 5"),
+];
+
+/// The line style of a line in the trend graph when there is only one category.
+pub const SOLID: &str = "none";
+
+/// Default colours of the years in the trend graph, used in turn.
+const YEAR_COLORS: [&str; 6] = ["#06b6d4", "#f6671f", "#46ee43", "#bb6bd9", "#f2c94c", "#f472b6"];
+
+/// The colour of the line style samples, which show only the style.
+const SAMPLE_COLOR: &str = "#c4c4ce";
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CategoryStyle {
     /// A CSS colour, e.g. #46ee43
@@ -33,11 +52,14 @@ pub struct CategoryStyle {
     pub visible: bool,
 }
 
-/// The colours and visibility chosen for each category, categories which have not been changed have the default style.
-/// There is also a total, which when visible replaces the visible categories with their total.
+/// The colours, line styles and visibility chosen for each category, and the colours chosen for each year, anything
+/// which has not been changed has its default. There is also a total, which when visible replaces the visible categories
+/// with their total.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CategoryFilter {
     styles: BTreeMap<String, CategoryStyle>,
+    dashes: BTreeMap<String, String>,
+    year_colors: BTreeMap<i32, String>,
     total: CategoryStyle,
 }
 
@@ -45,6 +67,8 @@ impl Default for CategoryFilter {
     fn default() -> Self {
         Self {
             styles: BTreeMap::new(),
+            dashes: BTreeMap::new(),
+            year_colors: BTreeMap::new(),
             total: CategoryStyle { color: String::from(TOTAL_COLOR), visible: false },
         }
     }
@@ -78,6 +102,34 @@ impl CategoryFilter {
         self.styles.insert(label.to_string(), style);
     }
 
+    /// The line style of each of the given categories in the trend graph, as an SVG stroke-dasharray.
+    pub fn dashes(&self, categories: &[String]) -> Vec<String> {
+        categories.iter()
+            .enumerate()
+            .map(|(index, label)| self.dashes.get(label)
+                .cloned()
+                .unwrap_or_else(|| String::from(LINE_STYLES[index % LINE_STYLES.len()].1)))
+            .collect()
+    }
+
+    pub fn set_dash(&mut self, label: &str, dash: String) {
+        self.dashes.insert(label.to_string(), dash);
+    }
+
+    /// The colour of each of the given years in the trend graph.
+    pub fn year_colors(&self, years: &[i32]) -> Vec<String> {
+        years.iter()
+            .enumerate()
+            .map(|(index, year)| self.year_colors.get(year)
+                .cloned()
+                .unwrap_or_else(|| String::from(YEAR_COLORS[index % YEAR_COLORS.len()])))
+            .collect()
+    }
+
+    pub fn set_year_color(&mut self, year: i32, color: String) {
+        self.year_colors.insert(year, color);
+    }
+
     pub fn total(&self) -> &CategoryStyle {
         &self.total
     }
@@ -90,7 +142,10 @@ impl CategoryFilter {
 /// A category to draw, with the value for each point of the graph.
 pub struct CategoryValues {
     pub label: String,
+    /// The colour in the bar graph.
     pub color: String,
+    /// The line style in the trend graph.
+    pub dash: String,
     pub values: Vec<f64>,
 }
 
@@ -101,15 +156,16 @@ impl CategoryFilter {
         let labels: Vec<String> = categories.iter().map(|(label, _)| label.clone()).collect();
         let visible: Vec<CategoryValues> = categories.into_iter()
             .zip(self.styles(&labels))
-            .filter(|(_, style)| style.visible)
-            .map(|((label, values), style)| CategoryValues { label, color: style.color, values })
+            .zip(self.dashes(&labels))
+            .filter(|((_, style), _)| style.visible)
+            .map(|(((label, values), style), dash)| CategoryValues { label, color: style.color, dash, values })
             .collect();
 
         if self.total.visible {
             let values = (0..points)
                 .map(|index| visible.iter().map(|category| category.values.get(index).copied().unwrap_or_default()).sum())
                 .collect();
-            vec![CategoryValues { label: String::from(TOTAL_LABEL), color: self.total.color.clone(), values }]
+            vec![CategoryValues { label: String::from(TOTAL_LABEL), color: self.total.color.clone(), dash: String::from(SOLID), values }]
         }
         else {
             visible
@@ -118,17 +174,21 @@ impl CategoryFilter {
 }
 
 /// A button with a menu of the categories, each with a colour picker and a check box to show or hide it, and a total.
+/// For the trend graph each category has a line style picker in place of the colour picker, and there is a colour
+/// picker for each of the years.
 #[component]
-pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String>, disabled: bool) -> Element {
+pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String>, years: Vec<i32>, trend: bool, disabled: bool) -> Element {
     let mut menu_open = use_signal(|| false);
     let styles = filter.read().styles(&categories);
+    let dashes = filter.read().dashes(&categories);
+    let year_colors = filter.read().year_colors(&years);
     let total = filter.read().total().clone();
 
     rsx! {
         span { class: "menu-anchor",
             button {
                 r#type: "button",
-                title: "Choose the categories shown and their colours",
+                title: if trend { "Choose the categories shown, their line styles and the colours of the years" } else { "Choose the categories shown and their colours" },
                 disabled,
                 onclick: move |_| menu_open.set(!menu_open()),
                 Icon {
@@ -149,55 +209,114 @@ pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String
                 // Covers the page so that clicking anywhere else closes the menu.
                 div { class: "menu-backdrop", onclick: move |_| menu_open.set(false) }
                 div { class: "dropdown-menu category-menu",
-                    for (label, style) in categories.iter().cloned().zip(styles) {
-                        {category_row(filter, label, style, false)}
+                    for ((label, style), dash) in categories.iter().cloned().zip(styles).zip(dashes) {
+                        div { class: "category-row",
+                            if trend {
+                                {line_style_picker(filter, label.clone(), dash)}
+                            }
+                            else {
+                                {color_picker(&label, style.color.clone(), {
+                                    let label = label.clone();
+                                    let style = style.clone();
+                                    move |color| {
+                                        let mut filter = filter;
+                                        filter.write().set_style(&label, CategoryStyle { color, ..style.clone() });
+                                    }
+                                })}
+                            }
+                            {visibility_check_box(filter, label.clone(), style.clone(), false)}
+                        }
                     }
                     div { class: "menu-separator" }
-                    {category_row(filter, String::from(TOTAL_LABEL), total, true)}
+                    div { class: "category-row",
+                        // In the trend graph the total has the colour of each year, and a solid line.
+                        if !trend {
+                            {color_picker(TOTAL_LABEL, total.color.clone(), {
+                                let total = total.clone();
+                                move |color| {
+                                    let mut filter = filter;
+                                    filter.write().set_total(CategoryStyle { color, ..total.clone() });
+                                }
+                            })}
+                        }
+                        {visibility_check_box(filter, String::from(TOTAL_LABEL), total.clone(), true)}
+                    }
+                    if trend {
+                        div { class: "menu-separator" }
+                        for (year, color) in years.iter().copied().zip(year_colors) {
+                            div { class: "category-row",
+                                {color_picker(&year.to_string(), color, move |color| {
+                                    let mut filter = filter;
+                                    filter.write().set_year_color(year, color);
+                                })}
+                                span { "{year}" }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/// A row of the category menu, setting the style of the category, or of the total if is_total.
-fn category_row(filter: Signal<CategoryFilter>, label: String, style: CategoryStyle, is_total: bool) -> Element {
-    let set_style = move |label: &str, style: CategoryStyle| {
-        let mut filter = filter;
-        if is_total {
-            filter.write().set_total(style);
-        }
-        else {
-            filter.write().set_style(label, style);
-        }
-    };
-
+/// A colour picker, which calls set with the colour chosen.
+fn color_picker(name: &str, color: String, set: impl Fn(String) + 'static) -> Element {
     rsx! {
-        div { class: "category-row",
+        input {
+            r#type: "color",
+            title: "Choose the colour of {name}",
+            value: "{color}",
+            // On macOS this makes "Show Colors…" open next to the picker rather than wherever it was last left.
+            onclick: move |_| move_color_panel_to_mouse(),
+            oninput: move |event: FormEvent| set(event.value()),
+        }
+    }
+}
+
+/// A list of the line styles, with a sample of the one chosen.
+fn line_style_picker(filter: Signal<CategoryFilter>, label: String, dash: String) -> Element {
+    rsx! {
+        svg { class: "line-style-sample", width: 28, height: 12,
+            line { x1: 2, x2: 26, y1: 6, y2: 6, stroke: SAMPLE_COLOR, stroke_width: 2, stroke_dasharray: "{dash}" }
+        }
+        select {
+            title: "Choose the line style of {label}",
+            onchange: {
+                let label = label.clone();
+                move |event: FormEvent| {
+                    let mut filter = filter;
+                    filter.write().set_dash(&label, event.value());
+                }
+            },
+            for (name, style) in LINE_STYLES {
+                option { value: style, selected: style == dash, "{name}" }
+            }
+        }
+    }
+}
+
+/// A check box which shows or hides the category, or the total if is_total, with the label.
+fn visibility_check_box(filter: Signal<CategoryFilter>, label: String, style: CategoryStyle, is_total: bool) -> Element {
+    rsx! {
+        label {
             input {
-                r#type: "color",
-                title: "Choose the colour of {label}",
-                value: "{style.color}",
-                // On macOS this makes "Show Colors…" open next to the picker rather than wherever it was last left.
-                onclick: move |_| move_color_panel_to_mouse(),
-                oninput: {
+                r#type: "checkbox",
+                checked: style.visible,
+                onchange: {
                     let label = label.clone();
-                    let style = style.clone();
-                    move |event: FormEvent| set_style(&label, CategoryStyle { color: event.value(), ..style.clone() })
+                    move |event: FormEvent| {
+                        let mut filter = filter;
+                        let style = CategoryStyle { visible: event.checked(), ..style.clone() };
+                        if is_total {
+                            filter.write().set_total(style);
+                        }
+                        else {
+                            filter.write().set_style(&label, style);
+                        }
+                    }
                 },
             }
-            label {
-                input {
-                    r#type: "checkbox",
-                    checked: style.visible,
-                    onchange: {
-                        let label = label.clone();
-                        let style = style.clone();
-                        move |event: FormEvent| set_style(&label, CategoryStyle { visible: event.checked(), ..style.clone() })
-                    },
-                }
-                " {label}"
-            }
+            " {label}"
         }
     }
 }
@@ -244,5 +363,17 @@ mod tests {
         assert_eq!(total.len(), 1);
         assert_eq!(total[0].label, TOTAL_LABEL);
         assert_eq!(total[0].values, [101.0, 202.0]);
+    }
+
+    #[test]
+    fn line_styles_and_year_colours_have_defaults_in_turn_which_can_be_changed() {
+        let mut filter = CategoryFilter::default();
+        assert_eq!(filter.dashes(&labels(&["A", "B"])), ["none", "8 4"]);
+        filter.set_dash("A", String::from("2 3"));
+        assert_eq!(filter.dashes(&labels(&["A", "B"])), ["2 3", "8 4"]);
+
+        assert_eq!(filter.year_colors(&[2025, 2026]), ["#06b6d4", "#f6671f"]);
+        filter.set_year_color(2026, String::from("#000000"));
+        assert_eq!(filter.year_colors(&[2025, 2026]), ["#06b6d4", "#000000"]);
     }
 }

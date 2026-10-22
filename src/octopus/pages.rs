@@ -6,11 +6,9 @@
  */
 
 mod bills;
-mod meter;
 mod properties;
 mod measurements;
 
 pub use bills::BillsPage;
-pub use meter::MeterPage;
 pub use properties::PropertiesPage;
 pub use measurements::MeasurementsPage;
