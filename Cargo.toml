@@ -39,6 +39,10 @@ time-tz = "2.0.0"
 dioxus = { version = "0.7.3", features = ["router", "desktop"] }
 dioxus-desktop = "0.7"
 dioxus-free-icons = { version = "0.10", features = ["lucide"] }
+# Native file dialogs, the same version and features as dioxus-desktop uses
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+# Clipboard access, text only
+arboard = { version = "3", default-features = false }
 anyhow = "1.0.100"
 wasm-bindgen = "0.2.105"
 windows = { version = "0.54", features = [

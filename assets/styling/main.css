@@ -497,6 +497,67 @@ h6 {
     margin-left: 0;
 }
 
+/* The export button, at the right hand end of the date range row. */
+.home-ev-date-range .export {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.export-status {
+    color: var(--muted);
+}
+
+/* Clicking the exported file name copies it to the clipboard. */
+.export-file-name {
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.export-file-name:hover {
+    color: #d0d0d0;
+}
+
+/* The menu of export formats, below the export button. */
+.export-menu-anchor {
+    position: relative;
+}
+
+.export-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+}
+
+.export-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    min-width: 100%;
+    padding: 4px 0;
+    border: 1px solid #404045;
+    border-radius: 4px;
+    background-color: #1a1a1f;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.export-menu button {
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    padding: 6px 16px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.export-menu button:hover {
+    background-color: #353540;
+}
+
 .view-toggle {
     margin-left: 12px;
 }

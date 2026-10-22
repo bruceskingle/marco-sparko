@@ -12,6 +12,7 @@ use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, ProgressMonitor};
 use time_tz::{TimeZone, Tz};
 
 use crate::CacheConfig;
+use crate::components::export::{ExportTable, ExportValue};
 use crate::data_set::{CancelToken, MonthlyFixedSlotDataSet, SlotSource};
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput};
@@ -144,6 +145,20 @@ impl HomeAndEvDataSet {
     }
 
     pub fn display_graph(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod) -> Element {
+        let (series, points) = self.graph_points(start, end, tz, period);
+
+        rsx! {
+            StackedBarGraph {
+                points,
+                series,
+                mode,
+                per_hour: period == StackedBarPeriod::Rate,
+            }
+        }
+    }
+
+    /// The readings from start to end aggregated by period, with a series for each label.
+    fn graph_points(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> (Vec<StackedBarSeries>, Vec<StackedBarPoint>) {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
@@ -335,14 +350,88 @@ impl HomeAndEvDataSet {
             last_bucket_start = Some(bucket_start.unix_timestamp());
         }
 
-        rsx! {
-            StackedBarGraph {
-                points,
-                series,
-                mode,
-                per_hour: period == StackedBarPeriod::Rate,
-            }
-        }
+        (series, points)
+    }
+
+    /// The readings from start to end, as shown in the table.
+    pub fn readings_export(&self, start: &DateTime, end: &DateTime) -> ExportTable {
+        let readings: Vec<&HomeAndEvReading> = self.data.iter()
+            .flat_map(|data_set| data_set.data.range(start..))
+            .filter(|(key, _)| *key < end)
+            .map(|(_, item)| &item.value)
+            .collect();
+        let labels = ordered_labels(readings.iter().copied());
+        let (unit, cost_unit) = Self::export_units(&readings);
+
+        // All the costs, then all the units, then the rates.
+        let mut columns = vec![String::from("Start"), String::from("End")];
+        columns.extend(labels.iter().map(|label| format!("{label} cost ({cost_unit})")));
+        columns.push(format!("Standing charge ({cost_unit})"));
+        columns.extend(labels.iter().map(|label| format!("{label} units ({unit})")));
+        columns.extend(labels.iter().map(|label| format!("{label} rate ({cost_unit}/{unit})")));
+
+        let decimal = |value: &Decimal| value.to_f64().map(ExportValue::number).unwrap_or(ExportValue::Empty);
+        let rows = readings.iter()
+            .map(|reading| {
+                // The value of a field of each label's consumption, empty if the reading does not have that label.
+                let field = |get: fn(&HomeAndEvReadingConsumption) -> &Decimal| labels.iter()
+                    .map(move |label| reading.consumption.get(label).map(|c| decimal(get(c))).unwrap_or(ExportValue::Empty));
+
+                let mut row = vec![ExportValue::time(&reading.start), ExportValue::time(&reading.end)];
+                row.extend(field(|c| &c.cost));
+                row.push(decimal(&reading.standing_charge));
+                row.extend(field(|c| &c.units));
+                row.extend(field(|c| &c.rate));
+                row
+            })
+            .collect();
+
+        ExportTable { columns, rows }
+    }
+
+    /// The readings from start to end aggregated by period, as shown in the graph.
+    pub fn graph_export(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> ExportTable {
+        let readings: Vec<&HomeAndEvReading> = self.data.iter()
+            .flat_map(|data_set| data_set.data.range(start..))
+            .filter(|(key, _)| *key < end)
+            .map(|(_, item)| &item.value)
+            .collect();
+        let (unit, cost_unit) = Self::export_units(&readings);
+        let (series, points) = self.graph_points(start, end, tz, period);
+
+        // All the costs, then all the units.
+        let mut columns = vec![String::from("Start"), String::from("End")];
+        columns.extend(series.iter().map(|series| format!("{} cost ({cost_unit})", series.label)));
+        columns.push(format!("Standing charge ({cost_unit})"));
+        columns.extend(series.iter().map(|series| format!("{} units ({unit})", series.label)));
+
+        let rows = points.iter()
+            .map(|point| {
+                let mut row = vec![ExportValue::unix_time(point.start, tz), ExportValue::unix_time(point.end, tz)];
+                row.extend(point.costs.iter().map(|cost| ExportValue::number(*cost)));
+                row.push(ExportValue::number(point.standing_charge));
+                row.extend(point.units.iter().map(|units| ExportValue::number(*units)));
+                row
+            })
+            .collect();
+
+        ExportTable { columns, rows }
+    }
+
+    /// The units of consumption and of cost for column headings, e.g. ("kwh", "p").
+    fn export_units(readings: &[&HomeAndEvReading]) -> (String, String) {
+        let unit = readings.iter()
+            .map(|reading| reading.unit.as_str())
+            .find(|unit| !unit.is_empty())
+            .unwrap_or_default()
+            .to_string();
+        let currency = readings.iter()
+            .map(|reading| reading.currency())
+            .find(|currency| *currency != Currency::NONE)
+            .unwrap_or(Currency::NONE);
+        // Costs are in the minor units of the currency.
+        let cost_unit = currency.subunit_symbol().unwrap_or_else(|| currency.code().to_string());
+        (unit, cost_unit)
     }
 }
 

@@ -6,6 +6,7 @@ use time_tz::Tz;
 use sparko_graphql::types::DateTime;
 
 use crate::components::date_range_picker::{DateRangePicker, RangeSelection};
+use crate::components::export::{ExportButton, export_file_name};
 use crate::data_set::CancelToken;
 use crate::octopus::context::OctopusContext;
 use crate::octopus::consumption::ConsumptionDataSet;
@@ -174,8 +175,21 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
     let mut view = use_signal(|| ConsumptionView::Table);
     let mut graph_period = use_signal(|| StackedBarPeriod::Raw);
 
+    // The data loaded by MeterDetail for the applied range, None until it has loaded.
+    let exportable = use_signal(|| None::<Arc<ConsumptionDataSet>>);
+
     let selection = *applied_range.read();
     let (start, end) = selection.to_date_times(tz).map_err(|error| anyhow!(error))?;
+
+    // Export what is currently shown, the readings in the table or the aggregated graph values.
+    let export_table = move |_: ()| {
+        let data = exportable.read().clone()?;
+        Some(match view() {
+            ConsumptionView::Table => data.readings_export(&start, &end),
+            ConsumptionView::Graph => data.graph_export(&start, &end, tz, graph_period()),
+        })
+    };
+    let export_name = export_file_name("meter", &props.meter_id, &start, &end, &view().export_description(graph_period()));
 
     // The key causes MeterDetail to be re-mounted when the applied range changes, which drops
     // (and so cancels) any fetch in progress for the previous range and starts a new one.
@@ -189,6 +203,7 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
             end,
             view: view(),
             graph_period: graph_period(),
+            exportable,
         }
     };
 
@@ -223,6 +238,11 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
                     }
                 }
             }
+            ExportButton {
+                default_name: export_name,
+                disabled: exportable.read().is_none(),
+                table: export_table,
+            }
         }
         {detail}
     }
@@ -239,6 +259,8 @@ struct MeterDetailProps {
     end: DateTime,
     view: ConsumptionView,
     graph_period: StackedBarPeriod,
+    /// Set to the data once it has loaded, so that the parent can export it.
+    exportable: Signal<Option<Arc<ConsumptionDataSet>>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -264,6 +286,7 @@ impl PartialEq for MeterDetailProps {
             && self.end == other.end
             && self.view == other.view
             && self.graph_period == other.graph_period
+            && self.exportable == other.exportable
             // && Arc::ptr_eq(&self.property, &other.property)
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
     }
@@ -288,9 +311,19 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
             async move {
                 ConsumptionDataSet::new(&props.account_id, &props.meter_id,
                     &props.start, &props.end,
-                    props.billing_timezone, &cancel, &context.cache_config, &*context.request_manager).await
+                    props.billing_timezone, &cancel, &context.cache_config, &*context.request_manager).await.map(Arc::new)
             }
         }
+    });
+
+    // Share the data with the parent for export once it has loaded.
+    let mut exportable = props.exportable;
+    use_effect(move || {
+        let loaded = match &*transactions_resource.read() {
+            Some(Ok(data)) => Some(data.clone()),
+            _ => None,
+        };
+        exportable.set(loaded);
     });
 
     match &*transactions_resource.read() {
@@ -309,5 +342,15 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
                 props.graph_period,
             ),
         },
+    }
+}
+
+impl ConsumptionView {
+    /// What an export of this view contains, for the file name.
+    fn export_description(&self, period: StackedBarPeriod) -> String {
+        match self {
+            ConsumptionView::Table => String::from("readings"),
+            ConsumptionView::Graph => period.to_string().to_lowercase(),
+        }
     }
 }

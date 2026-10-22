@@ -288,8 +288,9 @@ impl<'de> Visitor<'de> for DecimalVisitor {
     where
         E: de::Error,
     {
+      // Trailing zeros after the decimal point are removed, e.g. "1.500" becomes 1.5
       match  Decimal::from_str(value) {
-        Ok(value) => Ok(value),
+        Ok(value) => Ok(value.normalize()),
         Err(error) => Err(E::custom(format!("Invalid Decimal value: {}", error)))
       }
     }
@@ -383,6 +384,22 @@ mod tests {
       expect_parse_error(r#"{ "decimal": "0.1.2" }"#);
     }
   
+    fn expect_parse_as(s: &str, expected: &str) {
+      let value: MyStruct = serde_json::from_str(s).unwrap();
+      assert_eq!(value.decimal.to_string(), expected, "parsing {}", s);
+    }
+
+    #[test]
+    fn trailing_zeros_after_the_decimal_point_are_removed() {
+      expect_parse_as(r#"{ "decimal": "1.500" }"#, "1.5");
+      expect_parse_as(r#"{ "decimal": "444.0" }"#, "444");
+      expect_parse_as(r#"{ "decimal": "0.0000" }"#, "0");
+      expect_parse_as(r#"{ "decimal": "0E-18" }"#, "0");
+      expect_parse_as(r#"{ "decimal": "-0.00" }"#, "0");
+      expect_parse_as(r#"{ "decimal": "100" }"#, "100");
+      expect_parse_as(r#"{ "decimal": "28.8273" }"#, "28.8273");
+    }
+
     #[test]
     fn test_serialize() {
       assert_eq!(serde_json::to_string(&MyStruct {

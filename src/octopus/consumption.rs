@@ -8,6 +8,7 @@ use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, NoProgress};
 use time_tz::Tz;
 
 use crate::CacheConfig;
+use crate::components::export::{ExportTable, ExportValue};
 use crate::data_set::{CancelToken, MonthlyFixedSlotDataSet, SlotSource};
 
 use super::consumption_graph::{ConsumptionGraph, GraphPoint, GraphStyle};
@@ -103,6 +104,15 @@ impl ConsumptionDataSet {
     }
 
     pub fn display_graph(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> Element {
+        let points = self.graph_points(start, end, tz, period);
+
+        rsx! {
+            ConsumptionGraph { points, style: GraphStyle::Bar }
+        }
+    }
+
+    /// The readings from start to end aggregated by period.
+    fn graph_points(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> Vec<GraphPoint> {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
@@ -243,9 +253,39 @@ impl ConsumptionDataSet {
             last_bucket_start = Some(bucket_start.unix_timestamp());
         }
 
-        rsx! {
-            ConsumptionGraph { points, style: GraphStyle::Bar }
-        }
+        points
+    }
+
+    /// The readings from start to end, as shown in the table.
+    pub fn readings_export(&self, start: &DateTime, end: &DateTime) -> ExportTable {
+        let rows = self.data.iter()
+            .flat_map(|data_set| data_set.data.range(start..))
+            .filter(|(key, _)| *key < end)
+            .map(|(_, item)| vec![
+                ExportValue::time(&item.value.start_at_),
+                ExportValue::time(&item.value.end_at_),
+                item.value.value_.to_f64().map(ExportValue::number).unwrap_or(ExportValue::Empty),
+            ])
+            .collect();
+
+        ExportTable { columns: Self::export_columns(), rows }
+    }
+
+    /// The readings from start to end aggregated by period, as shown in the graph.
+    pub fn graph_export(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> ExportTable {
+        let rows = self.graph_points(start, end, tz, period).iter()
+            .map(|point| vec![
+                ExportValue::unix_time(point.start, tz),
+                ExportValue::unix_time(point.end, tz),
+                ExportValue::number(point.value),
+            ])
+            .collect();
+
+        ExportTable { columns: Self::export_columns(), rows }
+    }
+
+    fn export_columns() -> Vec<String> {
+        vec![String::from("Start"), String::from("End"), String::from("Consumption")]
     }
 }
 
