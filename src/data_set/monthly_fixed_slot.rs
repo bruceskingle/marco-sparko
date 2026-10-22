@@ -337,7 +337,15 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                     let month_boundaries: Vec<i64> = result_keys.iter()
                         .map(|key| data_set_map[key].data_set.next_date.at_midnight(tz).unix_timestamp())
                         .collect();
-                    let windows = fetch_windows(&cached, refresh_start.unix_timestamp(), end.unix_timestamp(), &month_boundaries);
+                    // Months fetched within their refresh duration are left alone, e.g. empty months before the server
+                    // has any data, which would otherwise be fetched again whenever a later month is refreshed.
+                    let mut windows = Vec::new();
+                    for window in fetch_windows(&cached, refresh_start.unix_timestamp(), end.unix_timestamp(), &month_boundaries) {
+                        let key = Self::key_for(&DateTime::from_unix_timestamp(window.0)?.to_timezone(tz).to_date());
+                        if data_set_map.get(&key).map_or(Ok(true), |data_set| data_set.is_stale(&refresh_after))? {
+                            windows.push(window);
+                        }
+                    }
 
                     // The number of requests made and of rows they returned, for progress messages.
                     let mut requests = 0;
@@ -421,6 +429,13 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                             }
 
                         }
+
+                        // The window was fetched, unless it was cancelled part way through.
+                        if !cancel.is_cancelled() {
+                            if let Some(data_set) = data_set_map.get_mut(&Self::key_for(&window_start.to_date())) {
+                                data_set.fetched = true;
+                            }
+                        }
                     }
                 }
             }
@@ -458,6 +473,7 @@ struct OpenMonthlyFixedSlotDataSet<S: SlotSource>
     file: File,   // File is exclusive locked
     path: PathBuf,
     is_dirty: bool,  // Cache needs updating
+    fetched: bool,   // A fetch window in this month completed, so the cache is up to date even if nothing changed
     data_set: MonthlyFixedSlotDataSet<S>
 }
 
@@ -473,6 +489,7 @@ impl<S: SlotSource> OpenMonthlyFixedSlotDataSet<S>
     ) -> anyhow::Result<Self> 
     {
         let month_bucket = config.path_for_month(hash_key, date)?;
+        let created = !month_bucket.path.exists();
 
         let mut file = OpenOptions::new()
             .read(true)
@@ -481,6 +498,12 @@ impl<S: SlotSource> OpenMonthlyFixedSlotDataSet<S>
             .open(&month_bucket.path)?;
         file.lock()?;
 
+        if created {
+            // Nothing has been fetched for this month yet, so it is stale until a fetch of it succeeds, even if we exit
+            // before it is flushed.
+            file.set_times(FileTimes::new().set_modified(UNIX_EPOCH))?;
+        }
+
         let data_set: MonthlyFixedSlotDataSet<S> = MonthlyFixedSlotDataSet::load(source, config, &mut file, month_bucket.start, month_bucket.next, tz)?;
         let path = month_bucket.path;
 
@@ -488,15 +511,14 @@ impl<S: SlotSource> OpenMonthlyFixedSlotDataSet<S>
             file,
             path,
             is_dirty: false,
+            fetched: false,
             data_set,
         })
     }
 
+    /// Whether the month is due to be fetched again. An empty month, e.g. one before the server has any data, goes by
+    /// the file time like any other: a new file is dated the epoch so it is stale until a fetch of it succeeds.
     fn is_stale(&self, refresh_after: &Duration) -> anyhow::Result<bool> {
-        if self.data_set.data.len() == 0 {
-            return Ok(true);
-        }
-
         let modified = self.file.metadata()?.modified()?;
         Ok(SystemTime::now()
             .duration_since(modified)
@@ -519,11 +541,18 @@ impl<S: SlotSource> OpenMonthlyFixedSlotDataSet<S>
                 writeln!(self.file, "{}", serde_json::to_string(&item.value)?)?;
             }
 
-            if is_stale {
-                // We fetched some data for this month but we don't know if more data might be available so we set the file modify date
-                // to the epoch so that if it is read later it will be treated as stale.
-                self.file.set_times(FileTimes::new().set_modified(UNIX_EPOCH))?;
-            }
+        }
+
+        if is_stale {
+            // We don't know if more data might be available, even if we fetched nothing (e.g. the fetch failed before
+            // reaching this month), so we set the file modify date to the epoch so that if it is read later it will be
+            // treated as stale.
+            self.file.set_times(FileTimes::new().set_modified(UNIX_EPOCH))?;
+        }
+        else if self.fetched && !self.is_dirty {
+            // We fetched this month and nothing changed, e.g. a month before the server has any data, so the file is
+            // touched to show it is up to date, otherwise it would be fetched again every time until it changes.
+            self.file.set_times(FileTimes::new().set_modified(SystemTime::now()))?;
         }
 
         Ok(self.data_set)

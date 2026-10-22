@@ -41,4 +41,4 @@ Finally the consumption analysis section shows us the total amounts per charge r
 
 <img src="../readMe/Screenshot5.png" width="1024">
 
-[< Documentation Home](../index.md)
+[Measurements >](measurements/index.md)
