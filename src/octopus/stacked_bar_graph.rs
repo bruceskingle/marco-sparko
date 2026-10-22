@@ -146,8 +146,6 @@ pub fn StackedBarGraph(
     .into_iter()
     .chain(series.iter().map(|series| (series.label.clone(), series.class.clone())))
     .collect();
-    let tooltip_height = 42.0 + segment_names.len() as f64 * 14.0;
-
     // The factor from a bar's values to its height.
     let scale = move |point: &StackedBarPoint| {
         if per_hour { 3600.0 / (point.end - point.start).max(1) as f64 } else { 1.0 }
@@ -251,8 +249,14 @@ pub fn StackedBarGraph(
                 bar_x + 10.0
             }
             .clamp(LEFT, (width - TOOLTIP_WIDTH - RIGHT).max(LEFT));
-            let segments: Vec<String> = point.segments(mode).into_iter().map(format_value).collect();
-            (tooltip_x, point.period_label.clone(), segments, format_value(totals[index]))
+            // The label, colour class and value of each segment, leaving out those which are zero.
+            let rows: Vec<(String, String, String)> = point.segments(mode)
+                .into_iter()
+                .zip(&segment_names)
+                .filter(|(value, _)| *value != 0.0)
+                .map(|(value, (label, class))| (label.clone(), class.clone(), format_value(value)))
+                .collect();
+            (tooltip_x, point.period_label.clone(), rows, format_value(totals[index]))
         })
     });
 
@@ -294,14 +298,14 @@ pub fn StackedBarGraph(
                 }
             }
 
-            if let Some((tx, period, segments, total)) = tooltip {
+            if let Some((tx, period, rows, total)) = tooltip {
                 g { class: "stacked-tooltip",
-                    rect { class: "stacked-tooltip-background", x: tx, y: TOP, width: TOOLTIP_WIDTH, height: tooltip_height, rx: 4 }
+                    rect { class: "stacked-tooltip-background", x: tx, y: TOP, width: TOOLTIP_WIDTH, height: 42.0 + rows.len() as f64 * 14.0, rx: 4 }
                     text { class: "stacked-tooltip-period", x: tx + TOOLTIP_TEXT_X, y: TOP + 16.0, "{period}" }
                     text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 34.0, "Total: {total}" }
-                    for (index, (label, color_class)) in segment_names.iter().enumerate() {
+                    for (index, (label, color_class, value)) in rows.iter().enumerate() {
                         rect { class: "stacked-legend-swatch {color_class}", x: tx + 8.0, y: TOP + 43.0 + index as f64 * 14.0, width: 10.0, height: 10.0 }
-                        text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {segments[index]}" }
+                        text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {value}" }
                     }
                 }
 
