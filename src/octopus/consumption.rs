@@ -350,7 +350,8 @@ impl SlotSource for ConsumptionSource {
         &self.hash_key
     }
 
-    fn initial_query(&mut self, start: &DateTime) -> anyhow::Result<Self::Query> {
+    /// The consumption query has no end, so fetch stops asking for more pages once it has every sample up to the end.
+    fn initial_query(&mut self, start: &DateTime, _end: &DateTime) -> anyhow::Result<Self::Query> {
         Ok(meter::meter_consumption::Query::builder()
             .with_meter_id(self.meter_node_id.clone())
             .with_grouping(super::graphql::ConsumptionGroupings::HalfHour)
@@ -360,7 +361,7 @@ impl SlotSource for ConsumptionSource {
             .build()?)
     }
 
-    fn continuation_query(&mut self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
+    fn continuation_query(&mut self, start: &DateTime, _end: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
         let page =  match &last_response.node_ {
             meter::meter_consumption::Node::ElectricityMeterType(electricity_meter) => {
                 &electricity_meter.consumption_

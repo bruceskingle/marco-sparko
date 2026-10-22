@@ -1,4 +1,4 @@
-[< Documentation Home](index.md)
+[< Documentation Home](../index.md)
 
 # Octopus Energy Plugin
 Information relating to the Octopus Energy API and the Marco Sparko implementation thereof.
@@ -26,6 +26,8 @@ The following inline fragment may be used to access these in a query, but you wi
     isExport
 }
 ```
+
+[Meter Consumption](meterConsumption.md) Observations about the ```consumption``` query on ```ElectricityMeterType```
 
 ## Plugin Details
 The following pages provide further details about this plugin.

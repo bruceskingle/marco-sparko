@@ -89,7 +89,6 @@ impl MeasurementsDataSet {
             account_number: account_number.clone(),
             mpan: mpan.clone(),
             hash_key: format!("{}#{}#MeasurementsConsumption", account_number, mpan),
-            end_at: end.clone(),
             tz,
         };
         
@@ -810,14 +809,14 @@ impl MeasurementsReading {
 
 pub struct MeasurementsConsumptionSource {
     pub account_number: String,
-    pub end_at: DateTime,
     pub tz: &'static Tz,
     pub mpan:String,
     pub hash_key: String,
 }
 
 impl MeasurementsConsumptionSource {
-    fn query_builder(&self) -> anyhow::Result<meter::home_and_ev_consumption_breakdown::QueryBuilder> {
+    /// A query for the readings up to end, the caller sets the start.
+    fn query_builder(&self, end: &DateTime) -> anyhow::Result<meter::home_and_ev_consumption_breakdown::QueryBuilder> {
         let mut utility_filters = Vec::new();
 
         utility_filters.push(UtilityFiltersInput::builder()
@@ -841,7 +840,7 @@ impl MeasurementsConsumptionSource {
 
         Ok(meter::home_and_ev_consumption_breakdown::Query::builder()
             .with_account_number(self.account_number.clone())
-            .with_end_at(self.end_at)
+            .with_end_at(*end)
             .with_timezone(self.tz.name().to_string())
             .with_utility_filters(utility_filters)
             // .with_modelled_utility_filters(modelled_utility_filters)
@@ -872,14 +871,14 @@ impl SlotSource for MeasurementsConsumptionSource {
         &self.hash_key
     }
 
-    fn initial_query(&mut self, start: &DateTime) -> anyhow::Result<Self::Query> {
-        Ok(self.query_builder()?
+    fn initial_query(&mut self, start: &DateTime, end: &DateTime) -> anyhow::Result<Self::Query> {
+        Ok(self.query_builder(end)?
             .with_start_at(start.clone())
             .build()?
         )
     }
 
-    fn continuation_query(&mut self, start: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
+    fn continuation_query(&mut self, start: &DateTime, end: &DateTime, last_response: &Self::Response) -> anyhow::Result<Option<Self::Query>> {
 
 
         // fn get_cursor(last_response: &meter::home_and_ev_consumption_breakdown::Response) -> anyhow::Result<Option<String>> {
@@ -902,7 +901,7 @@ impl SlotSource for MeasurementsConsumptionSource {
                 .as_ref()
                 .cloned()
         {
-            Some(self.query_builder()?
+            Some(self.query_builder(end)?
                 .with_start_at(start.clone())
                 .with_cursor(end_cursor)
                 .build()?)

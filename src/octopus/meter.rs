@@ -423,7 +423,7 @@ impl AgreementLineItems {
                         .with_timezone(String::from("Europe/London"))
                         .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
                         .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
-                        .with_first(50)
+                        .with_first(100)
                         .build()
 
                 };
@@ -439,7 +439,7 @@ impl AgreementLineItems {
                         .with_timezone(String::from("Europe/London"))
                         .with_item_type(super::graphql::LineItemTypeOptions::ConsumptionCharge)
                         .with_line_item_grouping(super::graphql::LineItemGroupingOptions::None)
-                        .with_first(50)
+                        .with_first(100)
                         .with_after(end_cursor)
                         .build())
                     }
