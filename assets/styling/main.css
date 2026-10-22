@@ -586,6 +586,31 @@ h6 {
     fill: #b8c0cc;
 }
 
+/* Series without a colour of their own, e.g. time of use buckets in older readings. */
+.stacked-consumption-graph .series-1 {
+    fill: #f2c94c;
+}
+
+.stacked-consumption-graph .series-2 {
+    fill: #bb6bd9;
+}
+
+.stacked-consumption-graph .series-3 {
+    fill: #2dd4bf;
+}
+
+.stacked-consumption-graph .series-4 {
+    fill: #f472b6;
+}
+
+.stacked-consumption-graph .series-5 {
+    fill: #a3e635;
+}
+
+.stacked-consumption-graph .series-6 {
+    fill: #60a5fa;
+}
+
 .stacked-consumption-graph .stacked-tooltip-background {
     fill: #1a1a1f;
     stroke: #707080;

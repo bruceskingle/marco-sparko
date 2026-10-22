@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,7 +17,51 @@ use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput};
 
 use super::graphql::meter;
-use super::stacked_bar_graph::{StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint};
+use super::stacked_bar_graph::{StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries};
+
+/// The labels of the current home and EV rates with their colour classes, in the order they are shown. Readings may
+/// have other labels, e.g. older readings have time of use buckets, which come after these.
+const KNOWN_LABELS: [(&str, &str); 4] = [
+    ("Home Low Rate", "home-low"),
+    ("Home Standard Rate", "home-standard"),
+    ("EV Low Rate", "ev-low"),
+    ("EV Standard Rate", "ev-standard"),
+];
+
+/// Colour classes for labels which are not in KNOWN_LABELS, used in turn.
+const OTHER_LABEL_CLASSES: [&str; 6] = ["series-1", "series-2", "series-3", "series-4", "series-5", "series-6"];
+
+/// The consumption labels used by any of the readings, see order_labels.
+fn ordered_labels<'a>(readings: impl IntoIterator<Item = &'a HomeAndEvReading>) -> Vec<String> {
+    order_labels(readings.into_iter().flat_map(|reading| reading.consumption.keys().map(String::as_str)))
+}
+
+/// The distinct labels, the known ones first in their usual order, then any others in alphabetical order.
+fn order_labels<'a>(labels: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let all: BTreeSet<&str> = labels.into_iter().collect();
+    let is_known = |label: &str| KNOWN_LABELS.iter().any(|(known, _)| *known == label);
+
+    KNOWN_LABELS.iter()
+        .map(|(label, _)| *label)
+        .filter(|label| all.contains(label))
+        .chain(all.iter().copied().filter(|label| !is_known(label)))
+        .map(String::from)
+        .collect()
+}
+
+/// The graph series for the given labels.
+fn label_series(labels: &[String]) -> Vec<StackedBarSeries> {
+    let mut other_classes = OTHER_LABEL_CLASSES.iter().cycle();
+    labels.iter()
+        .map(|label| {
+            let class = KNOWN_LABELS.iter()
+                .find(|(known, _)| known == label)
+                .map(|(_, class)| *class)
+                .unwrap_or_else(|| other_classes.next().unwrap());
+            StackedBarSeries { label: label.clone(), class: String::from(class) }
+        })
+        .collect()
+}
 
 /// Home and EV consumption readings for a meter over a period, cached in monthly buckets.
 pub struct HomeAndEvDataSet {
@@ -63,35 +108,34 @@ impl HomeAndEvDataSet {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
 
+        let rows: Vec<_> = self.data.iter()
+            .flat_map(|data_set| data_set.data.range(start..))
+            .filter(|(key, _)| *key < end)
+            .collect();
+
+        // A group of columns for each label used in the period.
+        let labels = ordered_labels(rows.iter().map(|(_, item)| &item.value));
+
         let mut items = Vec::new();
         let mut last_date = Date::from_calendar_date(0, time::Month::January, 1)?;
-        for data_set in &self.data {
-            for (key , item) in &data_set.data {
-                let end_ok = key < end;
-                
+        for (key, item) in rows {
+            let row_class = if item.attributes.cached { "cached"} else {"fetched"};
+            let item_start_date = item.value.start.to_date();
+            let (start_date, start_time) = if last_date == item_start_date {
+                ("".to_string(), item.value.start.format(&time_format).unwrap())
+            } else {
+                (item.value.start.format(&date_format).unwrap(), item.value.start.format(&time_format).unwrap())
+            };
 
-                if key >= start && end_ok {
-                    
-                    let row_class = if item.attributes.cached { "cached"} else {"fetched"};
-                    let item_start_date = item.value.start.to_date();
-                    let (start_date, start_time) = if last_date == item_start_date {
-                        ("".to_string(), item.value.start.format(&time_format).unwrap())
-                    } else {
-                        (item.value.start.format(&date_format).unwrap(), item.value.start.format(&time_format).unwrap())
-                    };
-                    
-                    let end_time = item.value.end.format(&time_format).unwrap();
-                    // let amount = format!("{:.3}", item.value.value_);
+            let end_time = item.value.end.format(&time_format).unwrap();
 
-                    items.push(item.value.summary_line(row_class, &start_date, &start_time, &end_time));
-                    last_date = key.to_date();
-                }
-            }
-        };
+            items.push(item.value.summary_line(&labels, row_class, &start_date, &start_time, &end_time));
+            last_date = key.to_date();
+        }
 
         rsx! {
             table {
-                {HomeAndEvReading::summary_headers()}
+                {HomeAndEvReading::summary_headers(&labels)}
                 for item in items {
                     {item}
                 }
@@ -110,6 +154,10 @@ impl HomeAndEvDataSet {
             .filter(|(key, _)| *key < end)
             .map(|(_, item)| &item.value)
             .collect();
+
+        // A series for each label used in the period.
+        let labels = ordered_labels(values.iter().copied());
+        let series = label_series(&labels);
 
         let mut points = Vec::with_capacity(values.len());
         let single_day = matches!(period, StackedBarPeriod::Raw | StackedBarPeriod::Rate)
@@ -236,14 +284,12 @@ impl HomeAndEvDataSet {
                 end: bucket_end.unix_timestamp(),
                 tick_label,
                 period_label: group_label,
-                home_standard_units: value.home_standard.units.to_f64().unwrap_or_default(),
-                home_low_units: value.home_low.units.to_f64().unwrap_or_default(),
-                ev_standard_units: value.ev_standard.units.to_f64().unwrap_or_default(),
-                ev_low_units: value.ev_low.units.to_f64().unwrap_or_default(),
-                home_standard_cost: value.home_standard.cost.to_f64().unwrap_or_default(),
-                home_low_cost: value.home_low.cost.to_f64().unwrap_or_default(),
-                ev_standard_cost: value.ev_standard.cost.to_f64().unwrap_or_default(),
-                ev_low_cost: value.ev_low.cost.to_f64().unwrap_or_default(),
+                units: labels.iter()
+                    .map(|label| value.consumption.get(label).and_then(|c| c.units.to_f64()).unwrap_or_default())
+                    .collect(),
+                costs: labels.iter()
+                    .map(|label| value.consumption.get(label).and_then(|c| c.cost.to_f64()).unwrap_or_default())
+                    .collect(),
                 standing_charge: value.standing_charge.to_f64().unwrap_or_default(),
                 currency: value.currency(),
                 unit: value.unit.clone(),
@@ -255,7 +301,7 @@ impl HomeAndEvDataSet {
                 // Extend the last run if this reading follows on from it with the same rates, otherwise start a new run.
                 let rates = value.rates();
                 match points.last_mut() {
-                    Some(existing) if last_rates == Some(rates) && existing.end == point.start => {
+                    Some(existing) if last_rates.as_ref() == Some(&rates) && existing.end == point.start => {
                         existing.end = point.end;
                         existing.add_values_from(&point);
                         if let Some(run_start) = &run_start {
@@ -290,7 +336,12 @@ impl HomeAndEvDataSet {
         }
 
         rsx! {
-            StackedBarGraph { points, mode, per_hour: period == StackedBarPeriod::Rate }
+            StackedBarGraph {
+                points,
+                series,
+                mode,
+                per_hour: period == StackedBarPeriod::Rate,
+            }
         }
     }
 }
@@ -391,19 +442,6 @@ impl HomeAndEvReadingConsumption {
 
         Ok(HomeAndEvReadingConsumption { units, cost: cost_incl, rate, ccy})
     }
-
-    fn zero() -> Self {
-        let cost = Decimal::ZERO;
-        let rate = Decimal::ZERO;
-        let units = Decimal::ZERO;
-
-        HomeAndEvReadingConsumption {
-            units,
-            cost,
-            rate,
-            ccy: Currency::NONE,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Eq, PartialEq, Clone)]
@@ -411,10 +449,9 @@ pub struct HomeAndEvReading {
     start:  DateTime,
     end: DateTime,
     is_final: bool,
-    home_standard: HomeAndEvReadingConsumption,
-    ev_standard: HomeAndEvReadingConsumption,
-    home_low: HomeAndEvReadingConsumption,
-    ev_low: HomeAndEvReadingConsumption,
+    /// The consumption at each rate, indexed by the label from the API. A BTreeMap so that the serialized form, which
+    /// is compared to detect changes, is always in the same order.
+    consumption: BTreeMap<String, HomeAndEvReadingConsumption>,
     standing_charge: Decimal,
     unit: String,
 }
@@ -422,68 +459,72 @@ pub struct HomeAndEvReading {
 impl HomeAndEvReading {
     const FINAL_DELAY: Duration = Duration::from_hours(3 * 24);
 
-    /// The unit rates of the four consumption types, readings with the same rates are grouped by StackedBarPeriod::Rate.
-    fn rates(&self) -> [Decimal; 4] {
-        [self.home_standard.rate, self.home_low.rate, self.ev_standard.rate, self.ev_low.rate]
+    /// The unit rate for each label, readings with the same rates are grouped by StackedBarPeriod::Rate.
+    fn rates(&self) -> BTreeMap<String, Decimal> {
+        self.consumption.iter()
+            .map(|(label, consumption)| (label.clone(), consumption.rate))
+            .collect()
     }
 
-    /// The currency of the costs, a consumption with no cost (e.g. zero()) has no currency so the first real one is used.
+    /// The currency of the costs, a consumption with no cost has no currency so the first real one is used.
     fn currency(&self) -> Currency {
-        [&self.home_standard, &self.home_low, &self.ev_standard, &self.ev_low]
-            .into_iter()
+        self.consumption.values()
             .map(|consumption| consumption.ccy)
             .find(|ccy| *ccy != Currency::NONE)
             .unwrap_or(Currency::NONE)
     }
 
-    fn summary_headers() -> Element {
+    /// Add the consumption for a label, which must appear only once in a reading.
+    fn insert_consumption(consumption: &mut BTreeMap<String, HomeAndEvReadingConsumption>, label: String,
+        value: HomeAndEvReadingConsumption, start: &DateTime) -> anyhow::Result<()> {
+        if consumption.contains_key(&label) {
+            return Err(anyhow!("Duplicate {} consumption in slot {}", label, start));
+        }
+        consumption.insert(label, value);
+        Ok(())
+    }
+
+    /// Table headers with a group of columns for each label.
+    fn summary_headers(labels: &[String]) -> Element {
         rsx! {
             tr {
                 td { colspan: 3 }
-                th { colspan: 3, class: "header", "Home Standard" }
-                th { colspan: 3, class: "header", "Home Low" }
-                th { colspan: 3, class: "header", "EV Standard" }
-                th { colspan: 3, class: "header", "EV Low" }
+                for label in labels {
+                    th { colspan: 3, class: "header", "{label}" }
+                }
             }
             tr { class: "header",
                 th { colspan: 2, "From" }
                 th { "To" }
-                th { "Units" }
-                th { "Cost" }
-                th { "Rate" }
-                th { "Units" }
-                th { "Cost" }
-                th { "Rate" }
-                th { "Units" }
-                th { "Cost" }
-                th { "Rate" }
-                th { "Units" }
-                th { "Cost" }
-                th { "Rate" }
+                for _ in labels {
+                    th { "Units" }
+                    th { "Cost" }
+                    th { "Rate" }
+                }
                 th { "Standing Charge" }
             }
         }
     }
 
-    
-    fn summary_line(&self, row_class: &str, start_date: &str, start_time: &str, end_time: &str) -> Element {
+    /// A table row matching summary_headers, labels which this reading does not have are left empty.
+    fn summary_line(&self, labels: &[String], row_class: &str, start_date: &str, start_time: &str, end_time: &str) -> Element {
         rsx!{
             tr { class: row_class,
                 td { "{start_date}" }
                 td { "{start_time}" }
                 td { "{end_time}" }
-                td { "{self.home_standard.units}" }
-                td { "{self.home_standard.cost}" }
-                td { "{self.home_standard.rate}" }
-                td { "{self.home_low.units}" }
-                td { "{self.home_low.cost}" }
-                td { "{self.home_low.rate}" }
-                td { "{self.ev_standard.units}" }
-                td { "{self.ev_standard.cost}" }
-                td { "{self.ev_standard.rate}" }
-                td { "{self.ev_low.units}" }
-                td { "{self.ev_low.cost}" }
-                td { "{self.ev_low.rate}" }
+                for label in labels {
+                    if let Some(consumption) = self.consumption.get(label) {
+                        td { "{consumption.units}" }
+                        td { "{consumption.cost}" }
+                        td { "{consumption.rate}" }
+                    }
+                    else {
+                        td {}
+                        td {}
+                        td {}
+                    }
+                }
                 td { "{self.standing_charge}" }
             }
         }
@@ -496,10 +537,7 @@ impl HomeAndEvReading {
             },
             meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
                 if let Some(meta_data) = interval_measurement_type.measurement_interface_.meta_data_ {
-                    let mut home_standard= None;
-                    let mut ev_standard= None;
-                    let mut home_low= None;
-                    let mut ev_low= None;
+                    let mut consumption = BTreeMap::new();
                     let mut standing_charge = None;
                     let unit = interval_measurement_type.measurement_interface_.unit_;
 
@@ -514,51 +552,17 @@ impl HomeAndEvReading {
                                         return Err(anyhow!("Null standing charge"));
                                     }
                                 },
+                                // Consumption at one rate, labelled with the rate, e.g. "EV Low Rate".
                                 super::graphql::ReadingStatisticTypeEnum::ConsumptionCost => {
-                                    if let Some(label) = stat.label_.clone() {
-                                        match label.as_str() {
-                                            "EV Low Rate" => {
-                                                ev_low = Some(HomeAndEvReadingConsumption::from(stat));
-                                            },
-                                            "EV Standard Rate" => {
-                                                ev_standard = Some(HomeAndEvReadingConsumption::from(stat));
-                                            },
-                                            "Home Low Rate" => {
-                                                home_low= Some(HomeAndEvReadingConsumption::from(stat));
-                                            },
-                                            "Home Standard Rate" => {
-                                                home_standard= Some(HomeAndEvReadingConsumption::from(stat));
-                                            },
-                                            _ => {
-
-                                                return Err(anyhow!(format!("Unknown meta data label {}", label)));
-                                            }
-                                        }
-                                    }
-                                    else {
-
-                                        return Err(anyhow!("No meta data label"));
-                                    }
+                                    let label = stat.label_.clone()
+                                        .ok_or_else(|| anyhow!("No meta data label"))?;
+                                    Self::insert_consumption(&mut consumption, label, HomeAndEvReadingConsumption::from(stat), &interval_measurement_type.start_at_)?;
                                 },
+                                // The old format, whole house consumption in time of use buckets, e.g. "OFF_PEAK".
                                 super::graphql::ReadingStatisticTypeEnum::TouBucketCost => {
-
-                                let label = stat.label_.clone()
-                                    .ok_or_else(|| anyhow!("No meta data label"))?;
-                                let consumption = HomeAndEvReadingConsumption::from_tou(stat)?;
-
-                                // Old format: one whole-house line per slot, no EV split, so it all goes to Home.
-                                let slot = match label.as_str() {
-                                    "OFF_PEAK" => &mut home_low,
-                                    "STANDARD_RATE" => &mut home_standard,
-                                    _ => {
-
-                                        return Err(anyhow!("Unknown TOU bucket label {}", label));
-                                    }
-                                };
-                                if slot.is_some() {
-                                    return Err(anyhow!("Duplicate {} bucket in slot {}", label, interval_measurement_type.start_at_));
-                                }
-                                *slot = Some(consumption);
+                                    let label = stat.label_.clone()
+                                        .ok_or_else(|| anyhow!("No meta data label"))?;
+                                    Self::insert_consumption(&mut consumption, label, HomeAndEvReadingConsumption::from_tou(stat)?, &interval_measurement_type.start_at_)?;
                                 },
                                 _ => {
 
@@ -571,10 +575,6 @@ impl HomeAndEvReading {
                         }
                     }
 
-                    let home_standard = if let Some(v) = home_standard { v } else { HomeAndEvReadingConsumption::zero()};
-                    let home_low = if let Some(v) = home_low { v } else { HomeAndEvReadingConsumption::zero()};
-                    let ev_standard = if let Some(v) = ev_standard { v } else { HomeAndEvReadingConsumption::zero()};
-                    let ev_low = if let Some(v) = ev_low { v } else { HomeAndEvReadingConsumption::zero()};
                     let standing_charge = if let Some(v) = standing_charge { v } else { Decimal::ZERO };
 
                     let is_final = **query_time - *interval_measurement_type.end_at_ > HomeAndEvReading::FINAL_DELAY;
@@ -582,10 +582,7 @@ impl HomeAndEvReading {
                         start: interval_measurement_type.start_at_,
                         end: interval_measurement_type.end_at_,
                         is_final,
-                        home_standard,
-                        home_low,
-                        ev_standard,
-                        ev_low,
+                        consumption,
                         standing_charge,
                         unit
                     })
@@ -745,5 +742,23 @@ impl SlotSource for HomeAndEvConsumptionSource {
     
     fn refresh_after(&self) -> Duration {
         Duration::from_hours(24)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{label_series, order_labels};
+
+    #[test]
+    fn known_labels_come_first_in_their_usual_order_then_others_alphabetically() {
+        let labels = order_labels(["STANDARD_RATE", "EV Standard Rate", "OFF_PEAK", "Home Low Rate", "EV Standard Rate"]);
+        assert_eq!(labels, ["Home Low Rate", "EV Standard Rate", "OFF_PEAK", "STANDARD_RATE"]);
+    }
+
+    #[test]
+    fn known_labels_keep_their_colours_and_others_use_the_palette() {
+        let labels = order_labels(["OFF_PEAK", "Home Low Rate", "STANDARD_RATE"]);
+        let classes: Vec<String> = label_series(&labels).into_iter().map(|series| series.class).collect();
+        assert_eq!(classes, ["home-low", "series-1", "series-2"]);
     }
 }
