@@ -9,7 +9,7 @@ use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use sparko_graphql::types::{Currency, Date, DateTime, ForwardPageOf};
 use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, ProgressMonitor};
-use time_tz::{OffsetDateTimeExt, TimeZone, Tz};
+use time_tz::{TimeZone, Tz};
 
 use crate::CacheConfig;
 use crate::components::export::{ExportTable, ExportValue};
@@ -20,7 +20,7 @@ use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, Uti
 use super::graphql::meter;
 use super::category_filter::{CategoryFilter, CategoryValues, KNOWN_LABELS, STANDING_CHARGE_LABEL};
 use super::stacked_bar_graph::{StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries};
-use super::trend_graph::{TrendGraph, TrendLegendItem, TrendLine, YEAR_DASHES, YEAR_LEGEND_COLOR};
+use super::trend_graph::{TrendGraph, TrendLegendItem, TrendLine, YEAR_LEGEND_COLOR, year_dash, year_positions};
 
 /// The readings in a period of a graph added together, e.g. a day.
 struct AggregatedPoint {
@@ -241,23 +241,13 @@ impl MeasurementsDataSet {
         let per_hour = period == StackedBarPeriod::Rate;
 
         // The year of each point and the position of its middle in that year.
-        let mut positions = Vec::with_capacity(aggregated.len());
-        for point in &aggregated {
-            let middle = point.start + (point.end - point.start) / 2;
-            let year = time::OffsetDateTime::from_unix_timestamp(middle)
-                .map_err(|error| anyhow!(error))?
-                .to_timezone(tz)
-                .year();
-            let year_start = Date::from_calendar_date(year, time::Month::January, 1)?.at_midnight(tz).unix_timestamp();
-            let next_year_start = Date::from_calendar_date(year + 1, time::Month::January, 1)?.at_midnight(tz).unix_timestamp();
-            positions.push((year, (middle - year_start) as f64 / (next_year_start - year_start) as f64));
-        }
+        let positions = year_positions(aggregated.iter().map(|point| (point.start, point.end)), tz)?;
         let years: BTreeSet<i32> = positions.iter().map(|(year, _)| *year).collect();
 
         // Each year has its own dash pattern, in order of year.
         let mut lines = Vec::new();
         for (year_index, year) in years.iter().enumerate() {
-            let dash = YEAR_DASHES[year_index % YEAR_DASHES.len()];
+            let dash = year_dash(year_index);
             for category in &categories {
                 let points: Vec<(f64, f64)> = aggregated.iter()
                     .zip(&positions)
@@ -278,7 +268,7 @@ impl MeasurementsDataSet {
             .chain(years.iter().enumerate().map(|(year_index, year)| TrendLegendItem {
                 label: year.to_string(),
                 color: String::from(YEAR_LEGEND_COLOR),
-                dash: String::from(YEAR_DASHES[year_index % YEAR_DASHES.len()]),
+                dash: String::from(year_dash(year_index)),
             }))
             .collect();
 

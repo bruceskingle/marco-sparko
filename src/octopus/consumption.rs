@@ -1,10 +1,11 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use dioxus::prelude::*;
 use rust_decimal::prelude::ToPrimitive;
-use sparko_graphql::types::{Date, DateTime};
-use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, NoProgress};
+use sparko_graphql::types::{Currency, Date, DateTime};
+use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, ProgressMonitor};
 use time_tz::Tz;
 
 use crate::CacheConfig;
@@ -13,7 +14,11 @@ use crate::data_set::{CancelToken, MonthlyFixedSlotDataSet, SlotSource};
 
 use super::consumption_graph::{ConsumptionGraph, GraphPoint, GraphStyle};
 use super::graphql::meter;
-use super::stacked_bar_graph::StackedBarPeriod;
+use super::stacked_bar_graph::{StackedBarMode, StackedBarPeriod};
+use super::trend_graph::{TrendGraph, TrendLegendItem, TrendLine, year_dash, year_positions};
+
+/// The colour of the lines in the trend graph, the same as the accent colour used for the bars.
+const TREND_COLOR: &str = "#06b6d4";
 
 /// Half hourly consumption readings for a meter over a period, cached in monthly buckets.
 pub struct ConsumptionDataSet {
@@ -27,6 +32,7 @@ impl ConsumptionDataSet {
         start: &DateTime,
         end: &DateTime,
         tz: &'static Tz,
+        progress: &(impl ProgressMonitor + ?Sized),
         cancel: &CancelToken,
         cache_config: &Arc<CacheConfig>,
         request_manager: &impl GraphQLCaller)
@@ -46,7 +52,7 @@ impl ConsumptionDataSet {
             start,
             end,
             cancel,
-            &NoProgress,
+            progress,
         ).await?;
 
         Ok(Self { data })
@@ -108,6 +114,45 @@ impl ConsumptionDataSet {
 
         rsx! {
             ConsumptionGraph { points, style: GraphStyle::Bar }
+        }
+    }
+
+    /// A line graph over one year, with a line for each year from start to end.
+    pub fn display_trend(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> Element {
+        let points = self.graph_points(start, end, tz, period);
+        let positions = year_positions(points.iter().map(|point| (point.start, point.end)), tz)?;
+        let years: BTreeSet<i32> = positions.iter().map(|(year, _)| *year).collect();
+
+        // Each year has its own dash pattern, in order of year.
+        let lines = years.iter()
+            .enumerate()
+            .map(|(year_index, year)| TrendLine {
+                color: String::from(TREND_COLOR),
+                dash: String::from(year_dash(year_index)),
+                points: points.iter()
+                    .zip(&positions)
+                    .filter(|(_, (point_year, _))| point_year == year)
+                    .map(|(point, (_, position))| (*position, point.value))
+                    .collect(),
+            })
+            .collect();
+        let legend = years.iter()
+            .enumerate()
+            .map(|(year_index, year)| TrendLegendItem {
+                label: year.to_string(),
+                color: String::from(TREND_COLOR),
+                dash: String::from(year_dash(year_index)),
+            })
+            .collect();
+
+        rsx! {
+            TrendGraph {
+                lines,
+                legend,
+                mode: StackedBarMode::Units,
+                currency: Currency::NONE,
+                unit: String::new(),
+            }
         }
     }
 

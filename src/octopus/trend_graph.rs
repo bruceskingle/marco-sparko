@@ -1,7 +1,9 @@
 //! A line graph of values over one year from 1 January, with a line for each year so that years can be compared.
 
+use anyhow::anyhow;
 use dioxus::prelude::*;
-use sparko_graphql::types::Currency;
+use sparko_graphql::types::{Currency, Date};
+use time_tz::{OffsetDateTimeExt, Tz};
 
 use super::consumption_graph::nice_step;
 use super::stacked_bar_graph::{StackedBarMode, axis_label};
@@ -22,6 +24,28 @@ pub const YEAR_DASHES: [&str; 6] = ["none", "8 4", "2 3", "12 4 2 4", "4 4", "1 
 
 /// The colour of the year samples in the legend.
 pub const YEAR_LEGEND_COLOR: &str = "#c4c4ce";
+
+/// The dash pattern for the year with the given index, in order of year, starting with solid.
+pub fn year_dash(year_index: usize) -> &'static str {
+    YEAR_DASHES[year_index % YEAR_DASHES.len()]
+}
+
+/// The year of the middle of each period, given as its start and end unix timestamps, and the position of the middle in
+/// that year, from 0 at the start of 1 January to 1 at the end of 31 December.
+pub fn year_positions(periods: impl IntoIterator<Item = (i64, i64)>, tz: &'static Tz) -> anyhow::Result<Vec<(i32, f64)>> {
+    periods.into_iter()
+        .map(|(start, end)| {
+            let middle = start + (end - start) / 2;
+            let year = time::OffsetDateTime::from_unix_timestamp(middle)
+                .map_err(|error| anyhow!(error))?
+                .to_timezone(tz)
+                .year();
+            let year_start = Date::from_calendar_date(year, time::Month::January, 1)?.at_midnight(tz).unix_timestamp();
+            let next_year_start = Date::from_calendar_date(year + 1, time::Month::January, 1)?.at_midnight(tz).unix_timestamp();
+            Ok((year, (middle - year_start) as f64 / (next_year_start - year_start) as f64))
+        })
+        .collect()
+}
 
 #[derive(Clone, PartialEq)]
 pub struct TrendLine {

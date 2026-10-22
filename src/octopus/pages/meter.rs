@@ -186,7 +186,7 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
         let data = exportable.read().clone()?;
         Some(match view() {
             ConsumptionView::Table => data.readings_export(&start, &end),
-            ConsumptionView::Graph => data.graph_export(&start, &end, tz, graph_period()),
+            ConsumptionView::Graph | ConsumptionView::Trend => data.graph_export(&start, &end, tz, graph_period()),
         })
     };
     let export_name = export_file_name("meter", &props.meter_id, &start, &end, &view().export_description(graph_period()));
@@ -211,7 +211,7 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
         div { class: "date-range date-range-row",
             DateRangePicker { range: applied_range, timezone: tz }
             span { class: "view-toggle",
-                for option in [ConsumptionView::Table, ConsumptionView::Graph] {
+                for option in [ConsumptionView::Table, ConsumptionView::Graph, ConsumptionView::Trend] {
                     button {
                         r#type: "button",
                         class: if view() == option { "active" },
@@ -220,7 +220,7 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
                     }
                 }
             }
-            if view() == ConsumptionView::Graph {
+            if view() != ConsumptionView::Table {
                 span { class: "view-toggle",
                     for option in [
                         StackedBarPeriod::Raw,
@@ -267,6 +267,8 @@ struct MeterDetailProps {
 enum ConsumptionView {
     Table,
     Graph,
+    /// A line for each year, to compare years.
+    Trend,
 }
 
 impl std::fmt::Display for ConsumptionView {
@@ -274,6 +276,7 @@ impl std::fmt::Display for ConsumptionView {
         match self {
             ConsumptionView::Table => write!(f, "Table"),
             ConsumptionView::Graph => write!(f, "Graph"),
+            ConsumptionView::Trend => write!(f, "Trend"),
         }
     }
 }
@@ -296,6 +299,9 @@ impl PartialEq for MeterDetailProps {
 fn MeterDetail(props: MeterDetailProps) -> Element {
     let context = use_context::<Arc<OctopusContext>>();
 
+    // The latest progress message from the fetch.
+    let progress = use_signal(String::new);
+
     // Set by the cancel button, the fetch then stops and returns the data it has so far.
     let cancel = use_hook(CancelToken::new);
 
@@ -309,9 +315,11 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
             let cancel = cancel.clone();
             let context = context.clone();
             async move {
+                let monitor = move |message: String| { let mut progress = progress; progress.set(message) };
                 ConsumptionDataSet::new(&props.account_id, &props.meter_id,
                     &props.start, &props.end,
-                    props.billing_timezone, &cancel, &context.cache_config, &*context.request_manager).await.map(Arc::new)
+                    props.billing_timezone, &monitor,
+                    &cancel, &context.cache_config, &*context.request_manager).await.map(Arc::new)
             }
         }
     });
@@ -328,14 +336,23 @@ fn MeterDetail(props: MeterDetailProps) -> Element {
 
     match &*transactions_resource.read() {
         None => rsx! {
-            {format!("Loading consumption for meter {}...", props.meter_id)}
-            " "
-            button { r#type: "button", onclick: move |_| cancel.cancel(), "Cancel" }
+            div {
+                {format!("Loading consumption for meter {}...", props.meter_id)}
+                " "
+                button { r#type: "button", onclick: move |_| cancel.cancel(), "Cancel" }
+            }
+            div { "{progress}" }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load consumption for meter {}: {error:?}", props.meter_id))?,
         Some(Ok(consumption)) => match props.view {
             ConsumptionView::Table => consumption.display(&props.start, &props.end),
             ConsumptionView::Graph => consumption.display_graph(
+                &props.start,
+                &props.end,
+                props.billing_timezone,
+                props.graph_period,
+            ),
+            ConsumptionView::Trend => consumption.display_trend(
                 &props.start,
                 &props.end,
                 props.billing_timezone,
@@ -351,6 +368,7 @@ impl ConsumptionView {
         match self {
             ConsumptionView::Table => String::from("readings"),
             ConsumptionView::Graph => period.to_string().to_lowercase(),
+            ConsumptionView::Trend => format!("trend_{}", period.to_string().to_lowercase()),
         }
     }
 }
