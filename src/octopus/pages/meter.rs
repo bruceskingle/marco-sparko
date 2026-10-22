@@ -208,7 +208,7 @@ fn MeterConsumption(props: MeterConsumptionProps) -> Element {
     };
 
     rsx! {
-        div { class: "date-range home-ev-date-range",
+        div { class: "date-range date-range-row",
             DateRangePicker { range: applied_range, timezone: tz }
             span { class: "view-toggle",
                 for option in [ConsumptionView::Table, ConsumptionView::Graph] {

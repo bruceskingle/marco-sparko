@@ -9,10 +9,12 @@ mod bill;
 mod meter;
 mod line_items;
 mod meter_agreement;
-mod home_and_ev;
+mod measurements;
 mod consumption;
 mod consumption_graph;
 mod stacked_bar_graph;
+mod trend_graph;
+mod category_filter;
 mod context;
 mod pages;
 
@@ -25,7 +27,7 @@ use async_trait::async_trait;
 use dioxus::prelude::*;
 
 use context::{OctopusContext, OctopusRoot};
-use pages::{BillsPage, MeterPage, HomeAndEvPage, PropertiesPage};
+use pages::{BillsPage, MeterPage, MeasurementsPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
 
 use time_tz::timezones;
@@ -189,8 +191,8 @@ impl Module for OctopusModule {
                 path: "meters",
             },
             PageInfo {
-                label: "Home and EV",
-                path: "home_and_ev",
+                label: "Measurements",
+                path: "measurements",
             },
         )
     }
@@ -353,9 +355,9 @@ impl Module for OctopusModule {
                     MeterPage { path }
                 }
             },
-            "home_and_ev" => {
+            "measurements" => {
                 rsx! {
-                    HomeAndEvPage { path }
+                    MeasurementsPage { path }
                 }
             },
             _ => {

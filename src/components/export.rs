@@ -147,7 +147,7 @@ fn csv_field(text: &str) -> String {
     }
 }
 
-/// The suggested name for an export, without an extension, e.g. home_and_ev_1012779334755_2026-10-01_to_2026-10-31_rate
+/// The suggested name for an export, without an extension, e.g. measurements_1012779334755_2026-10-01_to_2026-10-31_rate
 /// The end is exclusive, so the last day in the name is the day before it if it is midnight.
 pub fn export_file_name(prefix: &str, id: &str, start: &OffsetDateTime, end: &OffsetDateTime, what: &str) -> String {
     let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
@@ -254,7 +254,7 @@ pub fn ExportButton(
                 },
                 None => rsx! {},
             }
-            span { class: "export-menu-anchor",
+            span { class: "menu-anchor",
                 button {
                     r#type: "button",
                     title: "Export the data in this view",
@@ -276,8 +276,8 @@ pub fn ExportButton(
                 }
                 if menu_open() && !disabled {
                     // Covers the page so that clicking anywhere else closes the menu.
-                    div { class: "export-menu-backdrop", onclick: move |_| menu_open.set(false) }
-                    div { class: "export-menu",
+                    div { class: "menu-backdrop", onclick: move |_| menu_open.set(false) }
+                    div { class: "dropdown-menu",
                         for format in ExportFormat::ALL {
                             button {
                                 r#type: "button",
@@ -317,8 +317,8 @@ mod tests {
         let start = time::macros::datetime!(2026-10-01 00:00 +1);
         let end = time::macros::datetime!(2026-11-01 00:00 +0);
         assert_eq!(
-            super::export_file_name("home_and_ev", "1012779334755", &start, &end, "rate"),
-            "home_and_ev_1012779334755_2026-10-01_to_2026-10-31_rate"
+            super::export_file_name("measurements", "1012779334755", &start, &end, "rate"),
+            "measurements_1012779334755_2026-10-01_to_2026-10-31_rate"
         );
     }
 

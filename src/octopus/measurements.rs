@@ -9,7 +9,7 @@ use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use sparko_graphql::types::{Currency, Date, DateTime, ForwardPageOf};
 use sparko_graphql::{GraphQLCaller, GraphQLQueryBuilder, ProgressMonitor};
-use time_tz::{TimeZone, Tz};
+use time_tz::{OffsetDateTimeExt, TimeZone, Tz};
 
 use crate::CacheConfig;
 use crate::components::export::{ExportTable, ExportValue};
@@ -18,22 +18,38 @@ use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput};
 
 use super::graphql::meter;
+use super::category_filter::{CategoryFilter, CategoryValues, KNOWN_LABELS, STANDING_CHARGE_LABEL};
 use super::stacked_bar_graph::{StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries};
+use super::trend_graph::{TrendGraph, TrendLegendItem, TrendLine, YEAR_DASHES, YEAR_LEGEND_COLOR};
 
-/// The labels of the current home and EV rates with their colour classes, in the order they are shown. Readings may
-/// have other labels, e.g. older readings have time of use buckets, which come after these.
-const KNOWN_LABELS: [(&str, &str); 4] = [
-    ("Home Low Rate", "home-low"),
-    ("Home Standard Rate", "home-standard"),
-    ("EV Low Rate", "ev-low"),
-    ("EV Standard Rate", "ev-standard"),
-];
+/// The readings in a period of a graph added together, e.g. a day.
+struct AggregatedPoint {
+    start: i64,
+    end: i64,
+    tick_label: Option<String>,
+    period_label: String,
+    /// The units of each label, in the order of the labels.
+    units: Vec<f64>,
+    /// The cost of each label, in the order of the labels.
+    costs: Vec<f64>,
+    standing_charge: f64,
+}
 
-/// Colour classes for labels which are not in KNOWN_LABELS, used in turn.
-const OTHER_LABEL_CLASSES: [&str; 6] = ["series-1", "series-2", "series-3", "series-4", "series-5", "series-6"];
+impl AggregatedPoint {
+    /// Add the values of another point with the same labels.
+    fn add_values_from(&mut self, other: &Self) {
+        for (total, value) in self.units.iter_mut().zip(&other.units) {
+            *total += value;
+        }
+        for (total, value) in self.costs.iter_mut().zip(&other.costs) {
+            *total += value;
+        }
+        self.standing_charge += other.standing_charge;
+    }
+}
 
 /// The consumption labels used by any of the readings, see order_labels.
-fn ordered_labels<'a>(readings: impl IntoIterator<Item = &'a HomeAndEvReading>) -> Vec<String> {
+fn ordered_labels<'a>(readings: impl IntoIterator<Item = &'a MeasurementsReading>) -> Vec<String> {
     order_labels(readings.into_iter().flat_map(|reading| reading.consumption.keys().map(String::as_str)))
 }
 
@@ -50,26 +66,12 @@ fn order_labels<'a>(labels: impl IntoIterator<Item = &'a str>) -> Vec<String> {
         .collect()
 }
 
-/// The graph series for the given labels.
-fn label_series(labels: &[String]) -> Vec<StackedBarSeries> {
-    let mut other_classes = OTHER_LABEL_CLASSES.iter().cycle();
-    labels.iter()
-        .map(|label| {
-            let class = KNOWN_LABELS.iter()
-                .find(|(known, _)| known == label)
-                .map(|(_, class)| *class)
-                .unwrap_or_else(|| other_classes.next().unwrap());
-            StackedBarSeries { label: label.clone(), class: String::from(class) }
-        })
-        .collect()
+/// Measurement readings for a meter over a period, cached in monthly buckets.
+pub struct MeasurementsDataSet {
+    pub data: Vec<MonthlyFixedSlotDataSet<MeasurementsConsumptionSource>>,
 }
 
-/// Home and EV consumption readings for a meter over a period, cached in monthly buckets.
-pub struct HomeAndEvDataSet {
-    pub data: Vec<MonthlyFixedSlotDataSet<HomeAndEvConsumptionSource>>,
-}
-
-impl HomeAndEvDataSet {
+impl MeasurementsDataSet {
     pub async fn new(
         account_number: &String,
         mpan: &String,
@@ -83,10 +85,10 @@ impl HomeAndEvDataSet {
         -> anyhow::Result<Self>
     {
 
-        let source = HomeAndEvConsumptionSource{
+        let source = MeasurementsConsumptionSource{
             account_number: account_number.clone(),
             mpan: mpan.clone(),
-            hash_key: format!("{}#{}#HomeAndEvConsumption", account_number, mpan),
+            hash_key: format!("{}#{}#MeasurementsConsumption", account_number, mpan),
             end_at: end.clone(),
             tz,
         };
@@ -136,7 +138,7 @@ impl HomeAndEvDataSet {
 
         rsx! {
             table {
-                {HomeAndEvReading::summary_headers(&labels)}
+                {MeasurementsReading::summary_headers(&labels)}
                 for item in items {
                     {item}
                 }
@@ -144,21 +146,156 @@ impl HomeAndEvDataSet {
         }
     }
 
-    pub fn display_graph(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod) -> Element {
-        let (series, points) = self.graph_points(start, end, tz, period);
+    /// The categories which can be shown in the graphs for the readings from start to end, the standing charge (for
+    /// costs only) and then each label.
+    pub fn categories(&self, start: &DateTime, end: &DateTime, mode: StackedBarMode) -> Vec<String> {
+        let labels = ordered_labels(self.readings(start, end));
+        Self::categories_for(&labels, mode)
+    }
+
+    fn categories_for(labels: &[String], mode: StackedBarMode) -> Vec<String> {
+        let standing_charge = (mode == StackedBarMode::Cost).then(|| String::from(STANDING_CHARGE_LABEL));
+        standing_charge.into_iter().chain(labels.iter().cloned()).collect()
+    }
+
+    /// The readings from start to end.
+    fn readings<'a>(&'a self, start: &'a DateTime, end: &'a DateTime) -> impl Iterator<Item = &'a MeasurementsReading> + 'a {
+        self.data.iter()
+            .flat_map(move |data_set| data_set.data.range(start..))
+            .filter(move |(key, _)| *key < end)
+            .map(|(_, item)| &item.value)
+    }
+
+    /// The value of each category for each point, filtered by the filter.
+    fn filtered_categories(labels: &[String], points: &[AggregatedPoint], mode: StackedBarMode, filter: &CategoryFilter) -> Vec<CategoryValues> {
+        let categories = Self::categories_for(labels, mode).into_iter()
+            .enumerate()
+            .map(|(index, label)| {
+                // In Cost mode the standing charge comes first, before the labels.
+                let label_index = if mode == StackedBarMode::Cost { index.checked_sub(1) } else { Some(index) };
+                let values = points.iter()
+                    .map(|point| match (mode, label_index) {
+                        (StackedBarMode::Cost, None) => point.standing_charge,
+                        (StackedBarMode::Cost, Some(index)) => point.costs[index],
+                        (StackedBarMode::Units, Some(index)) => point.units[index],
+                        (StackedBarMode::Units, None) => 0.0,
+                    })
+                    .collect();
+                (label, values)
+            })
+            .collect();
+        filter.apply(categories, points.len())
+    }
+
+    /// The unit of consumption and the currency of the readings, e.g. kwh and GBP.
+    fn graph_units(&self, start: &DateTime, end: &DateTime) -> (String, Currency) {
+        let readings: Vec<&MeasurementsReading> = self.readings(start, end).collect();
+        let unit = readings.iter()
+            .map(|reading| reading.unit.as_str())
+            .find(|unit| !unit.is_empty())
+            .unwrap_or_default()
+            .to_string();
+        let currency = readings.iter()
+            .map(|reading| reading.currency())
+            .find(|currency| *currency != Currency::NONE)
+            .unwrap_or(Currency::NONE);
+        (unit, currency)
+    }
+
+    pub fn display_graph(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod, filter: &CategoryFilter) -> Element {
+        let (labels, aggregated) = self.graph_points(start, end, tz, period);
+        let categories = Self::filtered_categories(&labels, &aggregated, mode, filter);
+        let (unit, currency) = self.graph_units(start, end);
+
+        let series = categories.iter()
+            .map(|category| StackedBarSeries { label: category.label.clone(), color: category.color.clone() })
+            .collect();
+        let points = aggregated.into_iter()
+            .enumerate()
+            .map(|(index, point)| StackedBarPoint {
+                start: point.start,
+                end: point.end,
+                tick_label: point.tick_label,
+                period_label: point.period_label,
+                values: categories.iter().map(|category| category.values[index]).collect(),
+            })
+            .collect();
 
         rsx! {
             StackedBarGraph {
                 points,
                 series,
                 mode,
+                currency,
+                unit,
                 per_hour: period == StackedBarPeriod::Rate,
             }
         }
     }
 
-    /// The readings from start to end aggregated by period, with a series for each label.
-    fn graph_points(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> (Vec<StackedBarSeries>, Vec<StackedBarPoint>) {
+    /// A line graph over one year, with a line for each category (or the total) in each year from start to end.
+    pub fn display_trend(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod, filter: &CategoryFilter) -> Element {
+        let (labels, aggregated) = self.graph_points(start, end, tz, period);
+        let categories = Self::filtered_categories(&labels, &aggregated, mode, filter);
+        let (unit, currency) = self.graph_units(start, end);
+        let per_hour = period == StackedBarPeriod::Rate;
+
+        // The year of each point and the position of its middle in that year.
+        let mut positions = Vec::with_capacity(aggregated.len());
+        for point in &aggregated {
+            let middle = point.start + (point.end - point.start) / 2;
+            let year = time::OffsetDateTime::from_unix_timestamp(middle)
+                .map_err(|error| anyhow!(error))?
+                .to_timezone(tz)
+                .year();
+            let year_start = Date::from_calendar_date(year, time::Month::January, 1)?.at_midnight(tz).unix_timestamp();
+            let next_year_start = Date::from_calendar_date(year + 1, time::Month::January, 1)?.at_midnight(tz).unix_timestamp();
+            positions.push((year, (middle - year_start) as f64 / (next_year_start - year_start) as f64));
+        }
+        let years: BTreeSet<i32> = positions.iter().map(|(year, _)| *year).collect();
+
+        // Each year has its own dash pattern, in order of year.
+        let mut lines = Vec::new();
+        for (year_index, year) in years.iter().enumerate() {
+            let dash = YEAR_DASHES[year_index % YEAR_DASHES.len()];
+            for category in &categories {
+                let points: Vec<(f64, f64)> = aggregated.iter()
+                    .zip(&positions)
+                    .zip(&category.values)
+                    .filter(|((_, (point_year, _)), _)| point_year == year)
+                    .map(|((point, (_, position)), value)| {
+                        // Rate periods have different lengths, so their values are per hour.
+                        let scale = if per_hour { 3600.0 / (point.end - point.start).max(1) as f64 } else { 1.0 };
+                        (*position, value * scale)
+                    })
+                    .collect();
+                lines.push(TrendLine { color: category.color.clone(), dash: String::from(dash), points });
+            }
+        }
+
+        let legend = categories.iter()
+            .map(|category| TrendLegendItem { label: category.label.clone(), color: category.color.clone(), dash: String::from("none") })
+            .chain(years.iter().enumerate().map(|(year_index, year)| TrendLegendItem {
+                label: year.to_string(),
+                color: String::from(YEAR_LEGEND_COLOR),
+                dash: String::from(YEAR_DASHES[year_index % YEAR_DASHES.len()]),
+            }))
+            .collect();
+
+        rsx! {
+            TrendGraph {
+                lines,
+                legend,
+                mode,
+                currency,
+                unit,
+                per_hour,
+            }
+        }
+    }
+
+    /// The readings from start to end aggregated by period, with the labels in the order of their values.
+    fn graph_points(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> (Vec<String>, Vec<AggregatedPoint>) {
         let date_format = time::format_description::parse("[year]-[month]-[day]").unwrap();
         let day_format = time::format_description::parse("[day] [month repr:short]").unwrap();
         let time_format = time::format_description::parse("[hour]:[minute]").unwrap();
@@ -170,9 +307,8 @@ impl HomeAndEvDataSet {
             .map(|(_, item)| &item.value)
             .collect();
 
-        // A series for each label used in the period.
+        // The values of each label used in the period.
         let labels = ordered_labels(values.iter().copied());
-        let series = label_series(&labels);
 
         let mut points = Vec::with_capacity(values.len());
         let single_day = matches!(period, StackedBarPeriod::Raw | StackedBarPeriod::Rate)
@@ -294,7 +430,7 @@ impl HomeAndEvDataSet {
                 ),
                 StackedBarPeriod::Month => bucket_start.format(&month_format).unwrap(),
             };
-            let point = StackedBarPoint {
+            let point = AggregatedPoint {
                 start: bucket_start.unix_timestamp(),
                 end: bucket_end.unix_timestamp(),
                 tick_label,
@@ -306,8 +442,6 @@ impl HomeAndEvDataSet {
                     .map(|label| value.consumption.get(label).and_then(|c| c.cost.to_f64()).unwrap_or_default())
                     .collect(),
                 standing_charge: value.standing_charge.to_f64().unwrap_or_default(),
-                currency: value.currency(),
-                unit: value.unit.clone(),
             };
 
             if matches!(period, StackedBarPeriod::Raw) {
@@ -350,12 +484,12 @@ impl HomeAndEvDataSet {
             last_bucket_start = Some(bucket_start.unix_timestamp());
         }
 
-        (series, points)
+        (labels, points)
     }
 
     /// The readings from start to end, as shown in the table.
     pub fn readings_export(&self, start: &DateTime, end: &DateTime) -> ExportTable {
-        let readings: Vec<&HomeAndEvReading> = self.data.iter()
+        let readings: Vec<&MeasurementsReading> = self.data.iter()
             .flat_map(|data_set| data_set.data.range(start..))
             .filter(|(key, _)| *key < end)
             .map(|(_, item)| &item.value)
@@ -374,7 +508,7 @@ impl HomeAndEvDataSet {
         let rows = readings.iter()
             .map(|reading| {
                 // The value of a field of each label's consumption, empty if the reading does not have that label.
-                let field = |get: fn(&HomeAndEvReadingConsumption) -> &Decimal| labels.iter()
+                let field = |get: fn(&MeasurementsReadingConsumption) -> &Decimal| labels.iter()
                     .map(move |label| reading.consumption.get(label).map(|c| decimal(get(c))).unwrap_or(ExportValue::Empty));
 
                 let mut row = vec![ExportValue::time(&reading.start), ExportValue::time(&reading.end)];
@@ -391,19 +525,19 @@ impl HomeAndEvDataSet {
 
     /// The readings from start to end aggregated by period, as shown in the graph.
     pub fn graph_export(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> ExportTable {
-        let readings: Vec<&HomeAndEvReading> = self.data.iter()
+        let readings: Vec<&MeasurementsReading> = self.data.iter()
             .flat_map(|data_set| data_set.data.range(start..))
             .filter(|(key, _)| *key < end)
             .map(|(_, item)| &item.value)
             .collect();
         let (unit, cost_unit) = Self::export_units(&readings);
-        let (series, points) = self.graph_points(start, end, tz, period);
+        let (labels, points) = self.graph_points(start, end, tz, period);
 
         // All the costs, then all the units.
         let mut columns = vec![String::from("Start"), String::from("End")];
-        columns.extend(series.iter().map(|series| format!("{} cost ({cost_unit})", series.label)));
+        columns.extend(labels.iter().map(|label| format!("{label} cost ({cost_unit})")));
         columns.push(format!("Standing charge ({cost_unit})"));
-        columns.extend(series.iter().map(|series| format!("{} units ({unit})", series.label)));
+        columns.extend(labels.iter().map(|label| format!("{label} units ({unit})")));
 
         let rows = points.iter()
             .map(|point| {
@@ -419,7 +553,7 @@ impl HomeAndEvDataSet {
     }
 
     /// The units of consumption and of cost for column headings, e.g. ("kwh", "p").
-    fn export_units(readings: &[&HomeAndEvReading]) -> (String, String) {
+    fn export_units(readings: &[&MeasurementsReading]) -> (String, String) {
         let unit = readings.iter()
             .map(|reading| reading.unit.as_str())
             .find(|unit| !unit.is_empty())
@@ -436,14 +570,14 @@ impl HomeAndEvDataSet {
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Eq, PartialEq, Clone)]
-pub struct HomeAndEvReadingConsumption {
+pub struct MeasurementsReadingConsumption {
     units: Decimal,
     cost:  Decimal,
     rate: Decimal,
     ccy: sparko_graphql::types::Currency,
 }
 
-impl HomeAndEvReadingConsumption {
+impl MeasurementsReadingConsumption {
     fn from(stat: meter::home_and_ev_consumption_breakdown::StatisticOutput) -> Self {
 
 
@@ -483,7 +617,7 @@ impl HomeAndEvReadingConsumption {
             Decimal::ZERO
         };
 
-        HomeAndEvReadingConsumption {
+        MeasurementsReadingConsumption {
             units,
             cost,
             rate,
@@ -529,23 +663,23 @@ impl HomeAndEvReadingConsumption {
             (price_excl * cost_incl / cost_excl).round_dp(4)
         };
 
-        Ok(HomeAndEvReadingConsumption { units, cost: cost_incl, rate, ccy})
+        Ok(MeasurementsReadingConsumption { units, cost: cost_incl, rate, ccy})
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, DisplayAsJsonPretty, Eq, PartialEq, Clone)]
-pub struct HomeAndEvReading {
+pub struct MeasurementsReading {
     start:  DateTime,
     end: DateTime,
     is_final: bool,
     /// The consumption at each rate, indexed by the label from the API. A BTreeMap so that the serialized form, which
     /// is compared to detect changes, is always in the same order.
-    consumption: BTreeMap<String, HomeAndEvReadingConsumption>,
+    consumption: BTreeMap<String, MeasurementsReadingConsumption>,
     standing_charge: Decimal,
     unit: String,
 }
 
-impl HomeAndEvReading {
+impl MeasurementsReading {
     const FINAL_DELAY: Duration = Duration::from_hours(3 * 24);
 
     /// The unit rate for each label, readings with the same rates are grouped by StackedBarPeriod::Rate.
@@ -564,8 +698,8 @@ impl HomeAndEvReading {
     }
 
     /// Add the consumption for a label, which must appear only once in a reading.
-    fn insert_consumption(consumption: &mut BTreeMap<String, HomeAndEvReadingConsumption>, label: String,
-        value: HomeAndEvReadingConsumption, start: &DateTime) -> anyhow::Result<()> {
+    fn insert_consumption(consumption: &mut BTreeMap<String, MeasurementsReadingConsumption>, label: String,
+        value: MeasurementsReadingConsumption, start: &DateTime) -> anyhow::Result<()> {
         if consumption.contains_key(&label) {
             return Err(anyhow!("Duplicate {} consumption in slot {}", label, start));
         }
@@ -645,13 +779,13 @@ impl HomeAndEvReading {
                                 super::graphql::ReadingStatisticTypeEnum::ConsumptionCost => {
                                     let label = stat.label_.clone()
                                         .ok_or_else(|| anyhow!("No meta data label"))?;
-                                    Self::insert_consumption(&mut consumption, label, HomeAndEvReadingConsumption::from(stat), &interval_measurement_type.start_at_)?;
+                                    Self::insert_consumption(&mut consumption, label, MeasurementsReadingConsumption::from(stat), &interval_measurement_type.start_at_)?;
                                 },
                                 // The old format, whole house consumption in time of use buckets, e.g. "OFF_PEAK".
                                 super::graphql::ReadingStatisticTypeEnum::TouBucketCost => {
                                     let label = stat.label_.clone()
                                         .ok_or_else(|| anyhow!("No meta data label"))?;
-                                    Self::insert_consumption(&mut consumption, label, HomeAndEvReadingConsumption::from_tou(stat)?, &interval_measurement_type.start_at_)?;
+                                    Self::insert_consumption(&mut consumption, label, MeasurementsReadingConsumption::from_tou(stat)?, &interval_measurement_type.start_at_)?;
                                 },
                                 _ => {
 
@@ -666,8 +800,8 @@ impl HomeAndEvReading {
 
                     let standing_charge = if let Some(v) = standing_charge { v } else { Decimal::ZERO };
 
-                    let is_final = **query_time - *interval_measurement_type.end_at_ > HomeAndEvReading::FINAL_DELAY;
-                    Ok(HomeAndEvReading{
+                    let is_final = **query_time - *interval_measurement_type.end_at_ > MeasurementsReading::FINAL_DELAY;
+                    Ok(MeasurementsReading{
                         start: interval_measurement_type.start_at_,
                         end: interval_measurement_type.end_at_,
                         is_final,
@@ -684,7 +818,7 @@ impl HomeAndEvReading {
     }
 }
 
-pub struct HomeAndEvConsumptionSource {
+pub struct MeasurementsConsumptionSource {
     pub account_number: String,
     pub end_at: DateTime,
     pub tz: &'static Tz,
@@ -692,7 +826,7 @@ pub struct HomeAndEvConsumptionSource {
     pub hash_key: String,
 }
 
-impl HomeAndEvConsumptionSource {
+impl MeasurementsConsumptionSource {
     fn query_builder(&self) -> anyhow::Result<meter::home_and_ev_consumption_breakdown::QueryBuilder> {
         let mut utility_filters = Vec::new();
 
@@ -737,8 +871,8 @@ impl HomeAndEvConsumptionSource {
         }
 }
 
-impl SlotSource for HomeAndEvConsumptionSource {
-    type Value = HomeAndEvReading;
+impl SlotSource for MeasurementsConsumptionSource {
+    type Value = MeasurementsReading;
 
     type Response = meter::home_and_ev_consumption_breakdown::Response;
 
@@ -805,7 +939,7 @@ impl SlotSource for HomeAndEvConsumptionSource {
             .edges
             .into_iter()
             .map(move |edge| {
-                HomeAndEvReading::from(edge.node, &query_time)
+                MeasurementsReading::from(edge.node, &query_time)
                 // match edge.node {
                     
                 //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
@@ -836,7 +970,7 @@ impl SlotSource for HomeAndEvConsumptionSource {
 
 #[cfg(test)]
 mod tests {
-    use super::{label_series, order_labels};
+    use super::{AggregatedPoint, order_labels};
 
     #[test]
     fn known_labels_come_first_in_their_usual_order_then_others_alphabetically() {
@@ -845,9 +979,20 @@ mod tests {
     }
 
     #[test]
-    fn known_labels_keep_their_colours_and_others_use_the_palette() {
-        let labels = order_labels(["OFF_PEAK", "Home Low Rate", "STANDARD_RATE"]);
-        let classes: Vec<String> = label_series(&labels).into_iter().map(|series| series.class).collect();
-        assert_eq!(classes, ["home-low", "series-1", "series-2"]);
+    fn adding_points_sums_every_value() {
+        let point = || AggregatedPoint {
+            start: 0,
+            end: 1,
+            tick_label: None,
+            period_label: String::new(),
+            units: vec![1.0, 2.0],
+            costs: vec![5.0, 6.0],
+            standing_charge: 9.0,
+        };
+        let mut total = point();
+        total.add_values_from(&point());
+        assert_eq!(total.units, [2.0, 4.0]);
+        assert_eq!(total.costs, [10.0, 12.0]);
+        assert_eq!(total.standing_charge, 18.0);
     }
 }

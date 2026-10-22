@@ -486,19 +486,19 @@ h6 {
     margin-bottom: 12px;
 }
 
-.home-ev-date-range {
+.date-range-row {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
 }
 
-.home-ev-date-range .view-toggle {
+.date-range-row .view-toggle {
     margin-left: 0;
 }
 
 /* The export button, at the right hand end of the date range row. */
-.home-ev-date-range .export {
+.date-range-row .export {
     margin-left: auto;
     display: flex;
     align-items: center;
@@ -519,18 +519,18 @@ h6 {
     color: #d0d0d0;
 }
 
-/* The menu of export formats, below the export button. */
-.export-menu-anchor {
+/* A menu below a button, e.g. the export formats or the categories. */
+.menu-anchor {
     position: relative;
 }
 
-.export-menu-backdrop {
+.menu-backdrop {
     position: fixed;
     inset: 0;
     z-index: 10;
 }
 
-.export-menu {
+.dropdown-menu {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
@@ -545,7 +545,7 @@ h6 {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
-.export-menu button {
+.dropdown-menu > button {
     border: none;
     border-radius: 0;
     background-color: transparent;
@@ -554,8 +554,48 @@ h6 {
     white-space: nowrap;
 }
 
-.export-menu button:hover {
+.dropdown-menu > button:hover {
     background-color: #353540;
+}
+
+.menu-separator {
+    margin: 4px 0;
+    border-top: 1px solid #404045;
+}
+
+/* A category in the category menu, with its colour and whether it is shown. */
+.category-menu {
+    left: 0;
+    right: auto;
+}
+
+.category-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    white-space: nowrap;
+}
+
+.category-row input[type="color"] {
+    width: 28px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid #404045;
+    background: none;
+    cursor: pointer;
+}
+
+.category-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.trend-line {
+    fill: none;
+    stroke-width: 1.5;
 }
 
 .view-toggle {
@@ -625,51 +665,6 @@ h6 {
 .stacked-consumption-graph .stacked-legend-swatch {
     stroke: rgba(0, 0, 0, 0.45);
     stroke-width: 0.5;
-}
-
-.stacked-consumption-graph .home-standard {
-    fill: #f6671f;
-}
-
-.stacked-consumption-graph .home-low {
-    fill: #46ee43;
-}
-
-.stacked-consumption-graph .ev-standard {
-    fill: #f72525;
-}
-
-.stacked-consumption-graph .ev-low {
-    fill: #271cff;
-}
-
-.stacked-consumption-graph .standing-charge {
-    fill: #b8c0cc;
-}
-
-/* Series without a colour of their own, e.g. time of use buckets in older readings. */
-.stacked-consumption-graph .series-1 {
-    fill: #f2c94c;
-}
-
-.stacked-consumption-graph .series-2 {
-    fill: #bb6bd9;
-}
-
-.stacked-consumption-graph .series-3 {
-    fill: #2dd4bf;
-}
-
-.stacked-consumption-graph .series-4 {
-    fill: #f472b6;
-}
-
-.stacked-consumption-graph .series-5 {
-    fill: #a3e635;
-}
-
-.stacked-consumption-graph .series-6 {
-    fill: #60a5fa;
 }
 
 .stacked-consumption-graph .stacked-tooltip-background {

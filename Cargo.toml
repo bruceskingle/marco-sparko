@@ -54,6 +54,12 @@ windows = { version = "0.54", features = [
 ]}
 
 
+# macOS only, to position the system colour panel. The same versions as dioxus-desktop and rfd use.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.3"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSGeometry"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSColorPanel", "NSEvent", "NSPanel", "NSResponder", "NSScreen", "NSWindow"] }
+
 [dev-dependencies]
 tokio-test = "*"
 
