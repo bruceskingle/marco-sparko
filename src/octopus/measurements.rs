@@ -168,8 +168,8 @@ impl MeasurementsDataSet {
             .map(|(_, item)| &item.value)
     }
 
-    /// The value of each category for each point, filtered by the filter.
-    fn filtered_categories(labels: &[String], points: &[AggregatedPoint], mode: StackedBarMode, filter: &CategoryFilter) -> Vec<CategoryValues> {
+    /// The value of each category for each point, filtered by the filter for the trend graph if trend.
+    fn filtered_categories(labels: &[String], points: &[AggregatedPoint], mode: StackedBarMode, filter: &CategoryFilter, trend: bool) -> Vec<CategoryValues> {
         let categories = Self::categories_for(labels, mode).into_iter()
             .enumerate()
             .map(|(index, label)| {
@@ -186,7 +186,7 @@ impl MeasurementsDataSet {
                 (label, values)
             })
             .collect();
-        filter.apply(categories, points.len())
+        filter.apply(categories, points.len(), trend)
     }
 
     /// The unit of consumption and the currency of the readings, e.g. kwh and GBP.
@@ -206,7 +206,7 @@ impl MeasurementsDataSet {
 
     pub fn display_graph(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod, filter: &CategoryFilter) -> Element {
         let (labels, aggregated) = self.graph_points(start, end, tz, period);
-        let categories = Self::filtered_categories(&labels, &aggregated, mode, filter);
+        let categories = Self::filtered_categories(&labels, &aggregated, mode, filter, false);
         let (unit, currency) = self.graph_units(start, end);
 
         let series = categories.iter()
@@ -241,7 +241,7 @@ impl MeasurementsDataSet {
         smoothing: TrendSmoothing, filter: &CategoryFilter) -> Element {
         let period = if smoothing == TrendSmoothing::None { period } else { StackedBarPeriod::Day };
         let (labels, aggregated) = self.graph_points(start, end, tz, period);
-        let categories = Self::filtered_categories(&labels, &aggregated, mode, filter);
+        let categories = Self::filtered_categories(&labels, &aggregated, mode, filter, true);
         let (unit, currency) = self.graph_units(start, end);
         let per_hour = period == StackedBarPeriod::Rate;
 

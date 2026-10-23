@@ -54,13 +54,14 @@ pub struct CategoryStyle {
 
 /// The colours, line styles and visibility chosen for each category, and the colours chosen for each year, anything
 /// which has not been changed has its default. There is also a total, which when visible replaces the visible categories
-/// with their total.
+/// with their total. The trend graph has its own total, which is visible by default.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CategoryFilter {
     styles: BTreeMap<String, CategoryStyle>,
     dashes: BTreeMap<String, String>,
     year_colors: BTreeMap<i32, String>,
     total: CategoryStyle,
+    trend_total: CategoryStyle,
 }
 
 impl Default for CategoryFilter {
@@ -70,6 +71,7 @@ impl Default for CategoryFilter {
             dashes: BTreeMap::new(),
             year_colors: BTreeMap::new(),
             total: CategoryStyle { color: String::from(TOTAL_COLOR), visible: false },
+            trend_total: CategoryStyle { color: String::from(TOTAL_COLOR), visible: true },
         }
     }
 }
@@ -130,12 +132,18 @@ impl CategoryFilter {
         self.year_colors.insert(year, color);
     }
 
-    pub fn total(&self) -> &CategoryStyle {
-        &self.total
+    /// The total for the trend graph if trend, otherwise for the bar graph.
+    pub fn total(&self, trend: bool) -> &CategoryStyle {
+        if trend { &self.trend_total } else { &self.total }
     }
 
-    pub fn set_total(&mut self, style: CategoryStyle) {
-        self.total = style;
+    pub fn set_total(&mut self, trend: bool, style: CategoryStyle) {
+        if trend {
+            self.trend_total = style;
+        }
+        else {
+            self.total = style;
+        }
     }
 }
 
@@ -151,8 +159,8 @@ pub struct CategoryValues {
 
 impl CategoryFilter {
     /// The visible categories, or if the total is visible a single category with their total.
-    /// categories gives the label and the value for each point of every category.
-    pub fn apply(&self, categories: Vec<(String, Vec<f64>)>, points: usize) -> Vec<CategoryValues> {
+    /// categories gives the label and the value for each point of every category, trend chooses the total of the trend graph.
+    pub fn apply(&self, categories: Vec<(String, Vec<f64>)>, points: usize, trend: bool) -> Vec<CategoryValues> {
         let labels: Vec<String> = categories.iter().map(|(label, _)| label.clone()).collect();
         let visible: Vec<CategoryValues> = categories.into_iter()
             .zip(self.styles(&labels))
@@ -161,11 +169,12 @@ impl CategoryFilter {
             .map(|(((label, values), style), dash)| CategoryValues { label, color: style.color, dash, values })
             .collect();
 
-        if self.total.visible {
+        let total = self.total(trend);
+        if total.visible {
             let values = (0..points)
                 .map(|index| visible.iter().map(|category| category.values.get(index).copied().unwrap_or_default()).sum())
                 .collect();
-            vec![CategoryValues { label: String::from(TOTAL_LABEL), color: self.total.color.clone(), dash: String::from(SOLID), values }]
+            vec![CategoryValues { label: String::from(TOTAL_LABEL), color: total.color.clone(), dash: String::from(SOLID), values }]
         }
         else {
             visible
@@ -182,7 +191,7 @@ pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String
     let styles = filter.read().styles(&categories);
     let dashes = filter.read().dashes(&categories);
     let year_colors = filter.read().year_colors(&years);
-    let total = filter.read().total().clone();
+    let total = filter.read().total(trend).clone();
 
     rsx! {
         span { class: "menu-anchor",
@@ -224,7 +233,7 @@ pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String
                                     }
                                 })}
                             }
-                            {visibility_check_box(filter, label.clone(), style.clone(), false)}
+                            {visibility_check_box(filter, label.clone(), style.clone(), None)}
                         }
                     }
                     div { class: "menu-separator" }
@@ -235,11 +244,11 @@ pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String
                                 let total = total.clone();
                                 move |color| {
                                     let mut filter = filter;
-                                    filter.write().set_total(CategoryStyle { color, ..total.clone() });
+                                    filter.write().set_total(trend, CategoryStyle { color, ..total.clone() });
                                 }
                             })}
                         }
-                        {visibility_check_box(filter, String::from(TOTAL_LABEL), total.clone(), true)}
+                        {visibility_check_box(filter, String::from(TOTAL_LABEL), total.clone(), Some(trend))}
                     }
                     if trend {
                         div { class: "menu-separator" }
@@ -295,8 +304,8 @@ fn line_style_picker(filter: Signal<CategoryFilter>, label: String, dash: String
     }
 }
 
-/// A check box which shows or hides the category, or the total if is_total, with the label.
-fn visibility_check_box(filter: Signal<CategoryFilter>, label: String, style: CategoryStyle, is_total: bool) -> Element {
+/// A check box which shows or hides the category, or the total if total_for_trend is given, with the label.
+fn visibility_check_box(filter: Signal<CategoryFilter>, label: String, style: CategoryStyle, total_for_trend: Option<bool>) -> Element {
     rsx! {
         label {
             input {
@@ -307,8 +316,8 @@ fn visibility_check_box(filter: Signal<CategoryFilter>, label: String, style: Ca
                     move |event: FormEvent| {
                         let mut filter = filter;
                         let style = CategoryStyle { visible: event.checked(), ..style.clone() };
-                        if is_total {
-                            filter.write().set_total(style);
+                        if let Some(trend) = total_for_trend {
+                            filter.write().set_total(trend, style);
                         }
                         else {
                             filter.write().set_style(&label, style);
@@ -355,14 +364,21 @@ mod tests {
         let mut filter = CategoryFilter::default();
         filter.set_style("B", CategoryStyle { color: String::from("#000000"), visible: false });
 
-        let shown: Vec<String> = filter.apply(categories(), 2).into_iter().map(|category| category.label).collect();
+        let shown: Vec<String> = filter.apply(categories(), 2, false).into_iter().map(|category| category.label).collect();
         assert_eq!(shown, ["A", "C"]);
 
-        filter.set_total(CategoryStyle { color: String::from("#ffffff"), visible: true });
-        let total = filter.apply(categories(), 2);
+        filter.set_total(false, CategoryStyle { color: String::from("#ffffff"), visible: true });
+        let total = filter.apply(categories(), 2, false);
         assert_eq!(total.len(), 1);
         assert_eq!(total[0].label, TOTAL_LABEL);
         assert_eq!(total[0].values, [101.0, 202.0]);
+    }
+
+    #[test]
+    fn the_total_is_shown_by_default_only_in_the_trend_graph() {
+        let filter = CategoryFilter::default();
+        assert!(!filter.total(false).visible);
+        assert!(filter.total(true).visible);
     }
 
     #[test]
