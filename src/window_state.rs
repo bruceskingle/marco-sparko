@@ -16,7 +16,7 @@ use dioxus::desktop::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{CACHE_DIRECTORY_NAME, private_file::create_private_dir};
+use crate::{MarcoSparkoContext, private_file::create_private_dir};
 
 const STATE_FILE_NAME: &str = "window-state.json";
 
@@ -125,10 +125,7 @@ impl WindowState {
 }
 
 fn state_file() -> Option<PathBuf> {
-    let mut path = dirs::home_dir()?;
-    path.push(CACHE_DIRECTORY_NAME);
-    path.push(STATE_FILE_NAME);
-    Some(path)
+    Some(MarcoSparkoContext::get_cache_dir_path().ok()?.join(STATE_FILE_NAME))
 }
 
 /// Whether a window with its top left corner at position would have its title bar on a connected monitor, which is

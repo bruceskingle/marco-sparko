@@ -1,7 +1,7 @@
-[< Documentation Home](index.md)
+[< Profiles](profiles.md)
 
 # Cached Data
-Marco Sparko will create a file in your home directory called ```.marco-sparko-cache``` which contains local copies of data retrieved from the various online data sources for which it is configured. Maintaining a local copy of data which has previously been fetched from a server makes the application significantly faster and reduces the load on the cloud services it accesses. Most services will place limits on the number of requests which can be made in any period of time, and some operations (such as generating session authentication tokens) may be sufficiently expensive that the imposed limit is quite small.
+Marco Sparko will create a directory in your home directory (or the data directory, see [Profiles](profiles.md#moving-the-data-directory)) called ```.marco-sparko-cache``` which contains local copies of data retrieved from the various online data sources for which it is configured. Maintaining a local copy of data which has previously been fetched from a server makes the application significantly faster and reduces the load on the cloud services it accesses. Most services will place limits on the number of requests which can be made in any period of time, and some operations (such as generating session authentication tokens) may be sufficiently expensive that the imposed limit is quite small.
 
 If every time the program runs it was to reauthenticate with the server, then you would quickly find the application failing with a "Too Many Requests" error or similar.
 
@@ -35,4 +35,4 @@ In this case the dataset is expected to grow regularly. This data is chunked int
 
 As with the Multi Record format, the data is stored in ascending date order, so as new data is retrieved it can be appended to the existing file.
 
-[< Profiles](profiles.md)
+[< Documentation Home](../index.md)

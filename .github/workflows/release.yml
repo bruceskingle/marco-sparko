@@ -55,7 +55,7 @@ jobs:
     steps:
       # The two repos are checked out side by side, as in ~/git, because Cargo.toml refers to ../sparko_graphql
       - name: Check out marco-sparko
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           path: marco-sparko
@@ -63,7 +63,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check out sparko_graphql
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: bruceskingle/sparko_graphql
           ref: ${{ env.TAG }}
@@ -136,7 +136,7 @@ jobs:
           Write-Host "The app started"
 
       - name: Keep the installers
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: marco-sparko/dist/*
@@ -157,13 +157,13 @@ jobs:
 
     steps:
       - name: Fetch the installers
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
       - name: Record where they were built
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*
 

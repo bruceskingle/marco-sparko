@@ -93,4 +93,4 @@ The example above uses the 7 day average. The cumulative graph below shows that 
 
 <img src="Screenshot8.png" width="1024">
 
-[< Documentation Home](../index.md)
+[Profiles>](profiles.md)

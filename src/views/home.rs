@@ -93,6 +93,13 @@ pub fn Home(
                 }
                 s
             };
+            // Where the profile file and cache are, see data_home.
+            let data_directory = match (crate::data_home::data_home(), crate::data_home::data_home_source()) {
+                (Ok(path), Some(source)) => format!("{} (set by {})", path.display(), source),
+                (Ok(path), None) => path.display().to_string(),
+                (Err(error), _) => error.to_string(),
+            };
+
             let args = &context.args.marco_sparko_args;
             let debug = if args.debug {
                 rsx! {
@@ -143,6 +150,8 @@ pub fn Home(
                         }
                         " [{active}]"
                     }
+                    h2 { "Data Directory" }
+                    p { "{data_directory}" }
                     h2 { "Build Info" }
                     table {
                         tr {
