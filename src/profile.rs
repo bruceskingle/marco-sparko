@@ -1,19 +1,26 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::{collections::HashMap};
 use std::fs;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
 use indexmap::IndexMap;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use anyhow::anyhow;
 
-use crate::{Cli, private_file};
+use crate::{MarcoSparkoContext, private_file};
 
 const DEFAULT_PROFILE: &str = "default";
+pub const CURRENT_VERSION: &str = "0.4.3";
 
 #[derive(PartialEq)]
 pub struct ActiveProfile {
     pub all_profiles:   Vec<String>,
     pub active_profile: Profile,
+    pub profile_version_state: ProfileVersionState,
+}
+
+pub fn profile_names_equal(left: &str, right: &str) -> bool {
+    left.eq_ignore_ascii_case(right)
 }
 
 impl ActiveProfile {
@@ -22,26 +29,27 @@ impl ActiveProfile {
         ActiveProfile {
             all_profiles: vec!(String::from(DEFAULT_PROFILE)),
             active_profile: Profile::new(),
+            profile_version_state: ProfileVersionState::Current,
         }
     }
 }
 
 pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<ActiveProfile> {
-    let mut all_profiles = Vec::new();
-    let mut set = HashSet::new();
+    let mut all_profiles: Vec<String> = Vec::new();
+    let mut set: HashSet<String> = HashSet::new();
     let mut active_profile = None;
 
-    if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
+    if let Ok(file)= fs::File::open(&MarcoSparkoContext::get_file_path()?) {
         let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
         for profile in profile_file {
-            if set.contains(&profile.name) {
+            if all_profiles.iter().any(|name| profile_names_equal(name, &profile.name)) {
                 return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
             }
             set.insert(profile.name.clone());
             
             let got_it = if let Some(name) = profile_name {
-                name == &profile.name
+                profile_names_equal(name, &profile.name)
             }
             else {
                 active_profile.is_none()
@@ -63,45 +71,50 @@ pub fn fetch_active_profile(profile_name: &Option<String>) -> anyhow::Result<Act
         }
     }
 
-    Ok(if active_profile.is_none() {
-        let active_profile = ActiveProfile::new();
-        let mut profiles = Vec::new();
-
-        profiles.push(&active_profile.active_profile);
-
-        let f = private_file::create_private_file(&Cli::get_file_path()?)?;
-        println!("About to write to private file {:?}...", f);
-        serde_json::to_writer_pretty(f, &profiles)?;
-
-        println!("Done");
-        active_profile
-    }
-    else {
-        ActiveProfile {
-            all_profiles,
-            active_profile: active_profile.unwrap(),
+    Ok(
+        
+        if let Some(active_profile) = active_profile
+        {
+            let profile_version_state = ProfileVersionState::from(&active_profile.version)?;
+            ActiveProfile {
+                all_profiles,
+                active_profile: active_profile,
+                profile_version_state
+            }
         }
-    })
+        else
+        {
+            let active_profile = ActiveProfile::new();
+            let mut profiles = Vec::new();
+
+            profiles.push(&active_profile.active_profile);
+
+            let f = private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?;
+            serde_json::to_writer_pretty(f, &profiles)?;
+
+            active_profile
+        }
+    )
 }
 
 pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile> {
 
-    let mut all_profiles = Vec::new();
-    let mut map = IndexMap::new();
+    let mut all_profiles: Vec<String> = Vec::new();
+    let mut map: IndexMap<String, Profile> = IndexMap::new();
     
 
-    if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
+    if let Ok(file)= fs::File::open(&MarcoSparkoContext::get_file_path()?) {
         let profile_file: ProfileFile = serde_json::from_reader(file)?;
 
         for profile in profile_file {
-            if map.contains_key(&profile.name) {
+            if map.keys().any(|name| profile_names_equal(name, &profile.name)) {
                 return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
             }
             all_profiles.push(profile.name.clone());
             map.insert(profile.name.clone(), profile);
         }
-        let active_profile = if let Some(p) = map.shift_remove(profile_name) {
-            p
+        let active_profile = if let Some(existing_name) = map.keys().find(|name| profile_names_equal(name, profile_name)).cloned() {
+            map.shift_remove(&existing_name).unwrap()
         }
         else {
             return Err(anyhow!("No such profile \"{}\"", profile_name)); 
@@ -112,47 +125,80 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
         profiles.push(&active_profile);
         profiles.extend(map.values());
 
-        serde_json::to_writer_pretty(private_file::create_private_file(&Cli::get_file_path()?)?, &profiles)?;
+        serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
+        let profile_version_state = ProfileVersionState::from(&active_profile.version)?;
 
         Ok(ActiveProfile {
             all_profiles,
             active_profile,
+            profile_version_state,
         })
     }
     else {
         Err(anyhow!("No such profile \"{}\" (no profiles at all, in fact)", profile_name))
     }
 }
-    
+
+pub fn create_profile(profile_name: &str) -> anyhow::Result<ActiveProfile> {
+    let profile_name = profile_name.trim();
+    if profile_name.is_empty() {
+        return Err(anyhow!("Profile name cannot be empty"));
+    }
+    if !profile_name.chars().all(char::is_alphanumeric) {
+        return Err(anyhow!("Profile name must contain only alphanumeric characters"));
+    }
+
+    let mut profiles: ProfileFile = if let Ok(file) = fs::File::open(&MarcoSparkoContext::get_file_path()?) {
+        serde_json::from_reader(file)?
+    } else {
+        Vec::new()
+    };
+
+    if profiles.iter().any(|profile| profile_names_equal(&profile.name, profile_name)) {
+        return Err(anyhow!("A profile named \"{}\" already exists", profile_name));
+    }
+
+    let mut active_profile = Profile::new();
+    active_profile.name = profile_name.to_string();
+    profiles.insert(0, active_profile.clone());
+
+    serde_json::to_writer_pretty(
+        private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?,
+        &profiles,
+    )?;
+
+    let all_profiles = profiles.into_iter().map(|profile| profile.name).collect();
+    let profile_version_state = ProfileVersionState::from(&active_profile.version)?;
+
+    Ok(ActiveProfile {
+        all_profiles,
+        active_profile,
+        profile_version_state,
+    })
+}
+
 pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile: &T) -> anyhow::Result<()>
     where
     T: Serialize
 {
-    if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
+    if let Ok(file)= fs::File::open(&MarcoSparkoContext::get_file_path()?) {
         let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
 
-        println!("existing profile_file <{:?}>", &profile_file);
 
         let mut found = false;
-        // let mut profiles = Vec::new();
 
         for profile in profile_file.iter_mut() {
-            if &profile.name == profile_name {
-                println!("existing profile <{:?}>", &profile);
+            if profile_names_equal(&profile.name, profile_name) {
                 profile.modules.insert(module_id.to_string(), serde_json::to_value(module_profile)?);
                 found = true;
 
-                println!("updated profile <{:?}>", &profile);
             }
-            // profiles.push(profile);
         }
         if ! found{
             return Err(anyhow!("No such profile \"{}\"", profile_name)); 
         };
-
-         println!("saving profiles <{:?}>", &profile_file);
-
-            serde_json::to_writer_pretty(private_file::create_private_file(&Cli::get_file_path()?)?, &profile_file)?;
+    
+        serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
 
         Ok(())
     }
@@ -161,13 +207,158 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
     }
 }
 
+/// The cache files of a profile, for each plugin a <profile>-<plugin> directory of cached data and a
+/// <profile>-<plugin>.json file of tokens.
+#[derive(Debug, Default, PartialEq)]
+pub struct ProfileCacheUsage {
+    /// The bytes used by each plugin, by plugin id.
+    pub plugins: BTreeMap<String, u64>,
+    /// The cached data directories, which are moved to the trash when the profile is deleted.
+    pub data_dirs: Vec<PathBuf>,
+    /// The token files, which are deleted immediately when the profile is deleted.
+    pub token_files: Vec<PathBuf>,
+}
+
+impl ProfileCacheUsage {
+    pub fn total(&self) -> u64 {
+        self.plugins.values().sum()
+    }
+}
+
+/// The cache files of the given profile and the disk space they use.
+pub fn profile_cache_usage(profile_name: &str) -> anyhow::Result<ProfileCacheUsage> {
+    cache_usage_in(&MarcoSparkoContext::get_cache_dir_path()?, profile_name)
+}
+
+fn cache_usage_in(cache_dir: &Path, profile_name: &str) -> anyhow::Result<ProfileCacheUsage> {
+    // Profile names are alphanumeric, so the hyphen ends the profile name.
+    let prefix = format!("{}-", profile_name);
+    let mut usage = ProfileCacheUsage::default();
+    if let Ok(read_dir) = fs::read_dir(cache_dir) {
+        for entry in read_dir {
+            let entry = entry?;
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            let Some(rest) = file_name.strip_prefix(&prefix) else { continue };
+            let path = entry.path();
+            let plugin = if entry.file_type()?.is_dir() {
+                usage.data_dirs.push(path.clone());
+                rest
+            }
+            else if let Some(plugin) = rest.strip_suffix(".json") {
+                usage.token_files.push(path.clone());
+                plugin
+            }
+            else {
+                continue
+            };
+            *usage.plugins.entry(plugin.to_string()).or_default() += disk_usage(&path)?;
+        }
+    }
+    Ok(usage)
+}
+
+/// The total size of a file, or of all the files in a directory, symbolic links are not followed.
+fn disk_usage(path: &Path) -> anyhow::Result<u64> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.is_dir() {
+        let mut total = 0;
+        for entry in fs::read_dir(path)? {
+            total += disk_usage(&entry?.path())?;
+        }
+        Ok(total)
+    }
+    else {
+        Ok(metadata.len())
+    }
+}
+
+/// Deletes the token files of the given profile, moves its cached data to the trash and removes it from the profile
+/// file. The active profile cannot be deleted.
+pub fn delete_profile(profile_name: &str, active_profile: &str) -> anyhow::Result<()> {
+    if profile_names_equal(profile_name, active_profile) {
+        return Err(anyhow!("The active profile \"{}\" cannot be deleted", profile_name));
+    }
+
+    let file = fs::File::open(&MarcoSparkoContext::get_file_path()?)?;
+    let mut profiles: ProfileFile = serde_json::from_reader(file)?;
+    let count = profiles.len();
+    profiles.retain(|profile| !profile_names_equal(&profile.name, profile_name));
+    if profiles.len() == count {
+        return Err(anyhow!("No such profile \"{}\"", profile_name));
+    }
+
+    // The tokens are not kept in the trash.
+    let usage = profile_cache_usage(profile_name)?;
+    for path in &usage.token_files {
+        fs::remove_file(path)?;
+    }
+    if !usage.data_dirs.is_empty() {
+        trash::delete_all(&usage.data_dirs)?;
+    }
+
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
+    Ok(())
+}
+
+/// A number of bytes for display, e.g. 12.3 MB
+pub fn format_size(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+    if bytes < 1000 {
+        return format!("{} bytes", bytes);
+    }
+    let mut size = bytes as f64 / 1000.0;
+    let mut unit = 0;
+    while size >= 1000.0 && unit < UNITS.len() - 1 {
+        size /= 1000.0;
+        unit += 1;
+    }
+    format!("{:.1} {}", size, UNITS[unit])
+}
+
 pub type ModuleProfiles = HashMap<String, serde_json::Value>;
 pub type ProfileFile = Vec<Profile>;
+
+#[derive(PartialEq)]
+pub enum ProfileVersionState {
+    OlderThanCurrent,
+    Current,
+    NewerThanCurrent,
+    Invalid
+}
+
+impl ProfileVersionState {
+    pub fn from(version: &str) -> anyhow::Result<ProfileVersionState> {
+        let version = version.trim();
+
+        if version.len() == 0 {
+            return Ok(ProfileVersionState::OlderThanCurrent);
+        }
+
+
+        let current_version = Version::parse(CURRENT_VERSION).unwrap();
+        Ok(if let Ok(version) = Version::parse(version) {
+            match version.cmp(&current_version) {
+                std::cmp::Ordering::Less => Self::OlderThanCurrent,
+                std::cmp::Ordering::Equal => Self::Current,
+                std::cmp::Ordering::Greater => Self::NewerThanCurrent,
+            }
+        }
+        else {
+            Self::Invalid
+        })
+    }
+}
+
+fn default_profile_version() ->String {
+    "0.0.0".to_string()
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub name: String,
+    #[serde(default = "default_profile_version")]
+    pub version: String,
     pub modules: ModuleProfiles
 }
 
@@ -175,313 +366,42 @@ impl Profile {
     pub fn new() -> Profile {
         Profile {
             name: DEFAULT_PROFILE.to_string(),
+            version: CURRENT_VERSION.to_string(),
             modules: ModuleProfiles::new(),
         }
     }
 }
 
-struct ProfileMap {
-    map: IndexMap<String, Profile>,
-    updated: bool,
-}
+#[cfg(test)]
+mod tests {
+    use std::fs;
 
-pub struct ProfileManager {
-    profile_map:    Mutex<ProfileMap>,
-    pub active_profile: Profile,
-    pub profile_names: Vec<String>,
+    use super::{cache_usage_in, format_size};
 
+    #[test]
+    fn cache_usage_is_split_by_plugin_and_leaves_out_other_profiles() {
+        let dir = std::env::temp_dir().join(format!("marco-sparko-test-{}", std::process::id()));
+        fs::create_dir_all(dir.join("p-octopus/sub")).unwrap();
+        fs::create_dir_all(dir.join("p2-octopus")).unwrap();
+        fs::write(dir.join("p-octopus/sub/data"), [0u8; 100]).unwrap();
+        fs::write(dir.join("p-octopus.json"), [0u8; 10]).unwrap();
+        fs::write(dir.join("p-other.json"), [0u8; 1]).unwrap();
+        fs::write(dir.join("p-history.txt"), [0u8; 5]).unwrap();
+        fs::write(dir.join("p2-octopus.json"), [0u8; 1000]).unwrap();
 
+        let usage = cache_usage_in(&dir, "p").unwrap();
+        fs::remove_dir_all(&dir).unwrap();
 
-    // pub before_profiles: Vec<Profile>,
-    // pub after_profiles: Vec<Profile>,
-    // updated_profile: Mutex<Profile>,
-    // // file_path: &Path,
-}
-
-impl PartialEq for ProfileManager {
-    fn eq(&self, _: &Self) -> bool {
-        false
-    }
-}
-
-impl ProfileManager {
-    pub fn new(selector: &Option<String>) -> anyhow::Result<ProfileManager>  {
-        let mut map = IndexMap::new();
-        let mut profile_names = Vec::new();
-
-        if let Ok(file)= fs::File::open(&Cli::get_file_path()?) {
-            let profile_file: ProfileFile = serde_json::from_reader(file)?;
-
-            for profile in profile_file {
-                if map.contains_key(&profile.name) {
-                    return Err(anyhow!("Duplicate profile \"{}\"", &profile.name));
-                }
-                profile_names.push(profile.name.clone());
-                map.insert(profile.name.clone(), profile);
-            }
-        }
-
-        if map.is_empty() {
-            let profile = Profile::new();
-            map.insert(profile.name.clone(), profile);
-        }
-
-        // we know its not empty
-        // let first_profile_name = map.keys().into_iter().next().unwrap();
-        // let default = if let Some(name) = opt_default_name { name.clone() } else { first_profile_name.clone()};
-        // let last_used = if let Some(name) = opt_last_name { name.clone() } else { first_profile_name.clone()};
-
-        let active_name = if let Some(name) = selector {
-            &name
-        }
-        else {
-            DEFAULT_PROFILE
-        };
-
-        // match selector {
-        //     ProfileSelector::Default => default.clone(),
-        //     ProfileSelector::Last => last_used.clone(),
-        //     ProfileSelector::Named(name) => name.clone(),
-        // };
-
-        let active_profile = if let Some(profile) = map.get(active_name) {
-            profile.clone()
-        }
-        else {
-            return Err(anyhow!("No such profile \"{}\"", active_name));
-        };
-            
-        //     let mut it = profiles.into_iter();
-
-        //     if let Some(profile) = it.next() {
-        //         let default_profile = &profile;
-        //         map.insert(profile.name.clone(), default_profile.clone());
-
-                
-
-        //         active_profile = if let Some(name) = active_profile_name {
-        //             if let Some(profile) = map.get(name) {
-        //                 profile.clone()
-        //             }
-        //             else {
-        //                 return Err(anyhow!("No such profile \"{}\"", name));
-        //             }
-        //         }
-        //         else {
-        //             default_profile.clone()
-        //         };
-        //     }
-        //     else {
-        //         active_profile = Profile::new();
-        //         map.insert(active_profile.name.clone(), active_profile.clone());
-                
-        //         if let Some(name) = active_profile_name {
-        //             if name != &active_profile.name {
-        //                 return Err(anyhow!("No such profile \"{}\"", name));
-        //             }
-        //         }
-        //     }
-        // }
-        // else {
-        //     active_profile = Profile::new();
-        //     map.insert(active_profile.name.clone(), active_profile.clone());
-            
-        //     if let Some(name) = active_profile_name {
-        //         if name != &active_profile.name {
-        //             return Err(anyhow!("No such profile \"{}\"", name));
-        //         }
-        //     }
-        // }
-        
-
-        Ok(ProfileManager {
-            profile_map: Mutex::new(ProfileMap {
-                map,
-                updated: true,
-            }),
-            active_profile,
-            profile_names,
-        })
-
-
-
-
-
-
-
-
-        // // let x: i32 = "3.14".parse()?;
-
-        // // panic!("TEST");
-        // let before_profiles;
-        // let opt_active_profile;
-        // let active_profile;
-        // let profile_name;
-        // let after_profiles;
-        // let updated_profile;
-
-        // if let Ok(file)= fs::File::open(&MarcoSparko::get_file_path()?) {
-        //     let profiles: Vec<Profile> = serde_json::from_reader(file)?;
-            
-        //     (before_profiles, opt_active_profile, after_profiles) = Self::remove_active_profile(active_profile_name, profiles)?;
-
-        // }
-        // else {
-        //     before_profiles = Vec::new();
-        //     opt_active_profile = None;
-        //     after_profiles = Vec::new();
-        // }
-
-
-        // if let Some(existing_profile) = opt_active_profile {
-        //     profile_name = existing_profile.name.clone();
-        //     active_profile = existing_profile;
-        // }
-        // else {
-        //     profile_name = DEFAULT_PROFILE.to_string();
-        //     active_profile = Profile {
-        //         name: profile_name.clone(),
-        //         modules: ModuleProfiles::new()
-        //     }
-        // };
-
-        // updated_profile = Mutex::new(Profile {
-        //     name: profile_name,
-        //     modules: ModuleProfiles::new()
-        // });
-
-        // Ok(ProfileManager{
-        //     before_profiles,
-        //     active_profile,
-        //     after_profiles,
-        //     updated_profile,
-        //     // file_path
-        // })
+        assert_eq!(usage.plugins.into_iter().collect::<Vec<_>>(), [(String::from("octopus"), 110), (String::from("other"), 1)]);
+        assert_eq!(usage.data_dirs, [dir.join("p-octopus")]);
+        let mut token_files = usage.token_files;
+        token_files.sort();
+        assert_eq!(token_files, [dir.join("p-octopus.json"), dir.join("p-other.json")]);
     }
 
-
-    // fn remove_active_profile(active_profile_name: &Option<String>, mut profiles: Vec<Profile>) -> 
-    //     anyhow::Result<(Vec<Profile>, Option<Profile>, Vec<Profile>)> {
-    //     if let Some(profile_name) = active_profile_name {
-    //         let mut active_profile = None;
-    //         let mut before_profiles = Vec::new();
-    //         let mut after_profiles = Vec::new();
-    //         let mut after = false;
-            
-            
-    //         for profile in profiles {
-    //             if profile.name.eq(profile_name) {
-    //                 active_profile = Some(profile);
-    //                 after = true;
-    //             }
-    //             else {
-    //                 if after {
-    //                     after_profiles.push(profile);
-    //                 }
-    //                 else {
-    //                     before_profiles.push(profile);
-    //                 }
-    //             }
-    //         }
-
-    //         if let None = active_profile {
-    //             active_profile = Some(Profile {
-    //                 name: profile_name.clone(),
-    //                 modules: ModuleProfiles::new()
-    //             });
-    //             // return Result::Err(Error::UserError(format!("No profile called {}", profile_name)))
-    //         }
-    //         return Ok((before_profiles, active_profile, after_profiles))
-    //     }
-
-    //     if profiles.is_empty() {
-    //         Ok((Vec::new(), None, profiles))
-    //     }
-    //     else {
-    //         Ok((Vec::new(), Some(profiles.remove(0)), profiles))
-    //     }
-    // }
-
-    pub fn save_updated_profile(&self) -> anyhow::Result<()> {
-        let profile_map = match self.profile_map.lock() {
-            Ok(p) => p,
-            Err(_) => return Err(anyhow!("Profile manager mutex is poisoned")),
-        };
-
-        if profile_map.updated  {
-            let mut profiles = Vec::new();
-            
-            profiles.extend(profile_map.map.values().map(|p| p.clone()));
-
-            // let profile_file = ProfileFile {
-            //     default: Some(profile_map.default.clone()),
-            //     last_used: Some(profile_map.last_used.clone()),
-            //     profiles,
-            // };
-
-           
-            serde_json::to_writer_pretty(private_file::create_private_file(&Cli::get_file_path()?)?, &profiles)?;
-            
-            return Ok(())
-        }
-        else {
-            Ok(())
-        }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        // let updated_profile = match self.updated_profile.lock() {
-        //     Ok(p) => p,
-        //     Err(_) => return Err(anyhow!("Profile manager mutex is poisoned")),
-        // };
-
-        // if updated_profile.modules.is_empty() {
-        //     Ok(())
-        // }
-        // else {
-
-        //     let mut profiles = Vec::new();
-            
-        //     profiles.extend(&self.before_profiles);
-        //     profiles.push(&updated_profile);
-        //     profiles.extend(&self.after_profiles);
-            
-        //     serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparko::get_file_path()?)?, &profiles)?;
-            
-        //     return Ok(())
-        // }
+    #[test]
+    fn sizes_are_formatted_in_decimal_units() {
+        assert_eq!(format_size(999), "999 bytes");
+        assert_eq!(format_size(12_345_678), "12.3 MB");
     }
-    
-    // pub fn update_profile<T>(&self, module_id: &str, module_profile: T) -> anyhow::Result<()>
-    // where
-    //     T: Serialize
-    // {
-    //     let mut profile_map = match self.profile_map.lock() {
-    //         Ok(p) => p,
-    //         Err(_) => return Err(anyhow!("Profile manager mutex is poisoned")),
-    //     };
-
-    //     if let Some(profile) = profile_map.map.get_mut(&self.active_profile.name) {
-    //         profile.modules.insert(module_id.to_string(), serde_json::to_value(module_profile)?);
-    //     }
-    //     else {
-    //         return Err(anyhow!("Internal error, failed to find active profile {}", &self.active_profile.name))
-    //     }
-    //     Ok(())
-    // }
 }

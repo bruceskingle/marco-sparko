@@ -1,0 +1,14 @@
+/*
+ * Page components.
+ *
+ * Each page which needs hooks is a real component so that its hooks are owned by that component
+ * rather than by the enclosing Module component, which renders different pages at different times.
+ */
+
+mod bills;
+mod properties;
+mod measurements;
+
+pub use bills::BillsPage;
+pub use properties::PropertiesPage;
+pub use measurements::MeasurementsPage;

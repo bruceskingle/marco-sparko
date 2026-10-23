@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 
-use crate::{Cli, MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
-
-// const PAGE_CONTENT_CSS: Asset = asset!("/assets/styling/page_content.css");
+use crate::{MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
 
 // Simple HTML escaper
 fn escape_html(input: &str) -> String {
@@ -17,7 +15,7 @@ fn escape_html(input: &str) -> String {
         .replace("'", "&#x27;")
 }
 
-fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<String>, page_list: &'a Vec<PageInfo>) -> (&'a str, Box<dyn Fn() -> Element + 'a>) {
+fn get_page(module: &Box<dyn crate::Module + Send>, path: &Vec<String>, page_list: &Vec<PageInfo>) -> (&'static str, Element) {
     let mut page_id = "";
     let mut it = path.into_iter();
 
@@ -38,13 +36,7 @@ fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<String>
     if page_list.len() < 1 {
         let module_id = module.module_id();
 
-        // let x = || rsx!(
-        //     "Module page list is empty {module_id}"
-        // );
-        // let y: impl Fn() -> Element = x;
-
-        let x1 = Box::new(move || rsx!( "Module page list is empty {module_id}" ));
-        return ("", x1);
+        return ("", rsx!( "Module page list is empty {module_id}" ));
     }
 
     for page_info in page_list {
@@ -56,8 +48,7 @@ fn get_page<'a>(module: &'a Box<dyn crate::Module + Send>, path: &'a Vec<String>
 
 
     let msg = format!("{:?}", path);
-    let x2 = Box::new(move || rsx!( "Unknown page in path {msg}" ));
-    ("", x2)
+    ("", rsx!( "Unknown page in path {msg}" ))
 
 
 }
@@ -74,8 +65,11 @@ pub fn Module(module_id: String) -> Element {
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
 
+    // Signal for sidebar visibility
+    let mut sidebar_open = use_signal(|| true);
+
     let mut call_construct_module_signal = use_signal::<bool>(|| true);
-    let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { Cli::do_construct(&module_id, &module_registrations, &marco_sparko_context).await});
+    let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { module_registrations.module_factory(&module_id, &marco_sparko_context).await});
 
 
     let mut call_check_ready_module_signal = use_signal::<bool>(|| true);
@@ -88,7 +82,7 @@ pub fn Module(module_id: String) -> Element {
         call_construct_module_signal.set(false);
         construct_module_action.call(module_registrations.clone(), context.clone(), module_id.clone());
     }
-
+    
     if let Some(result) = construct_module_action.value() {
         let builder_signal = result?;
         let builder = (*builder_signal.read()).clone();
@@ -114,9 +108,7 @@ pub fn Module(module_id: String) -> Element {
                     let module = &*module_signal.read();
                     let page_list = module.get_page_list();
                     let (active_page_id, content) = get_page(&module, &path, &page_list);
-                    
-                    // Signal for sidebar visibility
-                    let mut sidebar_open = use_signal(|| true);
+
 
                     // Toggle sidebar
                     let toggle_sidebar = {
@@ -126,12 +118,12 @@ pub fn Module(module_id: String) -> Element {
                         }
                     };
 
-                    let body = match content() {
+                    let body = match content {
                         Ok(element) => rsx!(
                             div { class: "filler", {element} }
                         )?,
                         Err(error) => {
-                            let escaped_error = escape_html(&error.to_string());
+                            let escaped_error = escape_html(&format!("{:?}", &error));
 
                             let html = format!("<div class=\"error\">Failed to load page content: <pre>{}</pre></div>", escaped_error);
                             rsx! {
@@ -141,8 +133,6 @@ pub fn Module(module_id: String) -> Element {
                     };
 
                     rsx! {
-                        // document::Link { rel: "stylesheet", href: PAGE_CONTENT_CSS }
-                        // div { class: "layout-root",
                         // Main container
                         div { class: "container",
                             // Sidebar
@@ -169,7 +159,6 @@ pub fn Module(module_id: String) -> Element {
                                             "{page_info.label}"
                                         }
                                     }
-                                                                // }
                                 }
                             }
 
@@ -185,8 +174,6 @@ pub fn Module(module_id: String) -> Element {
                                 {body}
                             }
                         }
-                        // div { class: "bottombar" }
-                        // }
                     }
                 }
                 else {

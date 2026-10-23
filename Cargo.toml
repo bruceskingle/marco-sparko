@@ -1,7 +1,7 @@
 [package]
 name = "marco-sparko"
 description = "The Energy Explorer"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2024"
 default-run = "marco-sparko"
 
@@ -12,6 +12,7 @@ sparko_graphql_builder = { path = "../sparko_graphql/sparko_graphql_builder" }
 time = { version = "0.3", features = ["serde", "parsing", "formatting"] }
 
 [dependencies]
+semver = "1"
 time = { version = "0.3", features = ["serde", "parsing", "formatting"] }
 chrono = "0.4"
 serde = { version = "1.0", features = ["derive"], with = "iso8601"}
@@ -27,21 +28,23 @@ display_json = "0.2.1"
 rust_decimal = "1.36.0"
 rust_decimal_macros = "1.36.0"
 const_format = "0.2.32"
-sparko_graphql = {version = "0.4.2", path = "../../git/sparko_graphql" }
+sparko_graphql = {version = "0.4.3", path = "../sparko_graphql" }
 #serde_with = "3.9.0"
 #reedline-repl-rs = { version = "1.2.1", features = ["async"] }
 futures = "0.3.31"
-reedline = "0.38.0"
-nu-ansi-term = "0.50.1"
 indexmap = "2.7.1"
 time-tz = "2.0.0"
 #tzdb = "0.7.2"
 #tz-rs = "0.7.0"
 dioxus = { version = "0.7.3", features = ["router", "desktop"] }
 dioxus-desktop = "0.7"
+dioxus-free-icons = { version = "0.10", features = ["lucide"] }
+# Native file dialogs, the same version and features as dioxus-desktop uses
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+# Clipboard access, text only
+arboard = { version = "3", default-features = false }
 anyhow = "1.0.100"
 wasm-bindgen = "0.2.105"
-fs4 = "0.13.1"
 windows = { version = "0.54", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -49,7 +52,15 @@ windows = { version = "0.54", features = [
     "Win32_System_Threading",
     "Win32_Storage_FileSystem"
 ]}
+# Moves deleted profiles to the Trash (macOS), Recycle Bin (Windows) or freedesktop trash (Linux)
+trash = "5"
 
+
+# macOS only, to position the system colour panel. The same versions as dioxus-desktop and rfd use.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.3"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSGeometry"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSColorPanel", "NSEvent", "NSPanel", "NSResponder", "NSScreen", "NSWindow"] }
 
 [dev-dependencies]
 tokio-test = "*"

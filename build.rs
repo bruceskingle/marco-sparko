@@ -58,8 +58,38 @@ mod create_info {{
     Ok(())
 }
 
+/*
+git --no-optional-locks status --porcelain=v2 --branch --show-stash --ignore-submodules -uno
+*/
+
+
 
 fn git_status(file: &mut File)   -> Result<(), std::io::Error> {
+
+    let mut is_git = false;
+    let mut tag_name = String::new();
+    let mut branch_name = String::new();
+    let mut is_dirty = false;
+    let mut is_staged = false;
+    let mut has_stash = false;
+    let mut upstream: Option<i32> = None;
+
+    let output = Command::new("git")
+        .arg("name-rev")
+        .arg("--name-only")
+        .arg("--tags")
+        .arg("HEAD")
+        .stderr(Stdio::null())
+        .output()
+        .expect("Failed to execute command");
+
+    let output_str = String::from_utf8_lossy(&output.stdout);
+
+    for line in output_str.lines() {
+        tag_name = line.trim().to_string();
+    } 
+
+
     let output = Command::new("git")
         .arg("--no-optional-locks")
         .arg("status")
@@ -71,13 +101,6 @@ fn git_status(file: &mut File)   -> Result<(), std::io::Error> {
         .stderr(Stdio::null())
         .output()
         .expect("Failed to execute command");
-
-    let mut is_git = false;
-    let mut branch_name = String::new();
-    let mut is_dirty = false;
-    let mut is_staged = false;
-    let mut has_stash = false;
-    let mut upstream: Option<i32> = None;
 
     let output_str = String::from_utf8_lossy(&output.stdout);
 
@@ -121,6 +144,7 @@ fn git_status(file: &mut File)   -> Result<(), std::io::Error> {
     if is_git {
         // pub const USER_AGENT: &'static str = "{}-{};";
             writeln!(file, "\tpub const GIT_BRANCH : &'static str = \"{}\";", branch_name)?;
+            writeln!(file, "\tpub const GIT_TAG : &'static str = \"{}\";", tag_name)?;
     }
     writeln!(file, "\tpub const GIT_DIRTY : bool = {};", is_dirty)?;
     writeln!(file, "\tpub const GIT_STAGED : bool = {};", is_staged)?;

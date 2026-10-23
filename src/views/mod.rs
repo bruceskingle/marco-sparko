@@ -16,3 +16,6 @@ pub use module::Module;
 
 mod navbar;
 pub use navbar::Navbar;
+
+mod profile_size;
+pub use profile_size::ProfileSize;

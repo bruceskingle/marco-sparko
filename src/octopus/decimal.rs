@@ -22,7 +22,9 @@ This implementation is a wrapper around a rust_decimal::Decimal which provides s
 #[derive(Debug, Clone, Copy)]
 pub struct Decimal(rust_decimal::Decimal);
 
+
 impl Decimal {
+    pub const ZERO: Decimal  = Decimal(rust_decimal::Decimal::ZERO);
 
   pub fn new(num: i64, scale: u32) -> Decimal {
     Decimal (rust_decimal::Decimal::new(num, scale))
@@ -46,6 +48,10 @@ impl Decimal {
 
   pub fn round_dp_with_strategy(&self, dp: u32, strategy: rust_decimal::RoundingStrategy) -> Decimal {
     Decimal(self.0.round_dp_with_strategy(dp, strategy))
+  }
+
+  pub fn normalize(&self) -> Decimal {
+    Decimal(self.0.normalize())
   }
 }
 
@@ -88,7 +94,7 @@ impl Decimal {
 // }
 
 
-macro_rules! forward_ref_binop {
+macro_rules! forward_ref_binary_op {
     ($imp:ident, $method:ident) => {
         impl $imp<&Decimal> for Decimal {
             type Output = Decimal;
@@ -111,7 +117,7 @@ macro_rules! forward_ref_binop {
     };
 }
 
-macro_rules! forward_ref_assignop {
+macro_rules! forward_ref_assign_op {
     ($imp:ident, $method:ident) => {
         impl $imp<&Decimal> for Decimal {
             fn $method(&mut self, rhs: &Decimal) {
@@ -127,7 +133,7 @@ impl Div for Decimal {
         Decimal(self.0.div(rhs.0))
     }
 }
-forward_ref_binop!(Div, div);
+forward_ref_binary_op!(Div, div);
 
 impl Mul for Decimal {
     type Output = Decimal;
@@ -135,7 +141,7 @@ impl Mul for Decimal {
         Decimal(self.0.mul(rhs.0))
     }
 }
-forward_ref_binop!(Mul, mul);
+forward_ref_binary_op!(Mul, mul);
 
 impl Add for Decimal {
     type Output = Decimal;
@@ -143,7 +149,7 @@ impl Add for Decimal {
         Decimal(self.0.add(rhs.0))
     }
 }
-forward_ref_binop!(Add, add);
+forward_ref_binary_op!(Add, add);
 
 impl Sub for Decimal {
     type Output = Decimal;
@@ -151,35 +157,35 @@ impl Sub for Decimal {
         Decimal(self.0.sub(rhs.0))
     }
 }
-forward_ref_binop!(Sub, sub);
+forward_ref_binary_op!(Sub, sub);
 
 impl AddAssign for Decimal {
     fn add_assign(&mut self, rhs: Self) {
         self.0.add_assign(rhs.0);
     }
 }
-forward_ref_assignop!(AddAssign, add_assign);
+forward_ref_assign_op!(AddAssign, add_assign);
 
 impl SubAssign for Decimal {
     fn sub_assign(&mut self, rhs: Self) {
         self.0.sub_assign(rhs.0);
     }
 }
-forward_ref_assignop!(SubAssign, sub_assign);
+forward_ref_assign_op!(SubAssign, sub_assign);
 
 impl MulAssign for Decimal {
     fn mul_assign(&mut self, rhs: Self) {
         self.0.mul_assign(rhs.0);
     }
 }
-forward_ref_assignop!(MulAssign, mul_assign);
+forward_ref_assign_op!(MulAssign, mul_assign);
 
 impl DivAssign for Decimal {
     fn div_assign(&mut self, rhs: Self) {
         self.0.div_assign(rhs.0);
     }
 }
-forward_ref_assignop!(DivAssign, div_assign);
+forward_ref_assign_op!(DivAssign, div_assign);
 
 impl Display for Decimal {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -206,7 +212,13 @@ impl FromStr for Decimal {
     type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Decimal, Self::Err> {
-      Ok(Decimal(rust_decimal::Decimal::from_str(str)?))
+      // Python Decimals may be serialized in scientific notation, e.g. "0E-18"
+      if str.contains(['e', 'E']) {
+        Ok(Decimal(rust_decimal::Decimal::from_scientific(str)?))
+      }
+      else {
+        Ok(Decimal(rust_decimal::Decimal::from_str(str)?))
+      }
         // let mut int: i32 = 0;
         // let mut dec: u32 = 0;
         // let mut i = 0;
@@ -276,8 +288,9 @@ impl<'de> Visitor<'de> for DecimalVisitor {
     where
         E: de::Error,
     {
+      // Trailing zeros after the decimal point are removed, e.g. "1.500" becomes 1.5
       match  Decimal::from_str(value) {
-        Ok(value) => Ok(value),
+        Ok(value) => Ok(value.normalize()),
         Err(error) => Err(E::custom(format!("Invalid Decimal value: {}", error)))
       }
     }
@@ -360,10 +373,33 @@ mod tests {
       expect_parse(r#"{ "decimal": "0000.444" }"#, dec!(0.444));
       
       expect_parse(r#"{ "decimal": "876.444" }"#, dec!(876.444));
+
+
+      expect_parse(r#"{ "decimal": "0E-18" }"#, dec!(0));
+      expect_parse(r#"{ "decimal": "12345E-3" }"#, dec!(12.345));
+      expect_parse(r#"{ "decimal": "-2.5e-2" }"#, dec!(-0.025));
+      expect_parse(r#"{ "decimal": "1.5E+3" }"#, dec!(1500));
+      expect_parse_error(r#"{ "decimal": "1.5E" }"#);
       
       expect_parse_error(r#"{ "decimal": "0.1.2" }"#);
     }
   
+    fn expect_parse_as(s: &str, expected: &str) {
+      let value: MyStruct = serde_json::from_str(s).unwrap();
+      assert_eq!(value.decimal.to_string(), expected, "parsing {}", s);
+    }
+
+    #[test]
+    fn trailing_zeros_after_the_decimal_point_are_removed() {
+      expect_parse_as(r#"{ "decimal": "1.500" }"#, "1.5");
+      expect_parse_as(r#"{ "decimal": "444.0" }"#, "444");
+      expect_parse_as(r#"{ "decimal": "0.0000" }"#, "0");
+      expect_parse_as(r#"{ "decimal": "0E-18" }"#, "0");
+      expect_parse_as(r#"{ "decimal": "-0.00" }"#, "0");
+      expect_parse_as(r#"{ "decimal": "100" }"#, "100");
+      expect_parse_as(r#"{ "decimal": "28.8273" }"#, "28.8273");
+    }
+
     #[test]
     fn test_serialize() {
       assert_eq!(serde_json::to_string(&MyStruct {

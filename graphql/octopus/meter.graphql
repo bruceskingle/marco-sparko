@@ -57,6 +57,7 @@ query accountPropertiesMeters($accountNumber: String!) @ms_required_by_default {
 query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_default {
   node(id: $meterNodeId) {
     ... on ElectricityMeterType @ms_required_by_default {
+    	nodeId
       importMeter @ms_optional {
         meterPoint {
           mpan
@@ -156,6 +157,7 @@ query meterAgreements($meterNodeId: ID!, $validAfter: DateTime) @ms_required_by_
       }
     }
     ... on GasMeterType @ms_required_by_default {
+    	nodeId
       meterPoint {
         agreements(excludeFuture: false, validAfter: $validAfter) @ms_required_by_default {
           id
@@ -276,5 +278,97 @@ fragment consumptionFields on ConsumptionConnection @ms_required_by_default {
   pageInfo {
     endCursor
     hasNextPage
+  }
+}
+
+query activeMeterPointsWithAgreements($accountNumber: String!) {
+  account(accountNumber: $accountNumber) {
+    properties {
+      electricityMeterPoints {
+        mpan
+        direction
+        agreements(excludeFuture: true, includeInactive: false) {
+          tariff {
+            __typename
+            ... on TariffType {
+              productCode
+              __typename
+            }
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}
+
+query homeAndEvConsumptionBreakdown(
+  $accountNumber: String!
+  $first: Int!
+  $utilityFilters: [UtilityFiltersInput!]
+  $startOn: Date
+  $endOn: Date
+  $startAt: DateTime
+  $endAt: DateTime
+  $timezone: String
+  $cursor: String
+) {
+  account(accountNumber: $accountNumber) {
+    properties {
+      id
+      measurements(
+        first: $first
+        utilityFilters: $utilityFilters
+        startOn: $startOn
+        endOn: $endOn
+        startAt: $startAt
+        endAt: $endAt
+        timezone: $timezone
+        after: $cursor
+      ) {
+        edges {
+          cursor
+          node {
+            value
+            unit
+            ... on IntervalMeasurementType {
+              startAt
+              endAt
+            }
+            metaData {
+              statistics {
+                costExclTax {
+                  costCurrency @ms_currency
+                  pricePerUnit {
+                    amount
+                  }
+                  estimatedAmount
+                }
+                costInclTax {
+                  costCurrency @ms_currency
+                  pricePerUnit {
+                    amount
+                  }
+                  estimatedAmount
+                }
+                value
+                label
+                type
+              }
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        __typename
+      }
+      __typename
+    }
+    __typename
   }
 }

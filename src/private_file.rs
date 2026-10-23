@@ -13,7 +13,7 @@ use std::ptr::null_mut;
 #[cfg(windows)]
 use windows::Win32::Security::Authorization::*;
 #[cfg(windows)]
-use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::{FromRawHandle, OwnedHandle};
 
 #[cfg(windows)]
 use windows::Win32::Foundation::*;
@@ -89,10 +89,16 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", std::io::Error::last_os_error())));
         }
 
+        // SAFETY: we own the handle and no one else will close it. The file closes it when dropped, including on the
+        // error returns below.
+        let file = File::from_raw_handle(handle.0 as _);
+
         println!("OpenProcessToken");
         // Open process token
         let mut token = HANDLE::default();
         OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)?;
+        // SAFETY: we own the token handle, this closes it when dropped.
+        let _token_owner = OwnedHandle::from_raw_handle(token.0 as _);
 
         // Get user SID
         
@@ -127,15 +133,11 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
         let mut dacl: *mut ACL = null_mut();
         let rc = SetEntriesInAclW(Some(&ea_slice), None, &mut dacl);
 
-        if !dacl.is_null() {
-            LocalFree(HLOCAL(dacl as *mut std::ffi::c_void));
-        }
-        
         if rc.0 != 0 {
             return Err(io::Error::from_raw_os_error(rc.0 as i32));
         }
 
-        
+
         // Apply DACL only (do NOT pass owner)
         let rc = SetNamedSecurityInfoW(
             windows::core::PCWSTR(wide.as_ptr()),
@@ -147,12 +149,14 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
             None,
         );
 
+        // The DACL is only freed once it has been applied.
+        if !dacl.is_null() {
+            LocalFree(HLOCAL(dacl as *mut std::ffi::c_void));
+        }
+
         if rc.0 != 0 {
             return Err(io::Error::from_raw_os_error(rc.0 as i32));
         }
-
-        // SAFETY: we own the handle and no one else will close it
-        let file = File::from_raw_handle(handle.0 as _) ;
 
         Ok(file)
     }

@@ -28,6 +28,7 @@
   --derived:#f499f8;
   --invalid:#ad4646;
   --muted:#9aa6b2;
+  --fetched:#ecb91047;
   --glass: rgba(255,255,255,0.03);
   --radius:12px;
   --gap:1rem;
@@ -127,6 +128,15 @@ body{
   outline:none;
 }
 
+.profile-rename {
+  width: 12rem;
+  padding: 0.2rem 0.4rem;
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+
 .overlay {
     position: fixed;
     top: 0;
@@ -173,6 +183,50 @@ body{
 .menu-item:hover,.menu-item:focus{
   background:var(--glass);
   color:#e6f6fb;
+  outline:none;
+}
+
+/* A profile in the menu, with a ... button for its actions on the right. */
+.menu-item.profile-item {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.5rem;
+  cursor:pointer;
+}
+
+.profile-actions {
+  position:relative;
+}
+
+.profile-actions-toggle {
+  padding:0 0.4rem;
+  line-height:1.2;
+  font-size:0.95rem;
+}
+
+.profile-actions-menu {
+  position:absolute;
+  right:0;
+  top:calc(100% + 4px);
+  min-width:120px;
+  padding:0.35rem;
+  border-radius:10px;
+  background-color:#000000;
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow:0 10px 30px rgba(2,6,23,0.6);
+  z-index:40;
+}
+
+.menu-item.create-new {
+  color: var(--accent);
+}
+
+
+.menu-item.create-new:hover,.menu-item.create-new:focus{
+  background:var(--glass);
+  color:#e6f6fb;
+  transform:translateY(-1px);
   outline:none;
 }
 

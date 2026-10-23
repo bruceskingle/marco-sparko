@@ -40,7 +40,7 @@ query getBills($accountNumber: String!,
                         billType
                         fromDate
                         toDate
-                        issuedDate
+                        issuedDate @ms_optional
                         ...Statement
                         ...PeriodBasedDocument
                         ...Invoice
@@ -157,8 +157,8 @@ fragment Statement on StatementType @ms_required_by_default {
     closingBalance
     openingBalance
     isExternalBill
-    userId
-    toAddress
+    userId @ms_optional
+    toAddress @ms_optional
     paymentDueDate
     #consumptionStartDate @ms_optional
     #consumptionEndDate @ms_optional

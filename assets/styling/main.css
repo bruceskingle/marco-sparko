@@ -49,6 +49,8 @@ body {
 
 
 :root {
+    /* Render native controls (date pickers, select menus, checkboxes) with their dark variants */
+    color-scheme: dark;
     --sidebar-bg: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
     --border: rgba(0,0,0,0.08);
     --topbar-bg: #f8fafc;
@@ -112,6 +114,13 @@ body {
     /* background: white; */
 }
 
+.filler:has(.stacked-consumption-graph) {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+}
+
 #hero {
     margin: 0;
     display: flex;
@@ -139,7 +148,7 @@ body {
     padding: 10px;
 }
 
-.link {
+.link, a {
     color: rgb(153, 153, 226);
     text-decoration: underline;
     cursor: pointer;
@@ -148,6 +157,12 @@ body {
     border: white 1px solid;
     border-radius: 5px;
     padding: 10px; */
+}
+
+/* Small icon sitting alongside text, e.g. the external link marker */
+.inline-icon {
+    vertical-align: middle;
+    margin-left: 4px;
 }
 
 #links a:hover {
@@ -188,10 +203,9 @@ th {
     color: var(--header);
 }
 
-th.span {
-    background-color: var(--header_span_bg);
+.header {
     color: var(--header);
-    text-align: center;
+    background-color: var(--header_span_bg);
 }
 
 .derived {
@@ -202,6 +216,12 @@ th.span {
     color: var(--invalid);
     font-weight: bold;
 }
+
+.fetched {
+    background-color: var(--fetched);
+}
+
+/* .cached {} */
 
 th.row-header {
     text-align: right;
@@ -222,6 +242,7 @@ th.row-header {
 input[type="text"],
 input[type="email"],
 input[type="password"],
+input[type="date"],
 input[type="radio"],
 textarea,
 select {
@@ -237,6 +258,7 @@ select {
 input[type="text"]:focus,
 input[type="email"]:focus,
 input[type="password"]:focus,
+input[type="date"]:focus,
 textarea:focus,
 select:focus {
     background-color: #252530;
@@ -280,7 +302,7 @@ label {
 /* Button styling */
 button {
     background-color: #2a2a2f;
-    color: #b0b0b0;
+    color: var(--accent);
     border: 1px solid #404045;
     border-radius: 4px;
     padding: 10px 20px;
@@ -292,7 +314,7 @@ button {
 button:hover {
     background-color: #353540;
     color: #d0d0d0;
-    border-color: #505055;
+    border-color: var(--accent);
 }
 
 /* Heading styles */
@@ -398,4 +420,327 @@ h6 {
 /* .sidebar-item.inactive{
   color: yellow;
 } */
+
+.dialog {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid yellow;
+    padding: 20px;
+}
+/* Modal dialog, e.g. the meter consumption date range */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.modal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 360px;
+    padding: 20px;
+    border: 1px solid #404045;
+    border-radius: 8px;
+    background-color: #1a1a1f;
+    color: #d0d0d0;
+}
+
+.modal h3 {
+    margin: 0 0 4px 0;
+}
+
+.modal-row {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-row input:disabled,
+.modal-row select:disabled {
+    opacity: 0.4;
+}
+
+.modal-error {
+    color: #ff8080;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.modal-buttons button:disabled {
+    opacity: 0.4;
+}
+
+/* A modal dialog for an action which cannot be undone. */
+.modal.danger {
+    border: 2px solid #e04848;
+}
+
+button.danger {
+    color: #ffffff;
+    background-color: #b83232;
+    border-color: #e04848;
+}
+
+button.danger:hover {
+    background-color: #d03c3c;
+    color: #ffffff;
+}
+
+button.danger:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* The disk space used by a profile. */
+.profile-size {
+    padding: 20px;
+}
+
+.profile-size th,
+.profile-size td {
+    padding: 4px 16px 4px 0;
+    text-align: left;
+}
+
+.profile-size td.size {
+    text-align: right;
+}
+
+.profile-size tr.total td {
+    font-weight: bold;
+    border-top: 1px solid #404045;
+}
+
+.profile-size-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.date-range {
+    margin-bottom: 12px;
+}
+
+.date-range-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.date-range-row .view-toggle {
+    margin-left: 0;
+}
+
+/* The export button, at the right hand end of the date range row. */
+.date-range-row .export {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.export-status {
+    color: var(--muted);
+}
+
+/* Clicking the exported file name copies it to the clipboard. */
+.export-file-name {
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.export-file-name:hover {
+    color: #d0d0d0;
+}
+
+/* A menu below a button, e.g. the export formats or the categories. */
+.menu-anchor {
+    position: relative;
+}
+
+.menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    min-width: 100%;
+    padding: 4px 0;
+    border: 1px solid #404045;
+    border-radius: 4px;
+    background-color: #1a1a1f;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.dropdown-menu > button {
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    padding: 6px 16px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.dropdown-menu > button:hover {
+    background-color: #353540;
+}
+
+.menu-separator {
+    margin: 4px 0;
+    border-top: 1px solid #404045;
+}
+
+/* A category in the category menu, with its colour and whether it is shown. */
+.category-menu {
+    left: 0;
+    right: auto;
+}
+
+.category-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    white-space: nowrap;
+}
+
+.category-row input[type="color"] {
+    width: 28px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid #404045;
+    background: none;
+    cursor: pointer;
+}
+
+.category-row select {
+    padding: 2px 4px;
+    font-size: 13px;
+}
+
+.line-style-sample {
+    flex: none;
+}
+
+.category-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.trend-line {
+    fill: none;
+    stroke-width: 1.5;
+}
+
+/* The columns over the trend graph which show the tooltip for each day, and the line marking the day. */
+.trend-hit {
+    fill: transparent;
+}
+
+.trend-crosshair {
+    stroke: rgba(255, 255, 255, 0.35);
+    stroke-width: 1;
+}
+
+.view-toggle {
+    margin-left: 12px;
+}
+
+.view-toggle button {
+    border-radius: 0;
+}
+
+.view-toggle button:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.view-toggle button:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.view-toggle button + button {
+    border-left: none;
+}
+
+.view-toggle button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.view-toggle button:disabled:hover {
+    background-color: #2a2a2f;
+    color: var(--accent);
+    border-color: #404045;
+}
+
+.view-toggle button.active {
+    background-color: #353540;
+    color: #d0d0d0;
+}
+
+.stacked-consumption-graph {
+    display: block;
+    flex: 1 1 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    font-size: 12px;
+    visibility: hidden;
+}
+
+.stacked-consumption-graph.ready {
+    visibility: visible;
+}
+
+.stacked-consumption-graph .stacked-grid,
+.stacked-consumption-graph .stacked-tick {
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 1;
+}
+
+.stacked-consumption-graph .stacked-axis-label {
+    fill: #c4c4ce;
+}
+
+.stacked-consumption-graph .stacked-bar,
+.stacked-consumption-graph .stacked-legend-swatch {
+    stroke: rgba(0, 0, 0, 0.45);
+    stroke-width: 0.5;
+}
+
+.stacked-consumption-graph .stacked-tooltip-background {
+    fill: #1a1a1f;
+    stroke: #707080;
+}
+
+.stacked-consumption-graph .stacked-tooltip-period {
+    fill: #c4c4ce;
+    font-weight: bold;
+}
+
+.stacked-consumption-graph .stacked-tooltip-value {
+    fill: #ffffff;
+}
 

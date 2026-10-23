@@ -6,7 +6,7 @@ use crate::MarcoSparkoContext;
 
 use super::graphql::ObtainJsonWebTokenInput;
 
-use sparko_graphql::{RequestManager, TokenManager};
+use sparko_graphql::{GraphQLCaller, RequestManager, TokenManager};
 use super::graphql::login::obtain_kraken_token::ObtainKrakenJsonWebToken;
 
 /*
@@ -148,8 +148,8 @@ impl OctopusTokenManager {
         };
 
         if context.args.marco_sparko_args.verbose {
-            if let Some(token) = &token {
-                println!("Loaded token from cache: {:?}", token.token);
+            if token.is_some() {
+                println!("Loaded token from cache");
             }
             else {
                 println!("No cached token found");
@@ -208,12 +208,12 @@ impl TokenManager for OctopusTokenManager {
                     .build()?;
 
                 let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-                let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call(&mutation, None).await?;
+                let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call2(&mutation, None).await?;
         
                 let token = OctopusToken::from(response.obtain_kraken_token_);
 
                 if self.context.args.marco_sparko_args.verbose {
-                    println!("Obtained new Octopus token via refresh: {:?}", token.token);
+                    println!("Obtained new Octopus token via refresh");
                 }
 
                 if let Err(error) = self.context.update_cache(crate::octopus::MODULE_ID, &StoredToken::from(&token)) {
@@ -234,11 +234,11 @@ impl TokenManager for OctopusTokenManager {
 
                     
                     if self.context.args.marco_sparko_args.verbose {
-                        println!("Obtaining new Octopus token...{:?}", input);
+                        println!("Obtaining new Octopus token...");
                     }
 
                     let mutation = super::graphql::login::obtain_kraken_token::Mutation::new(input);
-                    let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call(&mutation, None).await?;
+                    let response: crate::octopus::graphql::login::obtain_kraken_token::Response = self.request_manager.call2(&mutation, None).await?;
             
                     let token = OctopusToken::from(response.obtain_kraken_token_);
             

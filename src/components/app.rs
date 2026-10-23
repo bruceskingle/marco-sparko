@@ -2,8 +2,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use crate::{Args, MarcoSparkoContext, ModuleRegistrations, views::*};
-use dioxus::desktop::{use_window, LogicalSize};
+use crate::{Args, InitRequested, MarcoSparkoContext, ModuleRegistrations, views::*};
 
 // use crate::views::{Blog, Home, Navbar};
 
@@ -29,6 +28,9 @@ pub enum Route {
         // Fields of the route variant will be passed to the component as props. In this case, the module component must accept
         // an `id` prop of type `i32`.
         Module { module_id: String },
+        // The disk space used by a profile, part of the Home app.
+        #[route("/profile/:name")]
+        ProfileSize { name: String },
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.
@@ -48,16 +50,16 @@ pub fn App() -> Element {
 
     let args = Args::ms_parse();
     let verbose = args.marco_sparko_args.verbose;
-    let mut init_signal = use_signal::<bool>(|| true);
-    let init = *init_signal.read();
+    let mut init_signal = use_signal(|| InitRequested(true));
+    let init = init_signal.read().0;
     let mut context_signal = use_signal::<Option<Arc<MarcoSparkoContext>>>(|| None);
     
     // Store the init signal in context so it can be accessed and reset from anywhere
-    use_context_provider::<Signal<bool>>(move || init_signal);
+    use_context_provider::<Signal<InitRequested>>(move || init_signal);
     
-    let window = use_window();
-    window.set_inner_size(LogicalSize::new(1400, 768));
-    window.set_title("Marco Sparko");
+    use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
+
+    use_context_provider::<ModuleRegistrations>(move || ModuleRegistrations::new(verbose));
 
     // let window_icon =dioxus_desktop::tao::window::Icon::from_file(&std::path::Path::new("icons/icon.ico")).unwrap();
     // window.set_window_icon(window_icon);
@@ -66,24 +68,57 @@ pub fn App() -> Element {
         let marco_sparko_context = MarcoSparkoContext::new(args)?;
         context_signal.set(Some(marco_sparko_context));
         // let x: Signal<Arc<MarcoSparkoContext>>;
-        use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
+        
+        
 
-        let module_registrations = ModuleRegistrations::new(verbose);
-        use_context_provider::<ModuleRegistrations>(move || module_registrations);
-
-        init_signal.set(false);
+        init_signal.set(InitRequested(false));
         
         return rsx!{ "Loading..." };
     }
+
+
+    // let opt_context = &*context_signal.read();
+    // let context = opt_context.as_ref().unwrap();
+    // let profile = &context.profile.active_profile;
+
+
+    // if !profile.version.eq(CURRENT_VERSION) {
+        
+    //     let profile_version = if profile.version.len() == 0 {"0.0.0"} else { &profile.version };
+
+    //     return rsx! {
+    //         ErrorBoundary {
+    //             handle_error: |errors: ErrorContext| {
+    //                 rsx! {
+
+    //                     div { "Oops, we encountered an error. Please report this to the developer of this application" }
+
+    //                     pre { "{errors:?}" }
+    //                 }
+    //             },
+
+    //             // In addition to element and text (which we will see later), rsx can contain other components. In this case,
+    //             // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
+    //             document::Link { rel: "icon", href: FAVICON }
+    //             document::Link { rel: "stylesheet", href: MAIN_CSS }
+
+    //             div { class: "dialog",
+    //                 p {
+    //                     "Profile {profile.name} is version {profile_version} but the current version is {CURRENT_VERSION}"
+    //                 }
+    //                 p { "Do you want to upgrade it to the current version?" }
+    //             }
+    //         }
+    //     }
+    // }
+   
     rsx! {
         ErrorBoundary {
             handle_error: |errors: ErrorContext| {
                 rsx! {
 
-        
-
                     div { "Oops, we encountered an error. Please report this to the developer of this application" }
-        
+
                     pre { "{errors:?}" }
                 }
             },

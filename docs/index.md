@@ -3,8 +3,6 @@ This section contains various documents about Marco Sparko as well as the servic
 
 [Getting Started](gettingStarted/index.md) An introduction into how to install and use the application.
 
-[Command Line Mode](gettingStarted/cli/index.md) An introduction into using the command line (CLI) mode.
-
 ## Plugins
 The following plugins are currently supported as part of the core Marco Sparko development. The links go to pages with more specific details.
 
