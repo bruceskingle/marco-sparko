@@ -186,6 +186,38 @@ body{
   outline:none;
 }
 
+/* A profile in the menu, with a ... button for its actions on the right. */
+.menu-item.profile-item {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.5rem;
+  cursor:pointer;
+}
+
+.profile-actions {
+  position:relative;
+}
+
+.profile-actions-toggle {
+  padding:0 0.4rem;
+  line-height:1.2;
+  font-size:0.95rem;
+}
+
+.profile-actions-menu {
+  position:absolute;
+  right:0;
+  top:calc(100% + 4px);
+  min-width:120px;
+  padding:0.35rem;
+  border-radius:10px;
+  background-color:#000000;
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow:0 10px 30px rgba(2,6,23,0.6);
+  z-index:40;
+}
+
 .menu-item.create-new {
   color: var(--accent);
 }

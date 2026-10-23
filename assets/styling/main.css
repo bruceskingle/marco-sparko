@@ -482,6 +482,53 @@ h6 {
     opacity: 0.4;
 }
 
+/* A modal dialog for an action which cannot be undone. */
+.modal.danger {
+    border: 2px solid #e04848;
+}
+
+button.danger {
+    color: #ffffff;
+    background-color: #b83232;
+    border-color: #e04848;
+}
+
+button.danger:hover {
+    background-color: #d03c3c;
+    color: #ffffff;
+}
+
+button.danger:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* The disk space used by a profile. */
+.profile-size {
+    padding: 20px;
+}
+
+.profile-size th,
+.profile-size td {
+    padding: 4px 16px 4px 0;
+    text-align: left;
+}
+
+.profile-size td.size {
+    text-align: right;
+}
+
+.profile-size tr.total td {
+    font-weight: bold;
+    border-top: 1px solid #404045;
+}
+
+.profile-size-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+}
+
 .date-range {
     margin-bottom: 12px;
 }

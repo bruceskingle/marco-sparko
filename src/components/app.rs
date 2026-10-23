@@ -28,6 +28,9 @@ pub enum Route {
         // Fields of the route variant will be passed to the component as props. In this case, the module component must accept
         // an `id` prop of type `i32`.
         Module { module_id: String },
+        // The disk space used by a profile, part of the Home app.
+        #[route("/profile/:name")]
+        ProfileSize { name: String },
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.

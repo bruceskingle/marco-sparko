@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{ MarcoSparkoContext, UpgradeRequested, components::app::Route};
+use crate::{ MarcoSparkoContext, UpgradeRequested, components::{app::Route, delete_profile::DeleteProfileDialog}, profile::profile_names_equal};
 use dioxus::prelude::*;
 
 // use crate::PROFILE_MANAGER;
@@ -27,6 +27,9 @@ pub fn Navbar() -> Element {
     let mut new_profile_generation = use_signal(|| 0u32);
     let mut new_profile_name = use_signal(String::new);
     let mut new_profile_error = use_signal(|| None::<String>);
+    // The profile whose ... menu is open, and the profile being deleted.
+    let mut profile_actions_open = use_signal(|| None::<String>);
+    let mut delete_profile = use_signal(|| None::<String>);
 
     let mut all = Vec::new();
     for name in &context.profile.all_profiles {
@@ -43,7 +46,7 @@ pub fn Navbar() -> Element {
             div { class: "nav-left",
 
                 Link {
-                    class: if matches!(&current_route, Route::Home {}) { "nav-item active" } else { "nav-item" },
+                    class: if matches!(&current_route, Route::Home {} | Route::ProfileSize { .. }) { "nav-item active" } else { "nav-item" },
                     to: Route::Home {},
                     "Home"
                 }
@@ -153,7 +156,10 @@ pub fn Navbar() -> Element {
                     if *menu_open.read() {
                         div {
                             class: "overlay",
-                            onclick: move |_| menu_open.set(false),
+                            onclick: move |_| {
+                                menu_open.set(false);
+                                profile_actions_open.set(None);
+                            },
                         }
                     }
 
@@ -162,21 +168,72 @@ pub fn Navbar() -> Element {
 
                         for name in all {
                             div {
-                                class: "menu-item",
-                                onclick: move |_| {
+                                class: "menu-item profile-item",
+                                onclick: {
+                                    let name = name.clone();
+                                    move |_| {
+                                        menu_open.set(false);
+                                        profile_actions_open.set(None);
+                                        let new_context = Arc::new(MarcoSparkoContext {
+                                            args: crate::Args::ms_parse(),
+                                            profile: crate::profile::set_active_profile(&name)?,
+                                        });
 
-                                    menu_open.set(false);
-                                    let new_context = Arc::new(MarcoSparkoContext {
-                                        args: crate::Args::ms_parse(),
-                                        profile: crate::profile::set_active_profile(&name)?,
-                                    });
-
-                                    context_signal.set(Some(new_context));
-                                    upgrade_requested.set(UpgradeRequested(false));
-                                    navigator.replace(Route::Home {});
-                                    Ok(())
+                                        context_signal.set(Some(new_context));
+                                        upgrade_requested.set(UpgradeRequested(false));
+                                        navigator.replace(Route::Home {});
+                                        Ok(())
+                                    }
                                 },
-                                "{&name}"
+                                span { "{&name}" }
+                                // The active profile cannot be deleted, so it has no actions.
+                                if !profile_names_equal(&name, &context.profile.active_profile.name) {
+                                    span { class: "profile-actions",
+                                        button {
+                                            class: "profile-actions-toggle",
+                                            title: "Profile actions",
+                                            onclick: {
+                                                let name = name.clone();
+                                                move |event: MouseEvent| {
+                                                    event.stop_propagation();
+                                                    let open = profile_actions_open.read().as_ref() == Some(&name);
+                                                    profile_actions_open.set(if open { None } else { Some(name.clone()) });
+                                                }
+                                            },
+                                            "…"
+                                        }
+                                        if profile_actions_open.read().as_ref() == Some(&name) {
+                                            div { class: "profile-actions-menu",
+                                                div {
+                                                    class: "menu-item",
+                                                    onclick: {
+                                                        let name = name.clone();
+                                                        move |event: MouseEvent| {
+                                                            event.stop_propagation();
+                                                            menu_open.set(false);
+                                                            profile_actions_open.set(None);
+                                                            navigator.push(Route::ProfileSize { name: name.clone() });
+                                                        }
+                                                    },
+                                                    "Size..."
+                                                }
+                                                div {
+                                                    class: "menu-item",
+                                                    onclick: {
+                                                        let name = name.clone();
+                                                        move |event: MouseEvent| {
+                                                            event.stop_propagation();
+                                                            menu_open.set(false);
+                                                            profile_actions_open.set(None);
+                                                            delete_profile.set(Some(name.clone()));
+                                                        }
+                                                    },
+                                                    "Delete..."
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -195,6 +252,10 @@ pub fn Navbar() -> Element {
                     }
                 }
             }
+        }
+
+        if let Some(name) = delete_profile.read().clone() {
+            DeleteProfileDialog { name, on_close: move |_| delete_profile.set(None) }
         }
 
         Outlet::<Route> {}

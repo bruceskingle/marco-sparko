@@ -52,6 +52,8 @@ windows = { version = "0.54", features = [
     "Win32_System_Threading",
     "Win32_Storage_FileSystem"
 ]}
+# Moves deleted profiles to the Trash (macOS), Recycle Bin (Windows) or freedesktop trash (Linux)
+trash = "5"
 
 
 # macOS only, to position the system colour panel. The same versions as dioxus-desktop and rfd use.

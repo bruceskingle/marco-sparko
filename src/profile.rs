@@ -1,6 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::{collections::HashMap};
 use std::fs;
+use std::path::{Path, PathBuf};
 use indexmap::IndexMap;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ pub struct ActiveProfile {
     pub profile_version_state: ProfileVersionState,
 }
 
-fn profile_names_equal(left: &str, right: &str) -> bool {
+pub fn profile_names_equal(left: &str, right: &str) -> bool {
     left.eq_ignore_ascii_case(right)
 }
 
@@ -206,6 +207,114 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
     }
 }
 
+/// The cache files of a profile, for each plugin a <profile>-<plugin> directory of cached data and a
+/// <profile>-<plugin>.json file of tokens.
+#[derive(Debug, Default, PartialEq)]
+pub struct ProfileCacheUsage {
+    /// The bytes used by each plugin, by plugin id.
+    pub plugins: BTreeMap<String, u64>,
+    /// The cached data directories, which are moved to the trash when the profile is deleted.
+    pub data_dirs: Vec<PathBuf>,
+    /// The token files, which are deleted immediately when the profile is deleted.
+    pub token_files: Vec<PathBuf>,
+}
+
+impl ProfileCacheUsage {
+    pub fn total(&self) -> u64 {
+        self.plugins.values().sum()
+    }
+}
+
+/// The cache files of the given profile and the disk space they use.
+pub fn profile_cache_usage(profile_name: &str) -> anyhow::Result<ProfileCacheUsage> {
+    cache_usage_in(&MarcoSparkoContext::get_cache_dir_path()?, profile_name)
+}
+
+fn cache_usage_in(cache_dir: &Path, profile_name: &str) -> anyhow::Result<ProfileCacheUsage> {
+    // Profile names are alphanumeric, so the hyphen ends the profile name.
+    let prefix = format!("{}-", profile_name);
+    let mut usage = ProfileCacheUsage::default();
+    if let Ok(read_dir) = fs::read_dir(cache_dir) {
+        for entry in read_dir {
+            let entry = entry?;
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            let Some(rest) = file_name.strip_prefix(&prefix) else { continue };
+            let path = entry.path();
+            let plugin = if entry.file_type()?.is_dir() {
+                usage.data_dirs.push(path.clone());
+                rest
+            }
+            else if let Some(plugin) = rest.strip_suffix(".json") {
+                usage.token_files.push(path.clone());
+                plugin
+            }
+            else {
+                continue
+            };
+            *usage.plugins.entry(plugin.to_string()).or_default() += disk_usage(&path)?;
+        }
+    }
+    Ok(usage)
+}
+
+/// The total size of a file, or of all the files in a directory, symbolic links are not followed.
+fn disk_usage(path: &Path) -> anyhow::Result<u64> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.is_dir() {
+        let mut total = 0;
+        for entry in fs::read_dir(path)? {
+            total += disk_usage(&entry?.path())?;
+        }
+        Ok(total)
+    }
+    else {
+        Ok(metadata.len())
+    }
+}
+
+/// Deletes the token files of the given profile, moves its cached data to the trash and removes it from the profile
+/// file. The active profile cannot be deleted.
+pub fn delete_profile(profile_name: &str, active_profile: &str) -> anyhow::Result<()> {
+    if profile_names_equal(profile_name, active_profile) {
+        return Err(anyhow!("The active profile \"{}\" cannot be deleted", profile_name));
+    }
+
+    let file = fs::File::open(&MarcoSparkoContext::get_file_path()?)?;
+    let mut profiles: ProfileFile = serde_json::from_reader(file)?;
+    let count = profiles.len();
+    profiles.retain(|profile| !profile_names_equal(&profile.name, profile_name));
+    if profiles.len() == count {
+        return Err(anyhow!("No such profile \"{}\"", profile_name));
+    }
+
+    // The tokens are not kept in the trash.
+    let usage = profile_cache_usage(profile_name)?;
+    for path in &usage.token_files {
+        fs::remove_file(path)?;
+    }
+    if !usage.data_dirs.is_empty() {
+        trash::delete_all(&usage.data_dirs)?;
+    }
+
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
+    Ok(())
+}
+
+/// A number of bytes for display, e.g. 12.3 MB
+pub fn format_size(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+    if bytes < 1000 {
+        return format!("{} bytes", bytes);
+    }
+    let mut size = bytes as f64 / 1000.0;
+    let mut unit = 0;
+    while size >= 1000.0 && unit < UNITS.len() - 1 {
+        size /= 1000.0;
+        unit += 1;
+    }
+    format!("{:.1} {}", size, UNITS[unit])
+}
+
 pub type ModuleProfiles = HashMap<String, serde_json::Value>;
 pub type ProfileFile = Vec<Profile>;
 
@@ -260,5 +369,39 @@ impl Profile {
             version: CURRENT_VERSION.to_string(),
             modules: ModuleProfiles::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::{cache_usage_in, format_size};
+
+    #[test]
+    fn cache_usage_is_split_by_plugin_and_leaves_out_other_profiles() {
+        let dir = std::env::temp_dir().join(format!("marco-sparko-test-{}", std::process::id()));
+        fs::create_dir_all(dir.join("p-octopus/sub")).unwrap();
+        fs::create_dir_all(dir.join("p2-octopus")).unwrap();
+        fs::write(dir.join("p-octopus/sub/data"), [0u8; 100]).unwrap();
+        fs::write(dir.join("p-octopus.json"), [0u8; 10]).unwrap();
+        fs::write(dir.join("p-other.json"), [0u8; 1]).unwrap();
+        fs::write(dir.join("p-history.txt"), [0u8; 5]).unwrap();
+        fs::write(dir.join("p2-octopus.json"), [0u8; 1000]).unwrap();
+
+        let usage = cache_usage_in(&dir, "p").unwrap();
+        fs::remove_dir_all(&dir).unwrap();
+
+        assert_eq!(usage.plugins.into_iter().collect::<Vec<_>>(), [(String::from("octopus"), 110), (String::from("other"), 1)]);
+        assert_eq!(usage.data_dirs, [dir.join("p-octopus")]);
+        let mut token_files = usage.token_files;
+        token_files.sort();
+        assert_eq!(token_files, [dir.join("p-octopus.json"), dir.join("p-other.json")]);
+    }
+
+    #[test]
+    fn sizes_are_formatted_in_decimal_units() {
+        assert_eq!(format_size(999), "999 bytes");
+        assert_eq!(format_size(12_345_678), "12.3 MB");
     }
 }

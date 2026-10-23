@@ -273,6 +273,13 @@ impl MarcoSparkoContext {
         Ok(path)
     }
 
+    /// The directory holding the cache files of every profile.
+    pub fn get_cache_dir_path() -> anyhow::Result<PathBuf> {
+        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
+        path.push(CACHE_DIRECTORY_NAME);
+        Ok(path)
+    }
+
     pub fn new(args: Args) -> anyhow::Result<Arc<MarcoSparkoContext>> {
         let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
         path.push(CACHE_DIRECTORY_NAME);
