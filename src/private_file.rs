@@ -43,6 +43,8 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
 pub fn create_private_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
     use std::fs::DirBuilder;
 
+    // Only unix sets the mode, so on Windows the builder is not changed.
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut builder = DirBuilder::new();
 #[cfg(unix)]
     builder.mode(0o700);
