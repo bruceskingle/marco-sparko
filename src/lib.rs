@@ -9,6 +9,7 @@ pub mod components;
 mod profile;
 
 mod private_file;
+pub mod data_home;
 
 #[cfg(feature = "desktop")]
 pub mod window_state;
@@ -21,7 +22,6 @@ use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use dioxus::core::Element;
-use dirs::home_dir;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use clap::{Parser};
@@ -53,6 +53,9 @@ pub struct MarcoSparkoArgs {
     debug: bool,
     #[arg(short, long)]
     verbose: bool,
+    /// The directory holding .marco-sparko and .marco-sparko-cache, instead of the home directory
+    #[arg(long)]
+    home: Option<PathBuf>,
 }
 
 pub struct Args {
@@ -62,7 +65,8 @@ pub struct Args {
 
 impl Args {
     fn extract_module(s: &str) -> Option<&str> {
-        let s = s.trim_start_matches('-');
+        // Only the name identifies the module, the value may contain hyphens, e.g. --home=/tmp/ms-test
+        let s = s.trim_start_matches('-').split('=').next().unwrap_or_default();
         if let Some((module, _)) = s.split_once('-') {
             if module.trim().is_empty() {
                 None
@@ -266,24 +270,18 @@ pub struct InitRequested(pub bool);
 // }
 
 impl MarcoSparkoContext {
+    /// The profile file, see data_home.
     pub fn get_file_path() -> anyhow::Result<PathBuf> {
-        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-
-        path.push(".marco-sparko");
-        Ok(path)
+        Ok(data_home::data_home()?.join(".marco-sparko"))
     }
 
-    /// The directory holding the cache files of every profile.
+    /// The directory holding the cache files of every profile, see data_home.
     pub fn get_cache_dir_path() -> anyhow::Result<PathBuf> {
-        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(CACHE_DIRECTORY_NAME);
-        Ok(path)
+        Ok(data_home::data_home()?.join(CACHE_DIRECTORY_NAME))
     }
 
     pub fn new(args: Args) -> anyhow::Result<Arc<MarcoSparkoContext>> {
-        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(CACHE_DIRECTORY_NAME);
-        private_file::create_private_dir(&path)?;
+        private_file::create_private_dir(&Self::get_cache_dir_path()?)?;
 
        
         let profile = crate::profile::fetch_active_profile(&args.marco_sparko_args.profile)?;
@@ -304,19 +302,12 @@ impl MarcoSparkoContext {
 
     fn get_cache_file_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
         let profile_name = &self.profile.active_profile.name;
-        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(CACHE_DIRECTORY_NAME);
-        path.push(format!("{}-{}.json", profile_name, module_id));
-                Ok(path)
+        Ok(Self::get_cache_dir_path()?.join(format!("{}-{}.json", profile_name, module_id)))
     }
 
     fn get_cache_data_dir_path(&self, module_id: &str) -> anyhow::Result<PathBuf> {
         let profile_name =&self.profile.active_profile.name;
-
-        let mut path = home_dir().ok_or(anyhow!("Unable to locate home directory"))?;
-        path.push(CACHE_DIRECTORY_NAME);
-        path.push(format!("{}-{}", profile_name, module_id));
-        Ok(path)
+        Ok(Self::get_cache_dir_path()?.join(format!("{}-{}", profile_name, module_id)))
     }
       
     fn create_cache_config(&self, module_id: &str, verbose: bool) -> anyhow::Result<Arc<CacheConfig>> {
@@ -350,5 +341,17 @@ impl MarcoSparkoContext {
         serde_json::to_writer_pretty(private_file::create_private_file(path)?, &profile)?;
 
         Ok(())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::Args;
+
+    #[test]
+    fn the_module_comes_from_the_name_of_an_arg_not_its_value() {
+        assert_eq!(Args::extract_module("--octopus-api-key=abc"), Some("octopus"));
+        assert_eq!(Args::extract_module("--home=/tmp/ms-test"), None);
+        assert_eq!(Args::extract_module("--profile"), None);
+        assert_eq!(Args::extract_module("-v"), None);
     }
 }

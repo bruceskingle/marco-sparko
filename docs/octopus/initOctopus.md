@@ -1,4 +1,4 @@
-[< Getting Started](index.md)
+[< Getting Started](../gettingStarted/index.md)
 
 # Initialize Octopus
 

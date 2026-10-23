@@ -7,7 +7,11 @@ The application is a platform with a module framework which is intended to suppo
 
 # What Does it Do?
 
-Using this application you can get a detailed view of your energy account statements with an analysis of the unit rates you are consuming.
+Using this application you can get a view of your energy usage and costs. This chart shows daily total cost for electricity broken down into the Low and Standard rates for both Home and EV usage. The export button at the top right of the chart allows you to export the data for the current view in either ```.csv``` or ```JSON``` format.
+
+![Statement Summary](docs/readMe/Screenshot6.png)
+
+This application also allows you to get a detailed view of your energy account statements with an analysis of the unit rates you are consuming.
 In this screenshot you can see the summary lines from a statement more or less as they appear on the documents provided by the company.
 
 Values in white text (e.g. <img src="docs/readMe/Screenshot2.png" height="15">, the Net value from the electricity import line) are from the Octopus API directly.
@@ -29,7 +33,6 @@ Finally the consumption analysis section shows us the total amounts per charge r
 I intend to continue expanding the scope of this but for the moment that's the main thing it provides.
 
 # Current Status
-
 
 This is a hobby project of mine, it is not supported, endorsed or approved by Octopus Energy or anyone else. I have no inside knowledge of the workings of Octopus or Kraken and this is all implemented against the publicly documented GraphQL API.
 

@@ -17,4 +17,5 @@ Clickable links in the user interface will highlight if you hover the mouse over
 
 The first step is to rectify this.
 
-[Initialize Octopus>](../octopus/initOctopus.md)]
+
+[Initialize Octopus>](../octopus/initOctopus.md)
