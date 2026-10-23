@@ -95,7 +95,6 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
         // error returns below.
         let file = File::from_raw_handle(handle.0 as _);
 
-        println!("OpenProcessToken");
         // Open process token
         let mut token = HANDLE::default();
         OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)?;
