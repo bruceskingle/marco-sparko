@@ -1,0 +1,175 @@
+# Builds the macOS and Windows installers for a release, tests them, and attaches them to the GitHub release.
+#
+# It runs when a release is published on GitHub. The release's tag (e.g. release0.4.3) must also exist in
+# sparko_graphql, so create the sparko_graphql release first.
+#
+# It can also be run by hand from the Actions tab (Release > Run workflow) with a tag, to try a build without
+# changing any release. The installers are then kept on the run's page under Artifacts.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to build, e.g. release0.4.3"
+        required: true
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  # Must match the dioxus version in Cargo.lock.
+  DX_VERSION: "0.7.3"
+  CARGO_TERM_COLOR: always
+
+# Read only, except for the publish job.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      # Let the other builds finish if one fails, so that all the problems are seen at once.
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            runner: macos-latest
+            artifact: macos-aarch64
+          - name: macOS Intel
+            runner: macos-15-intel
+            artifact: macos-x64
+          - name: Windows x64
+            runner: windows-latest
+            artifact: windows-x64
+          - name: Windows ARM
+            runner: windows-11-arm
+            artifact: windows-arm64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: marco-sparko
+
+    steps:
+      # The two repos are checked out side by side, as in ~/git, because Cargo.toml refers to ../sparko_graphql
+      - name: Check out marco-sparko
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: marco-sparko
+          # The build records the tag and branch, so it needs the history.
+          fetch-depth: 0
+
+      - name: Check out sparko_graphql
+        uses: actions/checkout@v4
+        with:
+          repository: bruceskingle/sparko_graphql
+          ref: ${{ env.TAG }}
+          path: sparko_graphql
+
+      # The Windows ARM runner may not have Rust installed.
+      - name: Install rustup
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        shell: pwsh
+        working-directory: .
+        run: |
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe -OutFile rustup-init.exe
+            .\rustup-init.exe -y --profile minimal --default-toolchain none
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustc --version
+
+      # Built from source with its own Cargo.lock, rather than downloading a prebuilt binary.
+      - name: Install the Dioxus CLI
+        run: cargo install dioxus-cli --version "$DX_VERSION" --locked
+
+      - name: Run the tests
+        run: cargo test --locked
+
+      - name: Build the installers
+        run: dx bundle --release
+
+      - name: Collect the installers
+        run: |
+          mkdir -p dist
+          find target/dx -path '*/bundle/*' -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \) -exec cp {} dist/ \;
+          ls -l dist
+          if [ -z "$(ls dist)" ]; then
+            echo "No installers were built"
+            exit 1
+          fi
+
+      # Installs the MSI as a user would and checks that the app starts and is still running 30 seconds later.
+      - name: Check the installed app starts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem dist -Filter *.msi | Select-Object -First 1
+          $install = Start-Process msiexec -ArgumentList "/i `"$($msi.FullName)`" /qn /l*v msi.log" -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            Get-Content msi.log -Tail 50
+            throw "The MSI failed to install, exit code $($install.ExitCode)"
+          }
+
+          $exe = Get-ChildItem "$env:ProgramFiles", "$env:LOCALAPPDATA\Programs" -Recurse -Depth 2 -Filter *.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like '*marco*' } |
+            Select-Object -First 1
+          if (-not $exe) {
+            throw "The installed app was not found"
+          }
+          Write-Host "Starting $($exe.FullName)"
+
+          $app = Start-Process $exe.FullName -PassThru
+          Start-Sleep -Seconds 30
+          if ($app.HasExited) {
+            throw "The app exited with code $($app.ExitCode)"
+          }
+          Stop-Process -Id $app.Id
+          Write-Host "The app started"
+
+      - name: Keep the installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: marco-sparko/dist/*
+          if-no-files-found: error
+
+  # Only runs if every build succeeded, so a release never gets some of the installers but not others.
+  publish:
+    name: Attach to the release
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # To attach the files to the release.
+      contents: write
+      # To record where the files were built, see https://github.com/bruceskingle/marco-sparko/attestations
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Fetch the installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Record where they were built
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l dist
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
