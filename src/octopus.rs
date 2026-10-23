@@ -462,7 +462,14 @@ impl OctopusModuleFactory {
                         }
                  
                     }
-                    errors.push(format!("Login failed {}", error));
+                    match &error {
+                        // The response often explains the error, e.g. that a firewall blocked the request.
+                        sparko_graphql::Error::HttpError(status, message) if !message.is_empty() =>
+                            errors.push(format!("Login failed, the server responded {}: {}", status, message)),
+                        sparko_graphql::Error::HttpError(status, _) =>
+                            errors.push(format!("Login failed, the server responded {}", status)),
+                        _ => errors.push(format!("Login failed {}", error)),
+                    }
                     return Err(anyhow!(error));
                 },
             }
