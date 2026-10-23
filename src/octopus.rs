@@ -73,6 +73,9 @@ impl std::fmt::Debug for OctopusArgs {
 pub struct Profile {
     pub api_key:  Option<String>,
     pub billing_timezone: Option<String>,
+    /// The host name of the API, e.g. api.octopus.energy
+    #[serde(default = "default_api_host")]
+    pub api_host: String,
     #[serde(skip)]
     // #[serde(default = false)]
     pub init: bool,
@@ -84,6 +87,7 @@ impl std::fmt::Debug for Profile {
         f.debug_struct("Profile")
             .field("api_key", &redacted(&self.api_key))
             .field("billing_timezone", &self.billing_timezone)
+            .field("api_host", &self.api_host)
             .field("init", &self.init)
             .finish()
     }
@@ -94,11 +98,17 @@ fn redacted(secret: &Option<String>) -> Option<&'static str> {
     secret.as_ref().map(|_| sparko_graphql::redact::REDACTED)
 }
 
+/// The API host for a profile which does not have one, i.e. one created before it was added.
+fn default_api_host() -> String {
+    "api.octopus.energy".to_string()
+}
+
 impl Profile {
     pub fn new() -> Profile {
         Profile {
             api_key: None,
             billing_timezone: Some("Europe/London".to_string()),
+            api_host: "api.oegb-kraken.energy".to_string(),
             init: true,
         }
     }
@@ -767,10 +777,15 @@ impl OctopusModuleFactoryBuilder {
             url
         }
         else {
-            "https://api.octopus.energy/v1/graphql/".to_string()
+            format!("https://{}/v1/graphql/", self.profile.api_host)
         };
 
         let verbose = self.context.args.marco_sparko_args.verbose;
+
+        if verbose {
+            println!("Octopus API initialized with URL {}", &url);
+        }
+        
         let request_manager = Arc::new(sparko_graphql::RequestManager::new(url, verbose, create_info::USER_AGENT)?);
         let cache_config = self.context.create_cache_config(crate::octopus::MODULE_ID, verbose)?;
 
