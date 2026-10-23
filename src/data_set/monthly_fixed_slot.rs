@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap}, fs::{File, FileTimes, OpenOptions}, io::{BufRead, BufReader, Seek, SeekFrom, Write}, path::PathBuf, pin::pin, time::{Duration, SystemTime, UNIX_EPOCH},
+    collections::{BTreeMap, HashMap, VecDeque}, fs::{File, FileTimes, OpenOptions}, io::{BufRead, BufReader, Seek, SeekFrom, Write}, path::PathBuf, pin::pin, time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use futures::future::{Either, select};
@@ -84,6 +84,18 @@ fn fetch_windows(cached: &[(i64, i64, bool)], start: i64, end: i64, month_bounda
         .collect()
 }
 
+/// The window from start to end split at each midnight in tz, as unix timestamps.
+fn day_windows(start: &DateTime, end: &DateTime, tz: &'static Tz) -> Vec<(i64, i64)> {
+    let mut days = Vec::new();
+    let mut day_start = *start;
+    while day_start < *end {
+        let day_end = day_start.to_date().next_day().at_midnight(tz).min(*end);
+        days.push((day_start.unix_timestamp(), day_end.unix_timestamp()));
+        day_start = day_end;
+    }
+    days
+}
+
 /// Whether the final samples in data cover the whole of the window from start to end with no gaps.
 fn window_complete<V>(data: &BTreeMap<DateTime, Item<V>>, start: &DateTime, end: &DateTime) -> bool {
     let mut covered_to = *start;
@@ -154,6 +166,12 @@ pub trait SlotSource {
     fn items(&self, response: Self::Response) -> anyhow::Result<impl IntoIterator<Item = anyhow::Result<Self::Value>>>;
     fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)>;
     fn refresh_after(&self) -> Duration;
+    /// Whether a sample is missing data which a request for a shorter period may provide, e.g. measurements whose
+    /// statistics the server leaves out of the whole response if any day in it has a problem. A request for more than
+    /// one day which returns such a sample is made again for each day.
+    fn is_partial(&self, _value: &Self::Value) -> bool {
+        false
+    }
 }
 
 
@@ -339,11 +357,11 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                         .collect();
                     // Months fetched within their refresh duration are left alone, e.g. empty months before the server
                     // has any data, which would otherwise be fetched again whenever a later month is refreshed.
-                    let mut windows = Vec::new();
+                    let mut windows = VecDeque::new();
                     for window in fetch_windows(&cached, refresh_start.unix_timestamp(), end.unix_timestamp(), &month_boundaries) {
                         let key = Self::key_for(&DateTime::from_unix_timestamp(window.0)?.to_timezone(tz).to_date());
                         if data_set_map.get(&key).map_or(Ok(true), |data_set| data_set.is_stale(&refresh_after))? {
-                            windows.push(window);
+                            windows.push_back(window);
                         }
                     }
 
@@ -352,18 +370,24 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                     let mut rows = 0;
                     let date_format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]").unwrap();
 
-                    for (window_number, (window_start, window_end)) in windows.iter().enumerate() {
+                    // The number of windows fetched, windows may be added as they are split into days.
+                    let mut window_number = 0;
+                    while let Some((window_start, window_end)) = windows.pop_front() {
                         if cancel.is_cancelled() {
                             break;
                         }
-                        let window_start = DateTime::from_unix_timestamp(*window_start)?.to_timezone(tz);
-                        let window_end = DateTime::from_unix_timestamp(*window_end)?.to_timezone(tz);
+                        window_number += 1;
+                        let window_count = window_number + windows.len();
+                        let window_start = DateTime::from_unix_timestamp(window_start)?.to_timezone(tz);
+                        let window_end = DateTime::from_unix_timestamp(window_end)?.to_timezone(tz);
                         let prefix = |requests: usize, rows: usize| format!(
                             "Period {} of {} from {}, request {requests}, {rows} rows loaded",
-                            window_number + 1,
-                            windows.len(),
+                            window_number,
+                            window_count,
                             window_start.format(&date_format).unwrap_or_default(),
                         );
+                        // Whether a sample in the window is missing data which a request for each day may provide.
+                        let mut partial = false;
 
                         requests += 1;
                         let query = source.initial_query(&window_start, &window_end)?;
@@ -378,6 +402,9 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                                 let value = value?;
                                 rows += 1;
                                 let (start, end, is_final) = source.index(&value)?;
+                                if start >= window_start && start < window_end && source.is_partial(&value) {
+                                    partial = true;
+                                }
                                 let start_date = start.to_date();
                                 let key = Self::key_for(&start_date);
 
@@ -434,6 +461,16 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                         if !cancel.is_cancelled() {
                             if let Some(data_set) = data_set_map.get_mut(&Self::key_for(&window_start.to_date())) {
                                 data_set.fetched = true;
+                            }
+
+                            // Fetch each day again, next, so that a problem with one day only loses the data for that day.
+                            if partial {
+                                let days = day_windows(&window_start, &window_end, tz);
+                                if days.len() > 1 {
+                                    for day in days.into_iter().rev() {
+                                        windows.push_front(day);
+                                    }
+                                }
                             }
                         }
                     }
@@ -673,5 +710,33 @@ mod retry_tests {
         assert!(!is_transient(&http(400)));
         assert!(!is_transient(&http(401)));
         assert!(!is_transient(&Error::InternalError(String::from("bad"))));
+    }
+}
+
+#[cfg(test)]
+mod day_windows_tests {
+    use sparko_graphql::types::DateTime;
+    use time_tz::timezones;
+
+    use super::day_windows;
+
+    #[test]
+    fn a_window_is_split_at_each_local_midnight_including_across_a_clock_change() {
+        let tz = timezones::db::europe::LONDON;
+        let time = |timestamp: i64| DateTime::from_unix_timestamp(timestamp).unwrap().to_timezone(tz);
+
+        // 12:00 on 28 March 2026 to 06:00 on 30 March, the clocks go forward on 29 March so it has 23 hours.
+        let start = 1774699200;
+        let midnight_29 = 1774742400;
+        let midnight_30 = 1774825200;
+        let end = 1774846800;
+        assert_eq!(midnight_30 - midnight_29, 23 * 3600);
+        assert_eq!(
+            day_windows(&time(start), &time(end), tz),
+            [(start, midnight_29), (midnight_29, midnight_30), (midnight_30, end)]
+        );
+
+        // A window within one day is not split.
+        assert_eq!(day_windows(&time(midnight_29), &time(midnight_30), tz), [(midnight_29, midnight_30)]);
     }
 }

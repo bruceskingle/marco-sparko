@@ -52,14 +52,23 @@ pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTok
  * 
  * Underscores in the names of fields on this struct are translated into hyphens on the command line automatically by clap.
  */
-#[derive(Parser, Debug, Clone, PartialEq)]
+#[derive(Parser, Clone, PartialEq)]
 pub struct OctopusArgs {
     /// The Octopus API_KEY to use
     #[arg(short, long, env)]
     octopus_api_key: Option<String>
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+/// Debug output is used in verbose mode, so the API key is hidden.
+impl std::fmt::Debug for OctopusArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OctopusArgs")
+            .field("octopus_api_key", &redacted(&self.octopus_api_key))
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub api_key:  Option<String>,
@@ -67,6 +76,22 @@ pub struct Profile {
     #[serde(skip)]
     // #[serde(default = false)]
     pub init: bool,
+}
+
+/// Debug output is used in verbose mode, so the API key is hidden.
+impl std::fmt::Debug for Profile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Profile")
+            .field("api_key", &redacted(&self.api_key))
+            .field("billing_timezone", &self.billing_timezone)
+            .field("init", &self.init)
+            .finish()
+    }
+}
+
+/// A secret for debug output, showing only whether there is one.
+fn redacted(secret: &Option<String>) -> Option<&'static str> {
+    secret.as_ref().map(|_| sparko_graphql::redact::REDACTED)
 }
 
 impl Profile {
@@ -89,12 +114,24 @@ pub struct OctopusModule{
 const MODULE_ID: &str = "octopus";
 
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Clone)]
 struct LoginForm {
     email: Option<String>,
     password: Option<String>,
     api_key: Option<String>,
     login_method: String,
+}
+
+/// Debug output is used in verbose mode, so the password and API key are hidden.
+impl std::fmt::Debug for LoginForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginForm")
+            .field("email", &self.email)
+            .field("password", &redacted(&self.password))
+            .field("api_key", &redacted(&self.api_key))
+            .field("login_method", &self.login_method)
+            .finish()
+    }
 }
 
 impl OctopusModule {

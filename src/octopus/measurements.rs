@@ -702,6 +702,13 @@ pub struct MeasurementsReading {
 impl MeasurementsReading {
     const FINAL_DELAY: Duration = Duration::from_hours(3 * 24);
 
+    /// Whether the reading has no statistics, which the server leaves out of every reading in a response if any day in
+    /// it has a problem. Every statistic sets the consumption or the standing charge, so a reading with statistics
+    /// has one or the other.
+    fn is_partial(&self) -> bool {
+        self.consumption.is_empty() && self.standing_charge.is_zero()
+    }
+
     /// The unit rate for each label, readings with the same rates are grouped by StackedBarPeriod::Rate.
     fn rates(&self) -> BTreeMap<String, Decimal> {
         self.consumption.iter()
@@ -833,15 +840,18 @@ impl MeasurementsReading {
 
                     let standing_charge = if let Some(v) = standing_charge { v } else { Decimal::ZERO };
 
-                    let is_final = **query_time - *interval_measurement_type.end_at_ > MeasurementsReading::FINAL_DELAY;
-                    Ok(MeasurementsReading{
+                    let mut reading = MeasurementsReading{
                         start: interval_measurement_type.start_at_,
                         end: interval_measurement_type.end_at_,
-                        is_final,
+                        is_final: false,
                         consumption,
                         standing_charge,
                         unit
-                    })
+                    };
+                    // A reading without statistics is fetched again until it has them, in case the server provides them later.
+                    reading.is_final = !reading.is_partial()
+                        && **query_time - *reading.end > MeasurementsReading::FINAL_DELAY;
+                    Ok(reading)
                 }
                 else {
                     Err(anyhow!(format!("No meta data")))
@@ -999,11 +1009,16 @@ impl SlotSource for MeasurementsConsumptionSource {
     }
 
     fn index(&self, value: &Self::Value) -> anyhow::Result<(DateTime, DateTime, bool)> {
-        Ok((value.start.clone(), value.end.clone(), value.is_final))
+        // Readings cached as final before readings without statistics were treated as not final are fetched again.
+        Ok((value.start.clone(), value.end.clone(), value.is_final && !value.is_partial()))
     }
     
     fn refresh_after(&self) -> Duration {
         Duration::from_hours(24)
+    }
+
+    fn is_partial(&self, value: &Self::Value) -> bool {
+        value.is_partial()
     }
 }
 

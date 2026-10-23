@@ -105,8 +105,14 @@ impl Args {
 
         if marco_sparko_args.verbose {
             println!("Main args: {:?}", marco_sparko_args);
+            // Only the names of the module args are shown as their values may be secrets, e.g. -o for an API key, which
+            // modules show redacted once they are parsed.
             for (module_id, args) in &module_args {
-                println!("Module '{}' args: {:?}", module_id, args);
+                let names: Vec<&str> = args.iter()
+                    .filter(|arg| arg.starts_with('-'))
+                    .map(|arg| arg.split('=').next().unwrap_or_default())
+                    .collect();
+                println!("Module '{}' args: {:?}", module_id, names);
             }
         }
 
@@ -195,7 +201,11 @@ impl ModuleRegistrations {
             };
 
             if context.args.marco_sparko_args.verbose {
-                println!("Initializing module '{}' with profile '{:?}'", module_id, profile);
+                let mut redacted_profile = profile.clone();
+                if let Some(value) = &mut redacted_profile {
+                    sparko_graphql::redact::redact_secrets(value);
+                }
+                println!("Initializing module '{}' with profile '{:?}'", module_id, redacted_profile);
             }
             let builder = constructor(context.clone(), profile)?;
 
