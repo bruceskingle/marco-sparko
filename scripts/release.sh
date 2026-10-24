@@ -1,0 +1,426 @@
+#!/bin/bash
+# The release process for marco-sparko and sparko_graphql, see docs/Release.md
+#
+# The version comes from the version in marco-sparko's Cargo.toml, which "start" sets at the beginning of each release
+# cycle. Each command checks that the repos are in the state it expects before changing anything, and stops at the
+# first problem.
+#
+# This is for macOS (it uses BSD sed) with both repos checked out side by side, e.g. ~/git/marco-sparko and
+# ~/git/sparko_graphql, and needs the GitHub CLI (gh) signed in.
+
+set -euo pipefail
+
+# sparko_graphql first, as marco-sparko depends on it.
+REPOS="sparko_graphql marco-sparko"
+WORKFLOW=release.yml
+# The installers attached to each release, with VERSION replaced by the version.
+INSTALLERS="MarcoSparko_VERSION_aarch64.dmg MarcoSparko_VERSION_x64.dmg MarcoSparko_VERSION_x64-setup.exe
+MarcoSparko_VERSION_x64_en-US.msi MarcoSparko_VERSION_arm64-setup.exe MarcoSparko_VERSION_arm64_en-US.msi"
+
+GIT_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+
+# The GitHub account or organisation of the repos, from marco-sparko's origin, so that the script also works on forks
+# (e.g. to try it out), checked out side by side in another directory.
+github_owner() {
+    git -C "$GIT_ROOT/$1" remote get-url origin | sed -E 's#^.*github\.com[:/]([^/]+)/.*$#\1#'
+}
+OWNER=$(github_owner marco-sparko)
+[ "$(github_owner sparko_graphql)" = "$OWNER" ] \
+    || { echo "ERROR: marco-sparko is from $OWNER but sparko_graphql is from $(github_owner sparko_graphql)" >&2; exit 1; }
+
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") <command>
+
+  status           Show the state of both repos, the tags and the GitHub release
+  start [version]  Start the next release: create the vX.X.X branches from main and set the version
+                   (default: the next patch version after the one on main)
+  try              Build the installers from the release branches, without merging, and download them
+  merge            Squash merge the release branches to main, tag them releaseX.X.X, and merge main back
+  check            Clean build and run the tagged source, then go back to the release branches
+  build            Create a draft GitHub release, build and attach the installers, and download them
+  publish          Publish the draft release, once the installers have been tried and the notes edited
+  untag            Delete the release tags (and draft release) to make more changes before releasing
+EOF
+    exit 1
+}
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+info() {
+    echo "==> $*"
+}
+
+repo_dir() {
+    echo "$GIT_ROOT/$1"
+}
+
+# The package version in the Cargo.toml in the given directory.
+cargo_version() {
+    sed -n 's/^version = "\(.*\)"/\1/p' "$1/Cargo.toml" | head -1
+}
+
+# The version being released, from marco-sparko's Cargo.toml, after checking that sparko_graphql has the same version.
+release_version() {
+    local version sparko_version dependency_version
+    version=$(cargo_version "$(repo_dir marco-sparko)")
+    sparko_version=$(cargo_version "$(repo_dir sparko_graphql)")
+    dependency_version=$(sed -n 's/^sparko_graphql = {version = "\([^"]*\)".*/\1/p' "$(repo_dir marco-sparko)/Cargo.toml")
+    [ -n "$version" ] || die "No version in marco-sparko/Cargo.toml"
+    [ "$sparko_version" = "$version" ] || die "sparko_graphql is version $sparko_version but marco-sparko is $version"
+    [ "$dependency_version" = "$version" ] || die "marco-sparko depends on sparko_graphql $dependency_version but is version $version"
+    echo "$version"
+}
+
+current_branch() {
+    git -C "$(repo_dir "$1")" symbolic-ref --short -q HEAD || echo "(detached at $(git -C "$(repo_dir "$1")" describe --tags --always))"
+}
+
+require_gh() {
+    gh auth status >/dev/null 2>&1 || die "gh is not signed in, run: gh auth login"
+}
+
+require_clean() {
+    local dir
+    dir=$(repo_dir "$1")
+    if [ -n "$(git -C "$dir" status --porcelain)" ]; then
+        git -C "$dir" status --short >&2
+        die "$1 has uncommitted changes (if only Cargo.lock has changed, it is safe to run: git -C $dir restore Cargo.lock)"
+    fi
+}
+
+require_branch() {
+    local branch
+    branch=$(current_branch "$1")
+    [ "$branch" = "$2" ] || die "$1 is on $branch, not $2"
+}
+
+require_pushed() {
+    local dir
+    dir=$(repo_dir "$1")
+    git -C "$dir" fetch -q origin
+    [ "$(git -C "$dir" rev-parse HEAD)" = "$(git -C "$dir" rev-parse '@{u}' 2>/dev/null)" ] \
+        || die "$1 has commits which are not pushed, or is behind origin (git push / git pull)"
+}
+
+remote_tag_exists() {
+    [ -n "$(git -C "$(repo_dir "$1")" ls-remote --tags origin "refs/tags/$2")" ]
+}
+
+# Deletes a tag locally and on GitHub, if it exists.
+delete_tag() {
+    local dir
+    dir=$(repo_dir "$1")
+    git -C "$dir" tag -d "$2" >/dev/null 2>&1 || true
+    if remote_tag_exists "$1" "$2"; then
+        git -C "$dir" push -q origin --delete "$2"
+    fi
+}
+
+# Whether the GitHub release for the tag is a draft, a published release, or does not exist.
+release_state() {
+    local draft
+    if draft=$(gh release view "$1" -R "$OWNER/marco-sparko" --json isDraft --jq .isDraft 2>/dev/null); then
+        if [ "$draft" = "true" ]; then echo draft; else echo published; fi
+    else
+        echo none
+    fi
+}
+
+latest_run_id() {
+    gh run list -R "$OWNER/marco-sparko" --workflow "$WORKFLOW" --limit 1 --json databaseId --jq '.[0].databaseId // ""'
+}
+
+# Runs the workflow from ref to build tag, attaching the installers to the draft release for tag if attach is true,
+# and waits for it to finish.
+run_workflow() {
+    local ref=$1 tag=$2 attach=$3 previous id
+    previous=$(latest_run_id)
+    info "Starting the $WORKFLOW workflow for $tag"
+    gh workflow run "$WORKFLOW" -R "$OWNER/marco-sparko" --ref "$ref" -f tag="$tag" -f attach="$attach"
+
+    id=$previous
+    for _ in $(seq 30); do
+        sleep 2
+        id=$(latest_run_id)
+        [ "$id" != "$previous" ] && break
+    done
+    [ "$id" != "$previous" ] || die "The workflow run did not start, see the Actions tab of the marco-sparko repo"
+
+    info "Watching run $id (about 30 to 40 minutes), Ctrl+C stops watching but not the run"
+    if ! gh run watch "$id" -R "$OWNER/marco-sparko" --exit-status; then
+        echo >&2
+        echo "To see why it failed: gh run view $id -R $OWNER/marco-sparko --log-failed" >&2
+        echo "To re-run the failed jobs: gh run rerun $id -R $OWNER/marco-sparko --failed" >&2
+        die "The workflow run failed"
+    fi
+    RUN_ID=$id
+}
+
+cmd_status() {
+    local version state
+    version=$(cargo_version "$(repo_dir marco-sparko)")
+    echo "Version (marco-sparko Cargo.toml): $version"
+    for repo in $REPOS; do
+        local dir changes
+        dir=$(repo_dir "$repo")
+        git -C "$dir" fetch -q --tags origin
+        changes=$(git -C "$dir" status --porcelain | wc -l | tr -d ' ')
+        echo
+        echo "$repo: $(current_branch "$repo"), version $(cargo_version "$dir"), $changes uncommitted changes"
+        for tag in "test$version" "release$version"; do
+            if remote_tag_exists "$repo" "$tag"; then
+                echo "  $tag: $(git -C "$dir" rev-parse --short "$tag^{commit}" 2>/dev/null || echo "on GitHub only")"
+            else
+                echo "  $tag: none"
+            fi
+        done
+    done
+    require_gh
+    state=$(release_state "release$version")
+    echo
+    echo "GitHub release release$version: $state"
+    echo
+    gh run list -R "$OWNER/marco-sparko" --workflow "$WORKFLOW" --limit 3
+}
+
+cmd_start() {
+    local main_version new_version
+    for repo in $REPOS; do
+        require_clean "$repo"
+        git -C "$(repo_dir "$repo")" fetch -q origin
+    done
+    main_version=$(git -C "$(repo_dir marco-sparko)" show origin/main:Cargo.toml | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)
+    # The next patch version, e.g. 0.4.3 to 0.4.4
+    new_version=${1:-$(echo "$main_version" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }')}
+    [[ "$new_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "$new_version is not a version like 0.4.4"
+    info "Starting release $new_version (main is $main_version)"
+
+    for repo in $REPOS; do
+        local dir branch
+        dir=$(repo_dir "$repo")
+        branch="v$new_version"
+        if git -C "$dir" rev-parse -q --verify "refs/heads/$branch" >/dev/null; then
+            info "$repo: switching to the existing $branch"
+            git -C "$dir" checkout -q "$branch"
+        elif git -C "$dir" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then
+            info "$repo: checking out $branch from GitHub"
+            git -C "$dir" checkout -q -b "$branch" --track "origin/$branch"
+        else
+            info "$repo: creating $branch from main"
+            git -C "$dir" checkout -q -b "$branch" origin/main
+        fi
+    done
+
+    info "Setting the version to $new_version"
+    sed -i '' "1,/^version = /s/^version = .*/version = \"$new_version\"/" "$(repo_dir sparko_graphql)/Cargo.toml"
+    sed -i '' -e "1,/^version = /s/^version = .*/version = \"$new_version\"/" \
+        -e "s/^sparko_graphql = {version = \"[^\"]*\"/sparko_graphql = {version = \"$new_version\"/" \
+        "$(repo_dir marco-sparko)/Cargo.toml"
+    release_version >/dev/null
+
+    # Updates the Cargo.lock files.
+    for repo in $REPOS; do
+        info "Building $repo"
+        (cd "$(repo_dir "$repo")" && cargo build -q)
+    done
+
+    for repo in $REPOS; do
+        local dir
+        dir=$(repo_dir "$repo")
+        if [ -n "$(git -C "$dir" status --porcelain)" ]; then
+            git -C "$dir" commit -q -am "Start v$new_version"
+        fi
+        git -C "$dir" push -q -u origin "v$new_version"
+        info "$repo: v$new_version pushed"
+    done
+    info "Release $new_version started, commit to the v$new_version branches"
+}
+
+cmd_try() {
+    local version tag download
+    require_gh
+    version=$(release_version)
+    tag="test$version"
+    for repo in $REPOS; do
+        require_branch "$repo" "v$version"
+        require_clean "$repo"
+        require_pushed "$repo"
+    done
+
+    for repo in $REPOS; do
+        info "$repo: tagging the release branch $tag"
+        git -C "$(repo_dir "$repo")" tag -f "$tag"
+        git -C "$(repo_dir "$repo")" push -q -f origin "$tag"
+    done
+
+    run_workflow "v$version" "$tag" false
+
+    download="$HOME/Downloads/marco-sparko-$version-test"
+    rm -rf "$download"
+    gh run download "$RUN_ID" -R "$OWNER/marco-sparko" --dir "$download"
+    info "The installers are in $download"
+}
+
+cmd_merge() {
+    local version
+    require_gh
+    version=$(release_version)
+    local tagged=0
+    for repo in $REPOS; do
+        require_branch "$repo" "v$version"
+        require_clean "$repo"
+        require_pushed "$repo"
+        if remote_tag_exists "$repo" "release$version"; then
+            tagged=$((tagged + 1))
+        fi
+    done
+    [ "$tagged" -lt 2 ] || die "Both repos are already tagged release$version, run untag first to make more changes"
+
+    for repo in $REPOS; do
+        local dir
+        dir=$(repo_dir "$repo")
+        # Carries on after a merge which failed part way.
+        if remote_tag_exists "$repo" "release$version"; then
+            info "$repo: already merged and tagged release$version"
+            continue
+        fi
+        if [ -z "$(gh pr list -R "$OWNER/$repo" --head "v$version" --state open --json number --jq '.[].number')" ]; then
+            info "$repo: creating a pull request"
+            gh pr create -R "$OWNER/$repo" --base main --head "v$version" --title "V$version" --body "Release $version"
+        fi
+        info "$repo: squash merging the pull request"
+        gh pr merge "v$version" -R "$OWNER/$repo" --squash
+
+        git -C "$dir" fetch -q origin
+        info "$repo: tagging main release$version"
+        git -C "$dir" tag "release$version" origin/main
+        git -C "$dir" push -q origin "release$version"
+
+        # A squash merge does not record that the branch's commits are on main, so merge it back so that the next pull
+        # request only shows new changes. This changes no files.
+        git -C "$dir" merge -q origin/main -m "Merge main after squash merge"
+        git -C "$dir" push -q
+
+        delete_tag "$repo" "test$version"
+    done
+    info "Merged and tagged release$version, next: $(basename "$0") check"
+}
+
+cmd_check() {
+    local version
+    version=$(release_version)
+    for repo in $REPOS; do
+        require_clean "$repo"
+        remote_tag_exists "$repo" "release$version" || die "$repo has no release$version tag, run merge first"
+        git -C "$(repo_dir "$repo")" fetch -q --tags origin
+    done
+
+    for repo in $REPOS; do
+        info "$repo: checking out release$version"
+        git -C "$(repo_dir "$repo")" checkout -q "release$version"
+    done
+
+    info "Clean build and run, quit the app when you have finished checking it"
+    (cd "$(repo_dir marco-sparko)" && cargo clean && dx run --release) || echo "The app did not build or run"
+
+    for repo in $REPOS; do
+        local dir
+        dir=$(repo_dir "$repo")
+        # Cargo.lock may have been regenerated, e.g. by the editor, and is the committed one on the branch.
+        git -C "$dir" restore Cargo.lock
+        git -C "$dir" checkout -q "v$version"
+        info "$repo: back on v$version"
+    done
+    info "If it was OK, next: $(basename "$0") build"
+}
+
+cmd_build() {
+    local version tag state download
+    require_gh
+    version=$(release_version)
+    tag="release$version"
+    for repo in $REPOS; do
+        remote_tag_exists "$repo" "$tag" || die "$repo has no $tag tag, run merge first"
+    done
+
+    state=$(release_state "$tag")
+    case $state in
+        published) die "$tag has already been published" ;;
+        none)
+            info "Creating the draft release $tag"
+            gh release create "$tag" -R "$OWNER/marco-sparko" --draft --verify-tag --title "Release $version" --generate-notes
+            ;;
+        draft) info "The draft release $tag already exists, its installers will be replaced" ;;
+    esac
+
+    # The workflow from the tagged commit, so it is the one which was released.
+    run_workflow "$tag" "$tag" true
+
+    download="$HOME/Downloads/marco-sparko-$version"
+    rm -rf "$download"
+    gh release download "$tag" -R "$OWNER/marco-sparko" --dir "$download"
+    info "The installers are in $download"
+    echo
+    echo "Try them, then edit the release notes on GitHub (the draft is listed on the Releases page):"
+    gh release view "$tag" -R "$OWNER/marco-sparko" --json url --jq .url
+    echo "or with: gh release edit $tag -R $OWNER/marco-sparko --notes-file <file>"
+    echo
+    info "When it is ready, next: $(basename "$0") publish"
+}
+
+cmd_publish() {
+    local version tag assets missing=""
+    require_gh
+    version=$(release_version)
+    tag="release$version"
+    [ "$(release_state "$tag")" = "draft" ] || die "There is no draft release $tag, run build first"
+
+    assets=$(gh release view "$tag" -R "$OWNER/marco-sparko" --json assets --jq '.assets[].name')
+    for installer in $INSTALLERS; do
+        installer=${installer//VERSION/$version}
+        echo "$assets" | grep -qx "$installer" || missing="$missing $installer"
+    done
+    [ -z "$missing" ] || die "The draft release is missing:$missing"
+
+    gh release edit "$tag" -R "$OWNER/marco-sparko" --draft=false --latest
+    info "Published:"
+    gh release view "$tag" -R "$OWNER/marco-sparko" --json url --jq .url
+    info "Next: $(basename "$0") start"
+}
+
+cmd_untag() {
+    local version tag state
+    require_gh
+    version=$(release_version)
+    tag="release$version"
+    state=$(release_state "$tag")
+    [ "$state" != "published" ] || die "$tag has been published, so start a new version instead"
+    if [ "$state" = "draft" ]; then
+        info "Deleting the draft release $tag"
+        gh release delete "$tag" -R "$OWNER/marco-sparko" --yes
+    fi
+    for repo in $REPOS; do
+        info "$repo: deleting $tag"
+        delete_tag "$repo" "$tag"
+    done
+    info "Make the changes on the v$version branches, then run merge again"
+}
+
+[ $# -ge 1 ] || usage
+command=$1
+shift
+case $command in
+    status) cmd_status ;;
+    start) cmd_start "$@" ;;
+    try) cmd_try ;;
+    merge) cmd_merge ;;
+    check) cmd_check ;;
+    build) cmd_build ;;
+    publish) cmd_publish ;;
+    untag) cmd_untag ;;
+    *) usage ;;
+esac
