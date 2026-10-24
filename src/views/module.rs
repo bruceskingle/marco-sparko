@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
+use dioxus_free_icons::{Icon, icons::ld_icons::{LdPanelLeftClose, LdPanelLeftOpen}};
 
 use crate::{MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
 
@@ -135,20 +136,24 @@ pub fn Module(module_id: String) -> Element {
                     rsx! {
                         // Main container
                         div { class: "container",
-                            // Sidebar
+                            // Sidebar, which when hidden is a narrow strip with just the button to show it again.
                             nav {
                                 class: format_args!("sidebar {}", if *sidebar_open.read() { "open" } else { "closed" }),
-                                style: "width: 240px;", // fixed width
                                 aria_label: "secondary navigation",
 
-                                div { class: "sidebar-inner",
+                                button {
+                                    class: "sidebar-toggle",
+                                    r#type: "button",
+                                    title: if *sidebar_open.read() { "Hide the page list" } else { "Show the page list" },
+                                    onclick: toggle_sidebar,
                                     if *sidebar_open.read() {
-                                        button {
-                                            class: "hamburger",
-                                            onclick: toggle_sidebar,
-                                            "<<"
-                                        }
+                                        Icon { icon: LdPanelLeftClose, width: 18, height: 18 }
                                     }
+                                    else {
+                                        Icon { icon: LdPanelLeftOpen, width: 18, height: 18 }
+                                    }
+                                }
+                                div { class: "sidebar-inner",
                                     for page_info in page_list.clone() {
                                         div {
                                             class: format_args!(
@@ -164,13 +169,6 @@ pub fn Module(module_id: String) -> Element {
 
                             // Main content
                             main { class: "content",
-                                if !*sidebar_open.read() {
-                                    button {
-                                        class: "hamburger",
-                                        onclick: toggle_sidebar,
-                                        ">>"
-                                    }
-                                }
                                 {body}
                             }
                         }

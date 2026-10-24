@@ -179,12 +179,6 @@ body {
 } */
 
 
-button.hamburger {
-  /* color: red;
-  background-color: yellow; */
-  color:var(--muted);
-}
-
 table.display, table.display th, table.display td {
     border-collapse: collapse;
     border: rgb(61, 61, 61) 1px solid;
@@ -359,40 +353,55 @@ h6 {
     border-bottom: 1px solid var(--border);
 }
 
-.hamburger {
-
-    background: var(--sidebar-bg);
-    color: var(--accent);
-    /* color: var(--sidebar-bg); */
-    /* background: transparent; */
-    border: 1px;
-    border-color: #f8fafc;
-    font-size: 18px;
-    cursor: pointer;
-}
-
-/* Sidebar */
+/* Sidebar, a fixed width, or when closed a narrow strip with the button to open it. */
 .sidebar {
     box-sizing: border-box;
-    /* background: var(--sidebar-bg); */
-    /* background-color: magenta ; */
-    border-right: 1px solid var(--border);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     flex-direction: column;
-    width: 240px;           /* fixed width */
-    min-width: 240px;
-    max-width: 240px;
+    flex: 0 0 auto;
+    width: 240px;
+    overflow: hidden;
     transition: width 200ms ease;
 }
 
-.sidebar-inner {
-    padding: 16px;
-    /* background-color: blue ; */
+.sidebar.closed {
+    width: 44px;
 }
 
-/* Hide sidebar when closed */
-.sidebar.closed {
-    display: none;
+.sidebar-inner {
+    padding: 0 16px 16px 16px;
+    width: 240px;
+    box-sizing: border-box;
+}
+
+.sidebar.closed .sidebar-inner {
+    visibility: hidden;
+}
+
+/* The button which hides or shows the sidebar, at its top right, or in the middle of the strip when it is closed. */
+.sidebar-toggle {
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin: 8px 6px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+}
+
+.sidebar.closed .sidebar-toggle {
+    align-self: center;
+}
+
+.sidebar-toggle:hover {
+    background: var(--glass);
+    color: #e6f6fb;
 }
 
 .sidebar-item{
