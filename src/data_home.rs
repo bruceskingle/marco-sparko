@@ -112,15 +112,17 @@ mod tests {
     fn the_option_then_the_environment_then_the_pointer_file_then_the_home_directory_is_used() {
         let home = std::env::temp_dir().join(format!("marco-sparko-home-test-{}", std::process::id()));
         fs::create_dir_all(&home).unwrap();
-        let option = PathBuf::from("/option");
-        let env = PathBuf::from("/env");
+        // Full paths on every platform, Windows ones need a drive.
+        let option = home.join("option");
+        let env = home.join("env");
+        let pointer = home.join("pointer");
 
         let path = |option: Option<PathBuf>, env: Option<PathBuf>| resolve(option, env.map(Into::into), Some(home.clone())).map(|data_home| data_home.path);
 
         assert_eq!(path(None, None).unwrap(), home);
 
-        fs::write(home.join(POINTER_FILE_NAME), "  /pointer\n").unwrap();
-        assert_eq!(path(None, None).unwrap(), PathBuf::from("/pointer"));
+        fs::write(home.join(POINTER_FILE_NAME), format!("  {}\n", pointer.display())).unwrap();
+        assert_eq!(path(None, None).unwrap(), pointer);
         assert_eq!(path(None, Some(env.clone())).unwrap(), env);
         assert_eq!(path(Some(option.clone()), Some(env)).unwrap(), option);
 
