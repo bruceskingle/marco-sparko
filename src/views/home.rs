@@ -13,15 +13,12 @@ pub fn Home(
     // xid: i32,
     // modules_signal: ModuleRegistrations
 ) -> Element {
-    println!("TRace Home 1");
     let context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
     let opt_context = &*context_signal.read();
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
     let mut modules = HashMap::new();
     let mut upgrade_requested = use_context::<Signal<UpgradeRequested>>();
-
-    println!("TRace Home 2");
 
     let profile = &context.profile.active_profile;
     let profile_version = &context.profile.active_profile.version.to_string();

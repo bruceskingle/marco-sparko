@@ -81,6 +81,24 @@ jobs:
             "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
           }
 
+      # ring, which is used for TLS, must be compiled with Clang on Windows ARM.
+      - name: Install Clang
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        shell: pwsh
+        working-directory: .
+        run: |
+          if (Get-Command clang -ErrorAction SilentlyContinue) {
+            clang --version
+            exit 0
+          }
+          $llvm = "$env:ProgramFiles\LLVM\bin"
+          if (-not (Test-Path "$llvm\clang.exe")) {
+            Invoke-WebRequest https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-woa64.exe -OutFile llvm-installer.exe
+            Start-Process .\llvm-installer.exe -ArgumentList '/S' -Wait
+          }
+          $llvm | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & "$llvm\clang.exe" --version
+
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal

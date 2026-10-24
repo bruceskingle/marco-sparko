@@ -420,6 +420,19 @@ pub struct OctopusModuleFactory {
     request_manager: Arc<sparko_graphql::RequestManager>,
     profile: Profile,
     verbose: bool,
+    /// Why the saved login could not be used, shown on the login page. None if there was no saved login.
+    saved_login_error: std::sync::Mutex<Option<String>>,
+}
+
+/// An error from logging in, for display, including the response if the server rejected the request.
+fn describe_login_error(error: &sparko_graphql::Error) -> String {
+    match error {
+        // The response often explains the error, e.g. that a firewall blocked the request.
+        sparko_graphql::Error::HttpError(status, message) if !message.is_empty() =>
+            format!("the server responded {}: {}", status, message),
+        sparko_graphql::Error::HttpError(status, _) => format!("the server responded {}", status),
+        _ => error.to_string(),
+    }
 }
 
 impl OctopusModuleFactory {
@@ -462,7 +475,7 @@ impl OctopusModuleFactory {
                         }
                  
                     }
-                    errors.push(format!("Login failed {}", error));
+                    errors.push(format!("Login failed, {}", describe_login_error(&error)));
                     return Err(anyhow!(error));
                 },
             }
@@ -546,11 +559,14 @@ impl OctopusModuleFactory {
 impl ModuleFactory for OctopusModuleFactory {
 
     async fn is_ready(&self) -> anyhow::Result<bool> {
-        if let Ok(_token) = self.token_manager.get_authenticator(false).await {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        let (ready, error) = match self.token_manager.get_authenticator(false).await {
+            Ok(_token) => (true, None),
+            // There is no saved login, so the login page is shown without an error.
+            Err(sparko_graphql::Error::MissingRequiredValueError(_)) => (false, None),
+            Err(error) => (false, Some(format!("Unable to log in with the saved login details, {}", describe_login_error(&error)))),
+        };
+        *self.saved_login_error.lock().unwrap() = error;
+        Ok(ready)
     }
 
     fn init_page(&self) -> Element {
@@ -558,7 +574,8 @@ impl ModuleFactory for OctopusModuleFactory {
         let mut password = use_signal(|| String::new());
         let mut api_key = use_signal(|| String::new());
         let mut login_method = use_signal(|| "email".to_string());
-        let mut errors: Signal<Vec<String>>   = use_signal(|| Vec::new());
+        let saved_login_error = self.saved_login_error.lock().unwrap().clone();
+        let mut errors: Signal<Vec<String>>   = use_signal(|| saved_login_error.into_iter().collect());
 
         let context: Arc<MarcoSparkoContext> = self.context.clone();
         let token_manager: Arc<OctopusTokenManager> = self.token_manager.clone();
@@ -800,6 +817,7 @@ impl OctopusModuleFactoryBuilder {
             request_manager,
             profile: self.profile,
             verbose: self.verbose,
+            saved_login_error: std::sync::Mutex::new(None),
         })
     }
 }

@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use sparko_graphql::types::{Currency, Date, DateTime};
 use time_tz::{OffsetDateTimeExt, Tz};
 
-use super::stacked_bar_graph::{StackedBarMode, axis_label, format_money, nice_step};
+use super::stacked_bar_graph::{StackedBarMode, axis_label, axis_unit, format_money, nice_step};
 
 const LEFT: f64 = 64.0;
 const RIGHT: f64 = 16.0;
@@ -197,8 +197,9 @@ pub fn TrendGraph(
     let y_ticks: Vec<(f64, String)> = (0..)
         .map(|i| i as f64 * step)
         .take_while(|value| *value <= y_max + step / 2.0)
-        .map(|value| (y(value), axis_label(value, decimals, mode, currency, &unit, &suffix)))
+        .map(|value| (y(value), axis_label(value, decimals, mode, currency)))
         .collect();
+    let y_unit = axis_unit(mode, currency, &unit, &suffix);
 
     // A tick at the start of each month, with the name of the month in the middle of it.
     let month_ticks: Vec<(f64, f64, &str)> = MONTHS.iter()
@@ -265,6 +266,8 @@ pub fn TrendGraph(
                 line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
                 text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
             }
+            // The units of the y axis labels, above them in the row of the legend.
+            text { class: "stacked-axis-label", x: LEFT - 8.0, y: 24.0, text_anchor: "end", "{y_unit}" }
             for (legend_x, item) in legend {
                 line {
                     class: "trend-line",

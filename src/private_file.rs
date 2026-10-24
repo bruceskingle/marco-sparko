@@ -43,6 +43,8 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
 pub fn create_private_dir<P: AsRef<Path>>(path: P) -> io::Result<()> {
     use std::fs::DirBuilder;
 
+    // Only unix sets the mode, so on Windows the builder is not changed.
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut builder = DirBuilder::new();
 #[cfg(unix)]
     builder.mode(0o700);
@@ -93,7 +95,6 @@ pub fn create_private_file<P: AsRef<Path>>(path: P) -> io::Result<File> {
         // error returns below.
         let file = File::from_raw_handle(handle.0 as _);
 
-        println!("OpenProcessToken");
         // Open process token
         let mut token = HANDLE::default();
         OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)?;

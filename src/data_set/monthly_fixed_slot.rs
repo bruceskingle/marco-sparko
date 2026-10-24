@@ -118,7 +118,7 @@ const FIRST_RETRY_DELAY: Duration = Duration::from_secs(2);
 fn is_transient(error: &sparko_graphql::Error) -> bool {
     match error {
         sparko_graphql::Error::IOError(_) => true,
-        sparko_graphql::Error::HttpError(status) => status.is_server_error() || status.as_u16() == 429,
+        sparko_graphql::Error::HttpError(status, _) => status.is_server_error() || status.as_u16() == 429,
         _ => false,
     }
 }
@@ -703,7 +703,7 @@ mod retry_tests {
         use sparko_graphql::Error;
 
         // sparko_graphql uses a different version of reqwest, so its status codes are made from numbers.
-        let http = |code: u16| Error::HttpError(code.try_into().unwrap());
+        let http = |code: u16| Error::HttpError(code.try_into().unwrap(), String::new());
         assert!(is_transient(&http(504)));
         assert!(is_transient(&http(502)));
         assert!(is_transient(&http(429)));
