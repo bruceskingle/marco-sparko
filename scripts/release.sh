@@ -41,6 +41,7 @@ Usage: $(basename "$0") <command>
   build            Create a draft GitHub release, build and attach the installers, and download them
   publish          Publish the draft release, once the installers have been tried and the notes edited
   untag            Delete the release tags (and draft release) to make more changes before releasing
+  watch            Watch the latest run of try or build again, e.g. after Ctrl+C, and download its installers
 EOF
     exit 1
 }
@@ -150,14 +151,45 @@ run_workflow() {
     done
     [ "$id" != "$previous" ] || die "The workflow run did not start, see the Actions tab of the marco-sparko repo"
 
-    info "Watching run $id (about 30 to 40 minutes), Ctrl+C stops watching but not the run"
+    watch_run "$id"
+    RUN_ID=$id
+}
+
+# Waits for the workflow run to finish, and stops if it failed.
+watch_run() {
+    local id=$1
+    info "Watching run $id (about 30 to 40 minutes), Ctrl+C stops watching but not the run, $(basename "$0") watch resumes"
     if ! gh run watch "$id" -R "$OWNER/marco-sparko" --exit-status; then
         echo >&2
         echo "To see why it failed: gh run view $id -R $OWNER/marco-sparko --log-failed" >&2
         echo "To re-run the failed jobs: gh run rerun $id -R $OWNER/marco-sparko --failed" >&2
         die "The workflow run failed"
     fi
-    RUN_ID=$id
+}
+
+# Downloads the installers built by try's workflow run.
+download_test_installers() {
+    local version=$1 id=$2 download
+    download="$HOME/Downloads/marco-sparko-$version-test"
+    rm -rf "$download"
+    gh run download "$id" -R "$OWNER/marco-sparko" --dir "$download"
+    info "The installers are in $download"
+}
+
+# Downloads the installers attached to the draft release by build's workflow run.
+download_release_installers() {
+    local version=$1 tag download
+    tag="release$version"
+    download="$HOME/Downloads/marco-sparko-$version"
+    rm -rf "$download"
+    gh release download "$tag" -R "$OWNER/marco-sparko" --dir "$download"
+    info "The installers are in $download"
+    echo
+    echo "Try them, then edit the release notes on GitHub (the draft is listed on the Releases page):"
+    gh release view "$tag" -R "$OWNER/marco-sparko" --json url --jq .url
+    echo "or with: gh release edit $tag -R $OWNER/marco-sparko --notes-file <file>"
+    echo
+    info "When it is ready, next: $(basename "$0") publish"
 }
 
 cmd_status() {
@@ -241,7 +273,7 @@ cmd_start() {
 }
 
 cmd_try() {
-    local version tag download
+    local version tag
     require_gh
     version=$(release_version)
     tag="test$version"
@@ -258,11 +290,7 @@ cmd_try() {
     done
 
     run_workflow "v$version" "$tag" false
-
-    download="$HOME/Downloads/marco-sparko-$version-test"
-    rm -rf "$download"
-    gh run download "$RUN_ID" -R "$OWNER/marco-sparko" --dir "$download"
-    info "The installers are in $download"
+    download_test_installers "$version" "$RUN_ID"
 }
 
 cmd_merge() {
@@ -339,7 +367,7 @@ cmd_check() {
 }
 
 cmd_build() {
-    local version tag state download
+    local version tag state
     require_gh
     version=$(release_version)
     tag="release$version"
@@ -359,17 +387,28 @@ cmd_build() {
 
     # The workflow from the tagged commit, so it is the one which was released.
     run_workflow "$tag" "$tag" true
+    download_release_installers "$version"
+}
 
-    download="$HOME/Downloads/marco-sparko-$version"
-    rm -rf "$download"
-    gh release download "$tag" -R "$OWNER/marco-sparko" --dir "$download"
-    info "The installers are in $download"
-    echo
-    echo "Try them, then edit the release notes on GitHub (the draft is listed on the Releases page):"
-    gh release view "$tag" -R "$OWNER/marco-sparko" --json url --jq .url
-    echo "or with: gh release edit $tag -R $OWNER/marco-sparko --notes-file <file>"
-    echo
-    info "When it is ready, next: $(basename "$0") publish"
+cmd_watch() {
+    local version id ref
+    require_gh
+    version=$(release_version)
+    id=$(latest_run_id)
+    [ -n "$id" ] || die "There are no runs of the $WORKFLOW workflow"
+    # The branch or tag the run was started from, which shows whether it was started by try or build.
+    ref=$(gh run view "$id" -R "$OWNER/marco-sparko" --json headBranch --jq .headBranch)
+    case $ref in
+        "v$version")
+            watch_run "$id"
+            download_test_installers "$version" "$id"
+            ;;
+        "release$version")
+            watch_run "$id"
+            download_release_installers "$version"
+            ;;
+        *) die "The latest run ($id) is from $ref, not from try or build of $version" ;;
+    esac
 }
 
 cmd_publish() {
@@ -422,5 +461,6 @@ case $command in
     build) cmd_build ;;
     publish) cmd_publish ;;
     untag) cmd_untag ;;
+    watch) cmd_watch ;;
     *) usage ;;
 esac

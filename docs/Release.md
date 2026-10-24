@@ -35,6 +35,13 @@ after fixing anything. The test tags are deleted by `merge`.
 
 If a build fails, it shows the commands to see why and to re-run the failed jobs.
 
+Ctrl+C stops watching but not the run. To pick it up again, e.g. after a re-run of failed jobs, and download the
+installers when it finishes:
+
+```
+./scripts/release.sh watch
+```
+
 <details>
 <summary>Manual commands</summary>
 
@@ -210,7 +217,8 @@ Try the installers, and edit the release notes on GitHub (the draft is at the to
 to the repo.
 
 If a build fails, fix it as in step 2 (`untag`, commit, `merge`, `check`) and run `build` again. Running `build` again
-on an existing draft replaces its installers.
+on an existing draft replaces its installers. As with `try`, `./scripts/release.sh watch` picks up the run again after
+Ctrl+C or a re-run of failed jobs, and downloads the installers from the draft when it finishes.
 
 <details>
 <summary>Manual commands</summary>
