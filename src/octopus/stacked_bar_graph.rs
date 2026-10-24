@@ -1,3 +1,4 @@
+use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use sparko_graphql::types::Currency;
 
@@ -8,6 +9,9 @@ const BOTTOM: f64 = 32.0;
 const MAX_X_TICKS: usize = 12;
 const Y_TICKS: f64 = 4.0;
 const BAR_GAP: f64 = 2.0;
+/// An estimate, a little on the wide side, of the width of a character of the 12px axis labels, to leave out x axis
+/// labels which would not fit.
+const LABEL_CHAR_WIDTH: f64 = 7.0;
 const TOOLTIP_WIDTH: f64 = 226.0;
 /// The tooltip text starts after a column of colour swatches.
 const TOOLTIP_TEXT_X: f64 = 24.0;
@@ -65,6 +69,42 @@ pub struct StackedBarPoint {
     pub period_label: String,
     /// The value of each series, in the order of the graph's series, bottom first.
     pub values: Vec<f64>,
+}
+
+/// A bar which was right clicked, with times as unix timestamps.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct BarClick {
+    pub start: i64,
+    pub end: i64,
+    /// The start of the bar before it, or for the first bar the same length before it.
+    pub previous_start: i64,
+}
+
+/// An item in the menu shown when a bar is right clicked.
+#[derive(Clone, PartialEq)]
+pub struct BarMenuItem {
+    pub label: String,
+    pub enabled: bool,
+    pub action: EventHandler<BarClick>,
+}
+
+/// The height of an item in the bar menu and the width of a character of its labels, a little on the large side, and
+/// its padding, to estimate its size.
+const MENU_ITEM_HEIGHT: f64 = 30.0;
+const MENU_CHAR_WIDTH: f64 = 8.0;
+const MENU_PADDING: f64 = 40.0;
+
+/// The CSS position of the bar menu for a right click at x, y in the window: below and to the right of the mouse, or
+/// where that would go off the edge of the window, above or to the left of it. Then the menu is placed by its bottom or
+/// right edge, so it is at the mouse however good the estimate of its size is.
+fn menu_position(x: f64, y: f64, menu: &[BarMenuItem]) -> String {
+    let window = dioxus::desktop::window();
+    let size = window.window.inner_size().to_logical::<f64>(window.window.scale_factor());
+    let height = menu.len() as f64 * MENU_ITEM_HEIGHT + MENU_PADDING;
+    let width = menu.iter().map(|item| item.label.chars().count()).max().unwrap_or(0) as f64 * MENU_CHAR_WIDTH + MENU_PADDING;
+    let vertical = if y + height > size.height { format!("bottom: {}px;", size.height - y) } else { format!("top: {y}px;") };
+    let horizontal = if x + width > size.width { format!("right: {}px;", size.width - x) } else { format!("left: {x}px;") };
+    format!("{vertical} {horizontal}")
 }
 
 /// A readable step between y axis ticks of at least raw, e.g. 0.25 or 50, and the number of decimal places it needs.
@@ -131,8 +171,22 @@ pub fn StackedBarGraph(
     /// Draw a histogram, where bar heights are per hour so that the area of each bar is its total. Needed when the bars
     /// have different widths.
     #[props(default)] per_hour: bool,
+    /// Whether each x axis label is in the middle of its bar, e.g. a day, rather than starting at the start of its bar,
+    /// e.g. the first reading of a day.
+    #[props(default)] centre_labels: bool,
+    /// Called with the start and end of a bar when it is double clicked, to show it in more detail.
+    #[props(default)] on_drill: Option<EventHandler<(i64, i64)>>,
+    /// Called with the start of the first bar and the end of the last when the mouse is dragged across more than one
+    /// bar, to show just those bars.
+    #[props(default)] on_zoom: Option<EventHandler<(i64, i64)>>,
+    /// The menu shown when a bar is right clicked, instead of the webview's menu.
+    #[props(default)] menu: Vec<BarMenuItem>,
 ) -> Element {
     let mut hovered = use_signal::<Option<usize>>(|| None);
+    // The bars where a drag started and where it is now, while the mouse button is down.
+    let mut dragged = use_signal::<Option<(usize, usize)>>(|| None);
+    // The bar which was right clicked and where, while its menu is open.
+    let mut menu_at = use_signal::<Option<(BarClick, f64, f64)>>(|| None);
     let mut dimensions = use_signal(|| None::<(f64, f64)>);
 
     let (Some(first), Some(last)) = (points.first(), points.last()) else {
@@ -170,10 +224,9 @@ pub fn StackedBarGraph(
     let y_max = (max_value / step).ceil().max(1.0) * step;
     let y = |value: f64| TOP + plot_height - value / y_max * plot_height;
 
-    let bars: Vec<(usize, String, f64, f64, f64, f64)> = points
+    let bars: Vec<(String, f64, f64, f64, f64)> = points
         .iter()
-        .enumerate()
-        .flat_map(|(i, point)| {
+        .flat_map(|point| {
             let slot_width = x(point.end) - x(point.start);
             let gap = if slot_width > 3.0 * BAR_GAP { BAR_GAP } else { 0.0 };
             let bar_x = x(point.start) + gap / 2.0;
@@ -190,7 +243,6 @@ pub fn StackedBarGraph(
                     let value = value.max(0.0) * bar_scale;
                     let top = y(baseline + value);
                     let segment = (
-                        i,
                         color.clone(),
                         bar_x,
                         top,
@@ -212,15 +264,31 @@ pub fn StackedBarGraph(
         .collect();
     let y_unit = axis_unit(mode, currency, &unit, if per_hour { "/h" } else { "" });
 
-    let all_x_ticks: Vec<(f64, &String)> = points
+    // The tick at the start of each labelled bar, and its label in the middle of the bar or starting at the tick.
+    let label_anchor = if centre_labels { "middle" } else { "start" };
+    let all_x_ticks: Vec<(f64, f64, &String)> = points
         .iter()
-        .filter_map(|point| point.tick_label.as_ref().map(|label| (x(point.start), label)))
+        .filter_map(|point| point.tick_label.as_ref().map(|label| {
+            let label_x = if centre_labels { (x(point.start) + x(point.end)) / 2.0 } else { x(point.start) };
+            (x(point.start), label_x, label)
+        }))
         .collect();
     let every = all_x_ticks.len().div_ceil(MAX_X_TICKS).max(1);
-    let x_ticks: Vec<(f64, String)> = all_x_ticks
+    let x_ticks: Vec<(f64, f64, String)> = all_x_ticks
         .into_iter()
         .step_by(every)
-        .map(|(position, label)| (position, label.clone()))
+        // Leave out a label which would go off the edge, e.g. the last day of raw readings when it is near the end.
+        .filter(|(_, label_x, label)| {
+            let label_width = label.chars().count() as f64 * LABEL_CHAR_WIDTH;
+            let (left, right) = if centre_labels {
+                (label_x - label_width / 2.0, label_x + label_width / 2.0)
+            }
+            else {
+                (*label_x, label_x + label_width)
+            };
+            left >= 0.0 && right <= width
+        })
+        .map(|(tick_x, label_x, label)| (tick_x, label_x, label.clone()))
         .collect();
     let legend: Vec<(f64, String, String)> = segment_names
         .iter()
@@ -229,6 +297,20 @@ pub fn StackedBarGraph(
             (LEFT + index as f64 * 145.0, label.clone(), color.clone())
         })
         .collect();
+
+    // A column over each bar, the full height of the graph, which shows its tooltip when the mouse is over it and can
+    // be double clicked or dragged across, and the start and end of each bar.
+    let columns: Vec<(usize, f64, f64)> = points.iter()
+        .enumerate()
+        .map(|(index, point)| (index, x(point.start), (x(point.end) - x(point.start)).max(0.0)))
+        .collect();
+    let periods: std::rc::Rc<Vec<(i64, i64)>> = std::rc::Rc::new(points.iter().map(|point| (point.start, point.end)).collect());
+    // The bars being dragged across, from the left of the first to the right of the last.
+    let selection = dragged().map(|(from, to)| {
+        let (first, last) = (from.min(to), from.max(to));
+        let left = x(points[first].start);
+        (left, x(points[last].end) - left)
+    });
 
     let tooltip = hovered().and_then(|index| {
         points.get(index).map(|point| {
@@ -253,7 +335,11 @@ pub fn StackedBarGraph(
 
     rsx! {
         svg {
-            class: if dimensions().is_some() { "stacked-consumption-graph ready" } else { "stacked-consumption-graph" },
+            class: format_args!(
+                "stacked-consumption-graph{}{}",
+                if dimensions().is_some() { " ready" } else { "" },
+                if dragged().is_some_and(|(from, to)| from != to) { " zooming" } else { "" },
+            ),
             view_box: "0 0 {width} {height}",
             role: "img",
             onresize: move |event| {
@@ -265,7 +351,10 @@ pub fn StackedBarGraph(
                     Err(error) => eprintln!("Failed to read stacked consumption graph size: {error:?}"),
                 }
             },
-            onmouseleave: move |_| hovered.set(None),
+            onmouseleave: move |_| {
+                hovered.set(None);
+                dragged.set(None);
+            },
             for (ty, label) in y_ticks {
                 line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
                 text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
@@ -276,11 +365,11 @@ pub fn StackedBarGraph(
                 rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
                 text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
             }
-            for (tx, label) in x_ticks {
+            for (tx, lx, label) in x_ticks {
                 line { class: "stacked-tick", x1: tx, x2: tx, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
-                text { class: "stacked-axis-label", x: tx, y: height - 10.0, text_anchor: "middle", "{label}" }
+                text { class: "stacked-axis-label", x: lx, y: height - 10.0, text_anchor: label_anchor, "{label}" }
             }
-            for (index, color, bx, by, bw, bh) in bars {
+            for (color, bx, by, bw, bh) in bars {
                 rect {
                     class: "stacked-bar",
                     fill: "{color}",
@@ -288,7 +377,62 @@ pub fn StackedBarGraph(
                     y: by,
                     width: bw,
                     height: bh,
-                    onmouseenter: move |_| hovered.set(Some(index)),
+                }
+            }
+            if let Some((selection_x, selection_width)) = selection {
+                rect { class: "stacked-selection", x: selection_x, y: TOP, width: selection_width, height: plot_height }
+            }
+            for (index, column_x, column_width) in columns {
+                rect {
+                    class: "stacked-hit",
+                    x: column_x,
+                    y: TOP,
+                    width: column_width,
+                    height: plot_height,
+                    onmouseenter: move |_| {
+                        hovered.set(Some(index));
+                        if let Some((from, _)) = dragged() {
+                            dragged.set(Some((from, index)));
+                        }
+                    },
+                    onmousedown: move |event| {
+                        // Only the left button drags, the right one opens the menu.
+                        if event.trigger_button() == Some(MouseButton::Primary) {
+                            dragged.set(Some((index, index)));
+                        }
+                    },
+                    oncontextmenu: {
+                        let periods = periods.clone();
+                        let has_menu = !menu.is_empty();
+                        move |event: MouseEvent| {
+                            event.prevent_default();
+                            if has_menu {
+                                let (start, end) = periods[index];
+                                let previous_start = if index > 0 { periods[index - 1].0 } else { start - (end - start) };
+                                let point = event.client_coordinates();
+                                menu_at.set(Some((BarClick { start, end, previous_start }, point.x, point.y)));
+                            }
+                        }
+                    },
+                    onmouseup: {
+                        let periods = periods.clone();
+                        move |_| {
+                            // A drag across more than one bar zooms to them, a click on one bar does nothing.
+                            if let (Some((from, to)), Some(on_zoom)) = (dragged.take(), on_zoom) {
+                                if from != to {
+                                    on_zoom.call((periods[from.min(to)].0, periods[from.max(to)].1));
+                                }
+                            }
+                        }
+                    },
+                    ondoubleclick: {
+                        let periods = periods.clone();
+                        move |_| {
+                            if let Some(on_drill) = on_drill {
+                                on_drill.call(periods[index]);
+                            }
+                        }
+                    },
                 }
             }
 
@@ -303,6 +447,32 @@ pub fn StackedBarGraph(
                     }
                 }
 
+            }
+        }
+        if let Some((click, menu_x, menu_y)) = menu_at() {
+            // Covers the page so that clicking anywhere else, or right clicking, closes the menu.
+            div {
+                class: "menu-backdrop",
+                onclick: move |_| menu_at.set(None),
+                oncontextmenu: move |event| {
+                    event.prevent_default();
+                    menu_at.set(None);
+                },
+            }
+            div {
+                class: "dropdown-menu bar-menu",
+                style: menu_position(menu_x, menu_y, &menu),
+                for item in menu.iter().cloned() {
+                    button {
+                        r#type: "button",
+                        disabled: !item.enabled,
+                        onclick: move |_| {
+                            menu_at.set(None);
+                            item.action.call(click);
+                        },
+                        "{item.label}"
+                    }
+                }
             }
         }
     }

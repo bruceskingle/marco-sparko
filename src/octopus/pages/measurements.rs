@@ -6,14 +6,14 @@ use time_tz::Tz;
 use sparko_graphql::types::DateTime;
 
 use crate::components::date_range_picker::{DateRangePicker, RangeSelection};
-use crate::components::export::{ExportButton, export_file_name};
+use crate::components::export::{ExportButton, ExportFormat, export_file_name, save_table};
 use crate::data_set::CancelToken;
 use crate::octopus::category_filter::{CategoryFilter, CategoryFilterMenu};
 use crate::octopus::trend_graph::{TrendSmoothing, range_years};
 use crate::octopus::context::OctopusContext;
 use crate::octopus::measurements::MeasurementsDataSet;
 use crate::octopus::meter_point::MeterPointDataSet;
-use crate::octopus::stacked_bar_graph::{StackedBarMode, StackedBarPeriod};
+use crate::octopus::stacked_bar_graph::{BarClick, BarMenuItem, StackedBarMode, StackedBarPeriod};
 
 #[derive(Props, Clone, PartialEq)]
 pub struct MeasurementsPageProps {
@@ -157,7 +157,7 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
 
     // The range currently being displayed.
     // Default to the start of the current month with no end.
-    let applied_range = use_signal(|| RangeSelection::current_month(tz));
+    let mut applied_range = use_signal(|| RangeSelection::current_month(tz));
 
     // Whether consumption is shown as a table or a graph, kept here so it survives range changes.
     let mut view = use_signal(|| ConsumptionView::Table);
@@ -170,6 +170,69 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
 
     // The data loaded by MeasurementsDetail for the applied range, None until it has loaded.
     let exportable = use_signal(|| None::<Arc<MeasurementsDataSet>>);
+
+    // The range and period before each drill down or zoom in the graph, the latest last, for Zoom Out.
+    let mut history = use_signal(Vec::<(RangeSelection, StackedBarPeriod)>::new);
+
+    // Double clicking a bar shows it in more detail: a month by week, a week by day, and a day as its raw readings. A
+    // rate period, if Rate was chosen, shows the raw readings for its whole day (the period alone would look the same
+    // as the bar).
+    let on_drill = move |(bar_start, bar_end): (i64, i64)| {
+        let (period, range) = match graph_period() {
+            StackedBarPeriod::Month => (StackedBarPeriod::Week, RangeSelection::from_unix_timestamps(bar_start, bar_end, tz)),
+            StackedBarPeriod::Week => (StackedBarPeriod::Day, RangeSelection::from_unix_timestamps(bar_start, bar_end, tz)),
+            StackedBarPeriod::Day => (StackedBarPeriod::Raw, RangeSelection::from_unix_timestamps(bar_start, bar_end, tz)),
+            StackedBarPeriod::Rate => (StackedBarPeriod::Raw, RangeSelection::day_containing(bar_start, tz)),
+            StackedBarPeriod::Raw => return,
+        };
+        if let Some(range) = range {
+            history.write().push((applied_range(), graph_period()));
+            applied_range.set(range);
+            graph_period.set(period);
+        }
+    };
+
+    // Dragging across bars shows just those bars, with the same period.
+    let on_zoom = move |(zoom_start, zoom_end): (i64, i64)| {
+        if let Some(range) = RangeSelection::from_unix_timestamps(zoom_start, zoom_end, tz) {
+            history.write().push((applied_range(), graph_period()));
+            applied_range.set(range);
+        }
+    };
+
+    // The items in the menu shown when a bar is right clicked which change the range, the rest are added by
+    // MeasurementsDetail as they need the data.
+    let (previous_range, next_range) = applied_range().before_and_after(tz);
+    let range_menu = vec![
+        BarMenuItem {
+            label: String::from("Zoom Out"),
+            enabled: !history.read().is_empty(),
+            action: EventHandler::new(move |_: BarClick| {
+                if let Some((range, period)) = history.write().pop() {
+                    applied_range.set(range);
+                    graph_period.set(period);
+                }
+            }),
+        },
+        BarMenuItem {
+            label: String::from("Previous"),
+            enabled: previous_range.is_some(),
+            action: EventHandler::new(move |_: BarClick| {
+                if let Some(range) = previous_range {
+                    applied_range.set(range);
+                }
+            }),
+        },
+        BarMenuItem {
+            label: String::from("Next"),
+            enabled: next_range.is_some(),
+            action: EventHandler::new(move |_: BarClick| {
+                if let Some(range) = next_range {
+                    applied_range.set(range);
+                }
+            }),
+        },
+    ];
 
     let selection = *applied_range.read();
     let (start, end) = selection.to_date_times(tz).map_err(|error| anyhow!(error))?;
@@ -212,6 +275,9 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
             smoothing: smoothing(),
             category_filter: category_filter(),
             exportable,
+            on_drill: if graph_period() == StackedBarPeriod::Raw { None } else { Some(EventHandler::new(on_drill)) },
+            on_zoom: EventHandler::new(on_zoom),
+            range_menu,
         }
     };
 
@@ -305,6 +371,12 @@ struct MeasurementsDetailProps {
     category_filter: CategoryFilter,
     /// Set to the data once it has loaded, so that the parent can export it.
     exportable: Signal<Option<Arc<MeasurementsDataSet>>>,
+    /// Called with the start and end of a bar in the graph when it is double clicked, None if there is no more detail.
+    on_drill: Option<EventHandler<(i64, i64)>>,
+    /// Called with the start and end of the bars dragged across in the graph.
+    on_zoom: EventHandler<(i64, i64)>,
+    /// The items in the menu shown when a bar is right clicked which change the range.
+    range_menu: Vec<BarMenuItem>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -338,6 +410,8 @@ impl PartialEq for MeasurementsDetailProps {
             && self.smoothing == other.smoothing
             && self.category_filter == other.category_filter
             && self.exportable == other.exportable
+            && self.on_drill.is_some() == other.on_drill.is_some()
+            && self.range_menu.iter().map(|item| item.enabled).eq(other.range_menu.iter().map(|item| item.enabled))
             // && Arc::ptr_eq(&self.property, &other.property)
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
     }
@@ -350,26 +424,95 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
     // The latest progress message from the fetch.
     let progress = use_signal(String::new);
 
-    // Set by the cancel button, the fetch then stops and returns the data it has so far.
-    let cancel = use_hook(CancelToken::new);
+    // Set by the cancel buttons, the fetch then stops and returns the data it has so far. Each reload has a new one, so
+    // that cancelling a reload does not cancel the next.
+    let mut cancel = use_signal(CancelToken::new);
 
-    // Fetch the data
+    // A period to fetch again from the server, however up to date the cache is, set from the bar menu.
+    let mut reload = use_signal(|| None::<(DateTime, DateTime)>);
+
+    // Fetch the data, and again whenever a period is reloaded.
     let transactions_resource = use_resource({
         let props = props.clone();
-        let cancel = cancel.clone();
         let context = context.clone();
         move || {
             let props = props.clone();
-            let cancel = cancel.clone();
+            let cancel = cancel.peek().clone();
             let context = context.clone();
+            let reload = reload();
             async move {
                 let monitor = move |message: String| { let mut progress = progress; progress.set(message) };
                 MeasurementsDataSet::new(&props.account_id, &props.mpan, props.export,
-                    &props.start, &props.end,
+                    &props.start, &props.end, reload,
                     props.billing_timezone, &monitor,
                     &cancel, &context.cache_config, &*context.request_manager).await.map(Arc::new)
             }
         }
+    });
+
+    let tz = props.billing_timezone;
+    let to_date_time = move |timestamp: i64| DateTime::from_unix_timestamp(timestamp).ok().map(|date_time| date_time.to_timezone(tz));
+
+    // The menu shown when a bar is right clicked.
+    let mut menu = props.range_menu.clone();
+    for format in ExportFormat::ALL {
+        let mpan = props.mpan.clone();
+        menu.push(BarMenuItem {
+            label: format!("Export this bar as {}", format.name()),
+            enabled: true,
+            action: EventHandler::new(move |click: BarClick| {
+                let (Some(start), Some(end)) = (to_date_time(click.start), to_date_time(click.end)) else {
+                    return;
+                };
+                let Some(Ok(data)) = &*transactions_resource.read() else {
+                    return;
+                };
+                let table = data.readings_export(&start, &end);
+                let name = export_file_name("measurements", &mpan, &start, &end, "readings");
+                spawn(async move {
+                    if let Err(error) = save_table(&table, &name, format).await {
+                        eprintln!("Export of a bar failed: {error}");
+                    }
+                });
+            }),
+        });
+    }
+    menu.push(BarMenuItem {
+        label: String::from("Reload this bar"),
+        enabled: true,
+        action: EventHandler::new(move |click: BarClick| {
+            // The reload starts at the start of the bar before, not of this bar. The server has returned wrong data
+            // near the start of a request, and starting the request a bar earlier keeps the bar being reloaded away from
+            // it. Reloading 1 June 2026 this way repaired its data, which had been wrong.
+            if let (Some(start), Some(end)) = (to_date_time(click.previous_start), to_date_time(click.end)) {
+                cancel.set(CancelToken::new());
+                reload.set(Some((start, end)));
+            }
+        }),
+    });
+    menu.push(BarMenuItem {
+        label: String::from("Reload this month"),
+        enabled: true,
+        action: EventHandler::new(move |click: BarClick| {
+            let Some(bar_start) = to_date_time(click.start) else {
+                return;
+            };
+            let month = bar_start.to_date();
+            let Ok(first) = sparko_graphql::types::Date::from_calendar_date(month.year(), month.month(), 1) else {
+                return;
+            };
+            let next_month = if month.month() == time::Month::December {
+                sparko_graphql::types::Date::from_calendar_date(month.year() + 1, time::Month::January, 1)
+            }
+            else {
+                sparko_graphql::types::Date::from_calendar_date(month.year(), month.month().next(), 1)
+            };
+            // From the day before the month, for the same reason as Reload this bar starts at the bar before.
+            if let Ok(next_month) = next_month {
+                cancel.set(CancelToken::new());
+                reload.set(Some((first.previous_day().at_midnight(tz), next_month.at_midnight(tz))));
+            }
+        }),
     });
 
     // Share the data with the parent for export once it has loaded.
@@ -387,30 +530,53 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
             div {
                 {format!("Loading measurements for meter {}...", props.mpan)}
                 " "
-                button { r#type: "button", onclick: move |_| cancel.cancel(), "Cancel" }
+                button { r#type: "button", onclick: move |_| cancel.peek().cancel(), "Cancel" }
             }
             div { "{progress}" }
         },
         Some(Err(error)) => Err(anyhow!("Failed to load measurements for meter {}: {error:?}", props.mpan))?,
-        Some(Ok(consumption)) => match props.view {
-            ConsumptionView::Table => consumption.display(&props.start, &props.end),
-            ConsumptionView::Graph => consumption.display_graph(
-                &props.start,
-                &props.end,
-                props.billing_timezone,
-                props.graph_mode,
-                props.graph_period,
-                &props.category_filter,
-            ),
-            ConsumptionView::Trend => consumption.display_trend(
-                &props.start,
-                &props.end,
-                props.billing_timezone,
-                props.graph_mode,
-                props.graph_period,
-                props.smoothing,
-                &props.category_filter,
-            ),
+        Some(Ok(consumption)) => {
+            let content = match props.view {
+                ConsumptionView::Table => consumption.display(&props.start, &props.end),
+                ConsumptionView::Graph => consumption.display_graph(
+                    &props.start,
+                    &props.end,
+                    props.billing_timezone,
+                    props.graph_mode,
+                    props.graph_period,
+                    &props.category_filter,
+                    props.on_drill,
+                    Some(props.on_zoom),
+                    menu,
+                ),
+                ConsumptionView::Trend => consumption.display_trend(
+                    &props.start,
+                    &props.end,
+                    props.billing_timezone,
+                    props.graph_mode,
+                    props.graph_period,
+                    props.smoothing,
+                    &props.category_filter,
+                ),
+            };
+            // While a reload is fetched the data loaded before it is shown, with a dialog over it.
+            let reloading = matches!(*transactions_resource.state().read(), UseResourceState::Pending);
+            rsx! {
+                div { class: "reloadable",
+                    {content}
+                    if reloading {
+                        div { class: "reload-overlay",
+                            div { class: "modal",
+                                h3 { "Reloading" }
+                                div { "{progress}" }
+                                div { class: "modal-buttons",
+                                    button { r#type: "button", onclick: move |_| cancel.peek().cancel(), "Cancel" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         },
     }
 }

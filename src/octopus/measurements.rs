@@ -19,7 +19,7 @@ use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, Uti
 
 use super::graphql::meter;
 use super::category_filter::{CategoryFilter, CategoryValues, KNOWN_LABELS, STANDING_CHARGE_LABEL};
-use super::stacked_bar_graph::{StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries};
+use super::stacked_bar_graph::{BarMenuItem, StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries};
 use super::category_filter::SOLID;
 use super::trend_graph::{CATEGORY_LEGEND_COLOR, TrendGraph, TrendLegendItem, TrendLine, TrendSmoothing, cumulative_by_year, moving_average, range_years, year_positions};
 
@@ -79,6 +79,7 @@ impl MeasurementsDataSet {
         export: bool,
         start: &DateTime,
         end: &DateTime,
+        reload: Option<(DateTime, DateTime)>,
         tz: &'static Tz,
         progress: &(impl ProgressMonitor + ?Sized),
         cancel: &CancelToken,
@@ -102,6 +103,7 @@ impl MeasurementsDataSet {
             request_manager,
             start,
             end,
+            reload,
             cancel,
             progress,
         ).await?;
@@ -204,7 +206,10 @@ impl MeasurementsDataSet {
         (unit, currency)
     }
 
-    pub fn display_graph(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod, filter: &CategoryFilter) -> Element {
+    /// on_drill is called with the start and end of a bar when it is double clicked, and on_zoom with the start and end
+    /// of the bars dragged across.
+    pub fn display_graph(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, mode: StackedBarMode, period: StackedBarPeriod, filter: &CategoryFilter,
+        on_drill: Option<EventHandler<(i64, i64)>>, on_zoom: Option<EventHandler<(i64, i64)>>, menu: Vec<BarMenuItem>) -> Element {
         let (labels, aggregated) = self.graph_points(start, end, tz, period);
         let categories = Self::filtered_categories(&labels, &aggregated, mode, filter, false);
         let (unit, currency) = self.graph_units(start, end);
@@ -231,6 +236,11 @@ impl MeasurementsDataSet {
                 currency,
                 unit,
                 per_hour: period == StackedBarPeriod::Rate,
+                // A bar of a day or longer is labelled in its middle, a reading or rate period at the start of its day.
+                centre_labels: matches!(period, StackedBarPeriod::Day | StackedBarPeriod::Week | StackedBarPeriod::Month),
+                on_drill,
+                on_zoom,
+                menu,
             }
         }
     }

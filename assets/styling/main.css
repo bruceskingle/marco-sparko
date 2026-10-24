@@ -429,6 +429,25 @@ h6 {
     border: 2px solid yellow;
     padding: 20px;
 }
+/* The data, with a dialog over it while part of it is reloaded. It fills the space like the graph inside it. */
+.reloadable {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.reload-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+}
+
 /* Modal dialog, e.g. the meter consumption date range */
 .modal-backdrop {
     position: fixed;
@@ -454,6 +473,36 @@ h6 {
 
 .modal h3 {
     margin: 0 0 4px 0;
+}
+
+/* The buttons for the period before and after the date range, either side of it. */
+.range-pager {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.range-pager button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* The quick range buttons on the left and Cancel and Apply on the right, at the bottom of the date range dialog. */
+.modal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+}
+
+/* Buttons which set the date range at once, the current periods (e.g. This Week) above the previous ones. */
+.quick-ranges {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    gap: 8px;
+}
+
+.quick-ranges button {
+    padding: 4px 10px;
 }
 
 .modal-row {
@@ -605,6 +654,23 @@ button.danger:disabled {
     background-color: #353540;
 }
 
+/* The menu shown where a bar in a graph was right clicked. */
+.dropdown-menu.bar-menu {
+    position: fixed;
+    top: auto;
+    right: auto;
+    min-width: 0;
+}
+
+.dropdown-menu > button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.dropdown-menu > button:disabled:hover {
+    background-color: transparent;
+}
+
 .menu-separator {
     margin: 4px 0;
     border-top: 1px solid #404045;
@@ -728,6 +794,31 @@ button.danger:disabled {
 .stacked-consumption-graph .stacked-legend-swatch {
     stroke: rgba(0, 0, 0, 0.45);
     stroke-width: 0.5;
+}
+
+/* Columns over the bars, which catch the mouse for the tooltip, double clicking and dragging. */
+.stacked-consumption-graph .stacked-hit {
+    fill: transparent;
+}
+
+/* The bars being dragged across to zoom to them. */
+.stacked-consumption-graph .stacked-selection {
+    fill: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+}
+
+.stacked-consumption-graph {
+    user-select: none;
+}
+
+.stacked-consumption-graph.zooming,
+.stacked-consumption-graph.zooming * {
+    cursor: zoom-in;
+}
+
+/* The tooltip does not get in the way of the columns under it. */
+.stacked-consumption-graph .stacked-tooltip {
+    pointer-events: none;
 }
 
 .stacked-consumption-graph .stacked-tooltip-background {

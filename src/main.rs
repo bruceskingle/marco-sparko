@@ -13,7 +13,9 @@ fn main() {
             .with_cfg(marco_sparko::window_state::remember_window_state(
                 dioxus::desktop::Config::new()
                     // .with_menu(None)
-                    ,
+                    // The webview's context menu (Reload, Inspect Element...) is only offered in debug builds, its
+                    // Reload would restart the app in a broken state.
+                    .with_disable_context_menu(!cfg!(debug_assertions)),
                 window,
             ))
             .launch(App);

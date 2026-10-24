@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque}, fs::{File, FileTimes, OpenOptions}, io::{BufRead, BufReader, Seek, SeekFrom, Write}, path::PathBuf, pin::pin, time::{Duration, SystemTime, UNIX_EPOCH},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque}, fs::{File, FileTimes, OpenOptions}, io::{BufRead, BufReader, Seek, SeekFrom, Write}, path::PathBuf, pin::pin, time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use futures::future::{Either, select};
@@ -106,6 +106,22 @@ fn window_complete<V>(data: &BTreeMap<DateTime, Item<V>>, start: &DateTime, end:
         covered_to = item.end;
     }
     covered_to >= *end
+}
+
+/// Whether a month, from month_start to month_end (no later than now), is missing data or has data which is not final
+/// outside the period from attempted_start to attempted_end which was just fetched. If so, its file is marked stale so
+/// that the rest is fetched next time; otherwise the fetch covered everything which could be missing.
+fn missing_outside<V>(
+    data: &BTreeMap<DateTime, Item<V>>,
+    month_start: &DateTime,
+    month_end: &DateTime,
+    attempted_start: &DateTime,
+    attempted_end: &DateTime,
+) -> bool {
+    let before_end = std::cmp::min(attempted_start, month_end);
+    let after_start = std::cmp::max(attempted_end, month_start);
+    (month_start < before_end && !window_complete(data, month_start, before_end))
+        || (after_start < month_end && !window_complete(data, after_start, month_end))
 }
 
 /// The number of times a request which failed with a transient error is retried.
@@ -277,11 +293,32 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         Ok(Self::new(start_date, next_date, tz, data))
     }
 
+    /// The key of each month the window from start to end covers, with the part of the window in that month.
+    fn window_months(start: &DateTime, end: &DateTime, tz: &'static Tz) -> Vec<(i32, DateTime, DateTime)> {
+        let mut months = Vec::new();
+        let mut part_start = *start;
+        while part_start < *end {
+            let date = part_start.to_date();
+            let next_month = Date::from_calendar_date(
+                if date.month() == time::Month::December { date.year() + 1 } else { date.year() },
+                date.month().next(),
+                1,
+            ).map(|date| date.at_midnight(tz)).unwrap_or(*end);
+            let part_end = std::cmp::min(next_month, *end);
+            months.push((Self::key_for(&date), part_start, part_end));
+            part_start = part_end;
+        }
+        months
+    }
+
     fn key_for(start: &Date) -> i32 {
         let key = start.year() * 12 + start.month() as i32 - 1;
         key
     }
 
+    /// The data from start to end, from the cache and fetched from the server where the cache is missing data or may
+    /// be out of date. With reload, the period it gives is fetched again however up to date the cache is, as a single
+    /// request even if it crosses a month boundary, and the months it covers are returned too.
     pub async fn fetch(
         mut source: S,
         tz: &'static Tz,
@@ -289,6 +326,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         request_manager: &impl GraphQLCaller,
         start: &DateTime,
         end: &DateTime,
+        reload: Option<(DateTime, DateTime)>,
         cancel: &CancelToken,
         progress: &(impl ProgressMonitor + ?Sized),
     ) -> anyhow::Result<Vec<MonthlyFixedSlotDataSet<S>>>
@@ -296,10 +334,17 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         let mut result_keys = Vec::new();
         let mut result = Vec::new();
         let mut data_set_map = HashMap::new();
+        let end = &match reload {
+            Some((_, reload_end)) => std::cmp::max(*end, reload_end),
+            None => *end,
+        };
 
         {
-            // scope this start_date
-            let mut start_date = start.to_date();
+            // scope this start_date, which includes the months of the period to reload
+            let mut start_date = match reload {
+                Some((reload_start, _)) => std::cmp::min(*start, reload_start),
+                None => *start,
+            }.to_date();
 
             progress.progress(String::from("Loading cached data"));
 
@@ -338,14 +383,34 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
         }
 
         let refresh_after = source.refresh_after();
+        // The period which was fetched, if any, and the months with windows in it.
+        let mut attempted: Option<(DateTime, DateTime)> = None;
+        let mut attempted_keys = HashSet::new();
 
 
         // The fetching is in a block of its own so that if it fails, the rows fetched before the failure are still
         // written to the cache below rather than being lost.
         let fetch_result: anyhow::Result<()> = async {
-            if let Some(refresh_start) = all_up_to_date(&refresh_after, &result_keys, &data_set_map)? {
+            // The windows to fetch, as unix timestamps.
+            let mut windows = VecDeque::new();
+            if let Some((reload_start, reload_end)) = reload {
+                // The cached samples are treated as not final so that they are fetched again, as one window even across a
+                // month boundary, see reload. They are only replaced if they have changed.
+                for ods in data_set_map.values_mut() {
+                    for (_, item) in ods.data_set.data.range_mut(reload_start..reload_end) {
+                        item.is_final = false;
+                    }
+                }
+                windows.push_back((reload_start.unix_timestamp(), reload_end.unix_timestamp()));
+                attempted = Some((reload_start, reload_end));
+                attempted_keys.extend(data_set_map.iter()
+                    .filter(|(_, ods)| ods.data_set.start_date.at_midnight(tz) < reload_end && reload_start < ods.data_set.next_date.at_midnight(tz))
+                    .map(|(key, _)| *key));
+            }
+            else if let Some(refresh_start) = all_up_to_date(&refresh_after, &result_keys, &data_set_map)? {
                 if &refresh_start < end {
                     let refresh_start = if &refresh_start < start { start } else {&refresh_start};
+                    attempted = Some((*refresh_start, *end));
 
                     // Fetch in windows which avoid the data we already have and cover at most one month each.
                     let cached: Vec<(i64, i64, bool)> = result_keys.iter()
@@ -357,120 +422,128 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
                         .collect();
                     // Months fetched within their refresh duration are left alone, e.g. empty months before the server
                     // has any data, which would otherwise be fetched again whenever a later month is refreshed.
-                    let mut windows = VecDeque::new();
                     for window in fetch_windows(&cached, refresh_start.unix_timestamp(), end.unix_timestamp(), &month_boundaries) {
                         let key = Self::key_for(&DateTime::from_unix_timestamp(window.0)?.to_timezone(tz).to_date());
                         if data_set_map.get(&key).map_or(Ok(true), |data_set| data_set.is_stale(&refresh_after))? {
                             windows.push_back(window);
+                            attempted_keys.insert(key);
+                        }
+                    }
+                }
+            }
+
+            // The number of requests made and of rows they returned, for progress messages.
+            let mut requests = 0;
+            let mut rows = 0;
+            let date_format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]").unwrap();
+
+            // The number of windows fetched, windows may be added as they are split into days.
+            let mut window_number = 0;
+            while let Some((window_start, window_end)) = windows.pop_front() {
+                if cancel.is_cancelled() {
+                    break;
+                }
+                window_number += 1;
+                let window_count = window_number + windows.len();
+                let window_start = DateTime::from_unix_timestamp(window_start)?.to_timezone(tz);
+                let window_end = DateTime::from_unix_timestamp(window_end)?.to_timezone(tz);
+                let prefix = |requests: usize, rows: usize| format!(
+                    "Period {} of {} from {}, request {requests}, {rows} rows loaded",
+                    window_number,
+                    window_count,
+                    window_start.format(&date_format).unwrap_or_default(),
+                );
+                // Whether a sample in the window is missing data which a request for each day may provide.
+                let mut partial = false;
+
+                requests += 1;
+                let query = source.initial_query(&window_start, &window_end)?;
+                let mut next_response = call_unless_cancelled(request_manager, &query, cancel, progress, &prefix(requests, rows)).await?;
+
+                while let Some(response) = next_response {
+                    let cq = source.continuation_query(&window_start, &window_end, &response);
+
+                    // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
+
+                    for value in source.items(response)? {
+                        let value = value?;
+                        rows += 1;
+                        let (start, end, is_final) = source.index(&value)?;
+                        if start >= window_start && start < window_end && source.is_partial(&value) {
+                            partial = true;
+                        }
+                        let start_date = start.to_date();
+                        let key = Self::key_for(&start_date);
+
+                        let data_set = if let Some(data_set) = data_set_map.get_mut(&key) {
+                            data_set
+                        }
+                        else {
+                            data_set_map.insert(key, OpenMonthlyFixedSlotDataSet::new(&source, &config, source.hash_key(), &start_date, tz)?);
+                            data_set_map.get_mut(&key).unwrap()
+                        };
+
+                        let update = if let Some(item) = data_set.data_set.data.get(&start) {
+                            let v = serde_json::to_string(&value)?;
+                            let c = serde_json::to_string(&item.value)?;
+                            v != c
+                        }
+                        else {
+                            true
+                        };
+
+                        if !update {
+                            // Unchanged, but it may have been treated as not final to reload it.
+                            if let Some(item) = data_set.data_set.data.get_mut(&start) {
+                                item.is_final = is_final;
+                            }
+                        }
+                        else {
+                            data_set.data_set.data.insert(start, Item {
+                                    end,
+                                    is_final,
+                                    attributes:DataSetAttributes { cached: false},
+                                    value,
+                                }
+                            );
+                            data_set.is_dirty = true;
                         }
                     }
 
-                    // The number of requests made and of rows they returned, for progress messages.
-                    let mut requests = 0;
-                    let mut rows = 0;
-                    let date_format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]").unwrap();
+                    // A source whose query has no end keeps returning samples after the window, in no useful order,
+                    // so stop once the window is complete rather than when a sample after the window arrives. Only
+                    // a reload crosses a month boundary, so the window is complete when its part in each month is.
+                    let complete = Self::window_months(&window_start, &window_end, tz).iter()
+                        .all(|(key, part_start, part_end)| data_set_map.get(key)
+                            .is_some_and(|data_set| window_complete(&data_set.data_set.data, part_start, part_end)));
+                    if complete {
+                        break;
+                    }
 
-                    // The number of windows fetched, windows may be added as they are split into days.
-                    let mut window_number = 0;
-                    while let Some((window_start, window_end)) = windows.pop_front() {
-                        if cancel.is_cancelled() {
-                            break;
-                        }
-                        window_number += 1;
-                        let window_count = window_number + windows.len();
-                        let window_start = DateTime::from_unix_timestamp(window_start)?.to_timezone(tz);
-                        let window_end = DateTime::from_unix_timestamp(window_end)?.to_timezone(tz);
-                        let prefix = |requests: usize, rows: usize| format!(
-                            "Period {} of {} from {}, request {requests}, {rows} rows loaded",
-                            window_number,
-                            window_count,
-                            window_start.format(&date_format).unwrap_or_default(),
-                        );
-                        // Whether a sample in the window is missing data which a request for each day may provide.
-                        let mut partial = false;
-
+                    if let Some(continuation_query) = cq? {
                         requests += 1;
-                        let query = source.initial_query(&window_start, &window_end)?;
-                        let mut next_response = call_unless_cancelled(request_manager, &query, cancel, progress, &prefix(requests, rows)).await?;
+                        next_response = call_unless_cancelled(request_manager, &continuation_query, cancel, progress, &prefix(requests, rows)).await?;
+                    }
+                    else {
+                        break;
+                    }
 
-                        while let Some(response) = next_response {
-                            let cq = source.continuation_query(&window_start, &window_end, &response);
+                }
 
-                            // Self::handle_records(response, &response_iterator, &indexer, &mut data, &mut file)?;
-
-                            for value in source.items(response)? {
-                                let value = value?;
-                                rows += 1;
-                                let (start, end, is_final) = source.index(&value)?;
-                                if start >= window_start && start < window_end && source.is_partial(&value) {
-                                    partial = true;
-                                }
-                                let start_date = start.to_date();
-                                let key = Self::key_for(&start_date);
-
-                                let data_set = if let Some(data_set) = data_set_map.get_mut(&key) {
-                                    data_set
-                                }
-                                else {
-                                    data_set_map.insert(key, OpenMonthlyFixedSlotDataSet::new(&source, &config, source.hash_key(), &start_date, tz)?);
-                                    data_set_map.get_mut(&key).unwrap()
-                                };
-
-                                let update = if let Some(item) = data_set.data_set.data.get(&start) {
-                                    let v = serde_json::to_string(&value)?;
-                                    let c = serde_json::to_string(&item.value)?;
-                                    v != c
-                                }
-                                else {
-                                    true
-                                };
-
-                                if update {
-                                    data_set.data_set.data.insert(start, Item {
-                                            end,
-                                            is_final,
-                                            attributes:DataSetAttributes { cached: false},
-                                            value,
-                                        }
-                                    );
-                                    data_set.is_dirty = true;
-                                }
-                            }
-
-                            // A source whose query has no end keeps returning samples after the window, in no useful order,
-                            // so stop once the window is complete rather than when a sample after the window arrives.
-                            // Windows do not cross month boundaries, so the window is all in one bucket.
-                            let window_key = Self::key_for(&window_start.to_date());
-                            if data_set_map.get(&window_key)
-                                .is_some_and(|data_set| window_complete(&data_set.data_set.data, &window_start, &window_end))
-                            {
-                                break;
-                            }
-
-                            if let Some(continuation_query) = cq? {
-                                requests += 1;
-                                next_response = call_unless_cancelled(request_manager, &continuation_query, cancel, progress, &prefix(requests, rows)).await?;
-                            }
-                            else {
-                                break;
-                            }
-
+                // The window was fetched, unless it was cancelled part way through.
+                if !cancel.is_cancelled() {
+                    for (key, _, _) in Self::window_months(&window_start, &window_end, tz) {
+                        if let Some(data_set) = data_set_map.get_mut(&key) {
+                            data_set.fetched = true;
                         }
+                    }
 
-                        // The window was fetched, unless it was cancelled part way through.
-                        if !cancel.is_cancelled() {
-                            if let Some(data_set) = data_set_map.get_mut(&Self::key_for(&window_start.to_date())) {
-                                data_set.fetched = true;
-                            }
-
-                            // Fetch each day again, next, so that a problem with one day only loses the data for that day.
-                            if partial {
-                                let days = day_windows(&window_start, &window_end, tz);
-                                if days.len() > 1 {
-                                    for day in days.into_iter().rev() {
-                                        windows.push_front(day);
-                                    }
-                                }
+                    // Fetch each day again, next, so that a problem with one day only loses the data for that day.
+                    if partial {
+                        let days = day_windows(&window_start, &window_end, tz);
+                        if days.len() > 1 {
+                            for day in days.into_iter().rev() {
+                                windows.push_front(day);
                             }
                         }
                     }
@@ -479,18 +552,24 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
             Ok(())
         }.await;
 
-        // If the fetch was cancelled or failed we keep what we have, but the cached buckets may be missing data so are
-        // marked stale.
+        // If the fetch was cancelled or failed we keep what we have, but the months it was fetching may be missing data
+        // so are marked stale. A month which was fetched is also marked stale if it still needs data from outside the
+        // fetched period, e.g. when only the last week of it was shown. Months which were not fetched are left alone, so
+        // just looking at part of a month does not make it stale.
         let cancelled = cancel.is_cancelled() || fetch_result.is_err();
         let now = DateTime::now(tz);
 
         for key in result_keys {
             let ods = data_set_map.remove(&key).unwrap();
 
-            let stale = cancelled ||
-                start > &ods.data_set.start_date.at_midnight(tz) ||
-                (&now > end && end < &ods.data_set.next_date.at_midnight(tz));
-
+            let stale = match &attempted {
+                Some((attempted_start, attempted_end)) if attempted_keys.contains(&key) => {
+                    let month_start = ods.data_set.start_date.at_midnight(tz);
+                    let month_end = std::cmp::min(ods.data_set.next_date.at_midnight(tz), now);
+                    cancelled || missing_outside(&ods.data_set.data, &month_start, &month_end, attempted_start, attempted_end)
+                },
+                _ => false,
+            };
 
             result.push(ods.flush(&config, stale)?);
         }
@@ -658,7 +737,7 @@ mod window_complete_tests {
 
     use sparko_graphql::types::DateTime;
 
-    use super::{Item, window_complete};
+    use super::{Item, missing_outside, window_complete};
     use crate::data_set::DataSetAttributes;
 
     const SLOT: i64 = 1800;
@@ -691,6 +770,24 @@ mod window_complete_tests {
         assert!(!window_complete(&samples(&[3, 4, 5, 6, 7], &[]), &time(2), &time(8)));
         assert!(!window_complete(&samples(&[2, 3, 4, 5, 6], &[]), &time(2), &time(8)));
         assert!(!window_complete(&samples(&all, &[4]), &time(2), &time(8)));
+    }
+
+    #[test]
+    fn a_month_needs_more_only_if_data_is_missing_outside_the_fetched_period() {
+        // A month of slots 0 to 20, of which 10 to 20 were just fetched.
+        let missing = |slots: &[i64], not_final: &[i64]| {
+            missing_outside(&samples(slots, not_final), &time(0), &time(20), &time(10), &time(20))
+        };
+        let all: Vec<i64> = (0..20).collect();
+        assert!(!missing(&all, &[]));
+        // Missing or not final data in the fetched period does not matter, it was asked for.
+        assert!(!missing(&(0..15).collect::<Vec<_>>(), &[12]));
+        // But before it does.
+        assert!(missing(&(1..20).collect::<Vec<_>>(), &[]));
+        assert!(missing(&all, &[3]));
+
+        // A fetch of slots 0 to 10 leaves the end of the month to fetch.
+        assert!(missing_outside(&samples(&(0..10).collect::<Vec<_>>(), &[]), &time(0), &time(20), &time(0), &time(10)));
     }
 }
 
