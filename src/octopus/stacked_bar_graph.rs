@@ -90,15 +90,30 @@ pub(crate) fn format_money(minor_units: f64, currency: Currency) -> String {
     let decimals = currency.minor_units() as usize;
     let major = minor_units / 10f64.powi(decimals as i32);
     let sign = if major < 0.0 { "-" } else { "" };
-    let symbol = if currency == Currency::NONE { String::new() } else { currency.symbol() };
-    format!("{sign}{symbol}{:.decimals$}", major.abs())
+    format!("{sign}{}{:.decimals$}", currency_symbol(currency), major.abs())
 }
 
-/// A y axis label for the value, with decimal places for units, followed by suffix, e.g. "/h".
-pub(crate) fn axis_label(value: f64, decimals: usize, mode: StackedBarMode, currency: Currency, unit: &str, suffix: &str) -> String {
+fn currency_symbol(currency: Currency) -> String {
+    if currency == Currency::NONE { String::new() } else { currency.symbol() }
+}
+
+/// A y axis label for the value, just the number, with decimal places for units and in the major units of the currency
+/// for costs. The units are shown once, see axis_unit.
+pub(crate) fn axis_label(value: f64, decimals: usize, mode: StackedBarMode, currency: Currency) -> String {
     match mode {
-        StackedBarMode::Units => format!("{value:.decimals$} {unit}{suffix}"),
-        StackedBarMode::Cost => format!("{}{suffix}", format_money(value, currency)),
+        StackedBarMode::Units => format!("{value:.decimals$}"),
+        StackedBarMode::Cost => {
+            let decimals = currency.minor_units() as usize;
+            format!("{:.decimals$}", value / 10f64.powi(decimals as i32))
+        },
+    }
+}
+
+/// The units of the y axis labels, shown once above them, followed by suffix, e.g. kwh/day or £/h
+pub(crate) fn axis_unit(mode: StackedBarMode, currency: Currency, unit: &str, suffix: &str) -> String {
+    match mode {
+        StackedBarMode::Units => format!("{unit}{suffix}"),
+        StackedBarMode::Cost => format!("{}{suffix}", currency_symbol(currency)),
     }
 }
 
@@ -192,9 +207,10 @@ pub fn StackedBarGraph(
         .map(|i| i as f64 * step)
         .take_while(|value| *value <= y_max + step / 2.0)
         .map(|value| {
-            (y(value), axis_label(value, decimals, mode, currency, &unit, if per_hour { "/h" } else { "" }))
+            (y(value), axis_label(value, decimals, mode, currency))
         })
         .collect();
+    let y_unit = axis_unit(mode, currency, &unit, if per_hour { "/h" } else { "" });
 
     let all_x_ticks: Vec<(f64, &String)> = points
         .iter()
@@ -254,6 +270,8 @@ pub fn StackedBarGraph(
                 line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
                 text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
             }
+            // The units of the y axis labels, above them in the row of the legend.
+            text { class: "stacked-axis-label", x: LEFT - 8.0, y: 24.0, text_anchor: "end", "{y_unit}" }
             for (legend_x, label, color) in legend {
                 rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
                 text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
@@ -294,7 +312,7 @@ pub fn StackedBarGraph(
 mod tests {
     use sparko_graphql::types::Currency;
 
-    use super::{format_money, nice_step};
+    use super::{StackedBarMode, axis_label, axis_unit, format_money, nice_step};
 
     #[test]
     fn nice_step_rounds_up_to_readable_values() {
@@ -312,5 +330,15 @@ mod tests {
         assert_eq!(format_money(-5.5, gbp), "-£0.06");
         assert_eq!(format_money(1234.0, Currency::from_code("JPY").unwrap()), "¥1234");
         assert_eq!(format_money(12.0, Currency::NONE), "12");
+    }
+
+    #[test]
+    fn axis_labels_are_just_numbers_and_the_units_are_shown_once() {
+        let gbp = Currency::from_code("GBP").unwrap();
+        assert_eq!(axis_label(2.5, 1, StackedBarMode::Units, gbp), "2.5");
+        assert_eq!(axis_label(125.0, 0, StackedBarMode::Cost, gbp), "1.25");
+        assert_eq!(axis_unit(StackedBarMode::Units, gbp, "kwh", "/day"), "kwh/day");
+        assert_eq!(axis_unit(StackedBarMode::Cost, gbp, "kwh", "/h"), "£/h");
+        assert_eq!(axis_unit(StackedBarMode::Cost, Currency::NONE, "kwh", ""), "");
     }
 }

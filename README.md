@@ -41,8 +41,6 @@ The application is written entirely in the [Rust programming language](https://r
 
 The source code is all available on GitHub and available under the MIT or Apache2.0 license at your choice, and there are pre-compiled binaries for Windows and MacOS in both ```x86``` (64bit intel processors) and ```aarch64/arm64``` (Apple Silicon/ARM64) processor families.
 
-There is no export facility at the moment but all data received from the API is cached locally in the JSON format as it is received. This data is stored in plain files in a folder called ```.marco-sparko-cache``` in your home directory.
-
 A verbose mode causes the app to print the individual GraphQL queries, variables and responses made by the application. This may be useful if you are
 writing code which accesses the API.
 
