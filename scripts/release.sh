@@ -42,6 +42,8 @@ Usage: $(basename "$0") <command>
   publish          Publish the draft release, once the installers have been tried and the notes edited
   untag            Delete the release tags (and draft release) to make more changes before releasing
   watch            Watch the latest run of try or build again, e.g. after Ctrl+C, and download its installers
+  sync [branch]    On another machine, e.g. to build and test there: fetch both repos and check out and update the
+                   same branch in each, e.g. 0.4.4, v0.4.4 or main (default: the latest vX.X.X release branch)
 EOF
     exit 1
 }
@@ -172,6 +174,8 @@ watch_run() {
         echo >&2
         echo "To see why it failed: gh run view $id -R $OWNER/marco-sparko --log-failed" >&2
         echo "To re-run the failed jobs: gh run rerun $id -R $OWNER/marco-sparko --failed" >&2
+        echo "To download the installers which were built, e.g. to try one which failed its check:" >&2
+        echo "  gh run download $id -R $OWNER/marco-sparko --dir ~/Downloads/marco-sparko-run-$id" >&2
         die "The workflow run failed"
     fi
 }
@@ -199,6 +203,50 @@ download_release_installers() {
     echo "or with: gh release edit $tag -R $OWNER/marco-sparko --notes-file <file>"
     echo
     info "When it is ready, next: $(basename "$0") publish"
+}
+
+# The latest vX.X.X release branch on GitHub, by version, empty if there is none.
+latest_release_branch() {
+    git -C "$(repo_dir marco-sparko)" ls-remote --heads origin 'v*' \
+        | sed -n 's#.*refs/heads/\(v[0-9]*\.[0-9]*\.[0-9]*\)$#\1#p' \
+        | sort -t. -k1.2,1n -k2,2n -k3,3n | tail -1
+}
+
+cmd_sync() {
+    local branch=${1:-}
+    # A version on its own is the release branch for it.
+    if [[ "$branch" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        branch="v$branch"
+    fi
+    if [ -z "$branch" ]; then
+        branch=$(latest_release_branch)
+        [ -n "$branch" ] || die "There is no vX.X.X release branch on GitHub, give the branch, e.g. main"
+    fi
+    # Checked before changing either repo.
+    for repo in $REPOS; do
+        require_clean "$repo"
+        info "$repo: fetching"
+        git -C "$(repo_dir "$repo")" fetch -q --prune origin
+        git -C "$(repo_dir "$repo")" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null \
+            || die "$repo has no branch $branch on GitHub"
+    done
+
+    for repo in $REPOS; do
+        local dir
+        dir=$(repo_dir "$repo")
+        if [ "$(current_branch "$repo")" != "$branch" ]; then
+            if git -C "$dir" rev-parse -q --verify "refs/heads/$branch" >/dev/null; then
+                git -C "$dir" checkout -q "$branch"
+            else
+                git -C "$dir" checkout -q -b "$branch" --track "origin/$branch"
+            fi
+        fi
+        # Only fast forwards, so that commits made on this machine are never lost or merged by accident.
+        git -C "$dir" merge -q --ff-only "origin/$branch" \
+            || die "$repo: $branch has commits on this machine which are not on GitHub, push or remove them first"
+        info "$repo: on $branch at $(git -C "$dir" log -1 --format='%h %s')"
+    done
+    info "Both repos are on $branch, build with: dx serve"
 }
 
 cmd_status() {
@@ -471,5 +519,6 @@ case $command in
     publish) cmd_publish ;;
     untag) cmd_untag ;;
     watch) cmd_watch ;;
+    sync) cmd_sync "$@" ;;
     *) usage ;;
 esac

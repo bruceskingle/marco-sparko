@@ -333,5 +333,35 @@ done
 
 </details>
 
+## Other Build and Test Machines
+
+To build and test the latest release branch on another machine, with both repos checked out side by side there too:
+
+```
+./scripts/release.sh sync
+```
+
+Fetches both repos and checks out and updates the latest `vX.X.X` branch in each, so that marco-sparko is built with
+the matching sparko_graphql. For another branch, give it, e.g. `./scripts/release.sh sync 0.4.4` or
+`./scripts/release.sh sync main`. It does not need `gh`. It stops without changing anything if either repo has
+uncommitted changes, and only fast forwards, so it stops if a branch has commits on that machine which are not on
+GitHub. Then build as usual, e.g. `dx serve`.
+
+<details>
+<summary>Manual commands</summary>
+
+```
+export RELEASE=0.4.4
+
+for repo in sparko_graphql marco-sparko; do
+  cd ~/git/$repo
+  git fetch
+  git checkout v$RELEASE
+  git pull --ff-only
+done
+```
+
+</details>
+
 # Old Release Instructions
 The manual build steps used before the workflow are in [Release-archive.md](Release-archive.md).
