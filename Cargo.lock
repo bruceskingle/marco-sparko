@@ -2914,7 +2914,7 @@ dependencies = [
 
 [[package]]
 name = "marco-sparko"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "anyhow",
  "arboard",
@@ -4878,7 +4878,7 @@ dependencies = [
 
 [[package]]
 name = "sparko_graphql"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "display_json",
  "indexmap",
