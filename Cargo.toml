@@ -32,8 +32,8 @@ indexmap = "2.7.1"
 time-tz = "2.0.0"
 #tzdb = "0.7.2"
 #tz-rs = "0.7.0"
-dioxus = { version = "0.7.3", features = ["router", "desktop"] }
-dioxus-desktop = "0.7"
+dioxus = { version = "0.7.10", features = ["router", "desktop"] }
+dioxus-desktop = "0.7.10"
 dioxus-free-icons = { version = "0.10", features = ["lucide"] }
 # Native file dialogs, the same version and features as dioxus-desktop uses
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }

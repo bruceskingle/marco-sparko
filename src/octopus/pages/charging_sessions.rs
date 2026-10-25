@@ -400,6 +400,12 @@ fn average_kw(energy_kwh: Decimal, minutes: i64) -> Option<String> {
     }
 }
 
+/// The price per unit of energy of a cost in the minor units of its currency, e.g. pence per kWh, None if there was no
+/// energy.
+fn unit_price(cost: Decimal, energy: Decimal) -> Option<String> {
+    energy.is_positive().then(|| two_dp(&(cost / energy)))
+}
+
 /// A duration as hours:minutes, or days:hours:minutes if it is a day or more.
 fn long_duration(minutes: i64) -> String {
     if minutes >= 24 * 60 {
@@ -470,6 +476,11 @@ fn sessions_table(sessions: &[&ChargingSession], battery_size: Option<Decimal>, 
     let total_cost = charged.iter().filter_map(|session| session.cost.as_ref().map(|(value, _)| *value))
         .fold(Decimal::ZERO, |total, value| total + value);
     let total_minutes: i64 = charged.iter().map(|session| minutes(session)).sum();
+    // The average price is of the sessions with a cost, e.g. public charging, as smart charging has none.
+    let costed_energy = charged.iter()
+        .filter(|session| session.cost.is_some())
+        .filter_map(|session| session.energy.as_ref().map(|(value, _)| *value))
+        .fold(Decimal::ZERO, |total, value| total + value);
     let count = if plugged_in > 0 {
         format!("{} charging, {plugged_in} plugged in without charging", charged.len())
     }
@@ -491,6 +502,7 @@ fn sessions_table(sessions: &[&ChargingSession], battery_size: Option<Decimal>, 
                 th { class: "quantity", "Avg Power" br {} "(kW)" }
                 if has_cost {
                     th { "Cost" }
+                    th { title: "The cost divided by the energy added", class: "quantity", "Price" br {} "(p/{energy_unit})" }
                 }
                 if has_percent {
                     th { title: "The energy added as a percentage of the battery size configured in Octopus, not of the EV's actual battery", class: "quantity", "% Battery" }
@@ -516,6 +528,8 @@ fn sessions_table(sessions: &[&ChargingSession], battery_size: Option<Decimal>, 
                     td { class: "numeric derived", {cell(session.energy.as_ref().and_then(|(value, _)| average_kw(*value, minutes(session))))} }
                     if has_cost {
                         td { class: "numeric", {cell(session.cost.as_ref().map(|(value, currency)| money(value, currency)))} }
+                        td { class: "numeric derived", {cell(session.cost.as_ref().zip(session.energy.as_ref())
+                            .and_then(|((cost, _), (energy, _))| unit_price(*cost, *energy)))} }
                     }
                     if has_percent {
                         td { class: "numeric", {cell(session.state_of_charge_final.map(|value| two_dp(&value)))} }
@@ -557,6 +571,7 @@ fn sessions_table(sessions: &[&ChargingSession], battery_size: Option<Decimal>, 
                 td { class: "numeric derived", {cell(average_kw(total_energy, total_minutes))} }
                 if has_cost {
                     td { class: "numeric derived", {money(&total_cost, &currency)} }
+                    td { class: "numeric derived", {cell(unit_price(total_cost, costed_energy))} }
                 }
                 if has_percent {
                     td {}

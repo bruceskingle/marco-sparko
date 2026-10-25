@@ -93,10 +93,19 @@ require_clean() {
     fi
 }
 
+# The given repo is on the release branch for the version in the Cargo.toml files, e.g. v0.4.4 for version 0.4.4.
 require_branch() {
     local branch
     branch=$(current_branch "$1")
-    [ "$branch" = "$2" ] || die "$1 is on $branch, not $2"
+    if [ "$branch" != "$2" ]; then
+        if [[ "$branch" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            die "$1 is on the release branch $branch, but the version in the Cargo.toml files is ${2#v}, so the release branch should be $2.
+       If you are releasing ${branch#v}, set the version with: ./scripts/release.sh start ${branch#v}
+       If you are releasing ${2#v}, switch branch with: git -C $(repo_dir "$1") checkout $2"
+        fi
+        die "$1 is on the branch $branch, but releasing version ${2#v} (from the Cargo.toml files) needs the release branch $2.
+       Switch branch with: git -C $(repo_dir "$1") checkout $2"
+    fi
 }
 
 require_pushed() {

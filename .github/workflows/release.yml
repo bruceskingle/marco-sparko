@@ -21,7 +21,7 @@ on:
 env:
   TAG: ${{ inputs.tag }}
   # Must match the dioxus version in Cargo.lock.
-  DX_VERSION: "0.7.3"
+  DX_VERSION: "0.7.10"
   CARGO_TERM_COLOR: always
 
 # Read only, except for the publish job.
