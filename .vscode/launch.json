@@ -134,7 +134,8 @@
             "cwd": "${workspaceFolder}",
             "env": {
                 "CARGO_MANIFEST_DIR": "${workspaceFolder}",
-                "RUST_BACKTRACE": "1"
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
             }
         },
 
@@ -161,7 +162,8 @@
             "stdio": [null, "${workspaceFolder}/target/verbose.log", null],
             "env": {
                 "CARGO_MANIFEST_DIR": "${workspaceFolder}",
-                "RUST_BACKTRACE": "1"
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
             }
         },
         {

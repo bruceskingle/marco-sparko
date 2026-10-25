@@ -1,5 +1,9 @@
 # Release 0.4.4
 
+> **Windows:** Marco Sparko for Windows now comes only as a `setup.exe`, there is no longer a `.msi` installer. If you
+> installed an earlier version from the `.msi`, uninstall it first (Settings, Apps, Marco Sparko, Uninstall), so that
+> you do not end up with two copies. Your profiles and downloaded data are kept.
+
 ## New
 - **Drill down by double clicking.** On the Graph view, double click a bar to see it in more detail: a month shows its
   weeks, a week its days, and a day its individual half hour readings.

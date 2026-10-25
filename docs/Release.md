@@ -74,13 +74,44 @@ gh run download $RUN -n windows-arm64 -n macos-aarch64 --dir ~/Downloads/marco-s
 gh api repos/bruceskingle/marco-sparko/actions/runs/$RUN/artifacts --jq '.artifacts[] | "\(.name) \(.size_in_bytes)"'
 ```
 
-On a Windows VM (with `gh` installed from https://github.com/cli/cli/releases and signed in), in PowerShell:
+On a Windows VM, in PowerShell:
 
-```
-cd ~\git\marco-sparko
-$RUN = gh run list --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId'
-gh run download $RUN -n windows-arm64 --dir $HOME\Downloads\marco-sparko-test
-```
+1. Install `gh` with `winget install --id GitHub.cli`, or from https://github.com/cli/cli/releases (the "windows
+   arm64 installer" or "windows amd64 installer", which is the `.msi`). Then open a new PowerShell window and sign in
+   with `gh auth login`.
+
+2. Find the run ID, the number which identifies the run of the workflow. It is shown in any of these places:
+   - On the Mac, in the output of `try`, `build` or `watch`: `==> Watching run 40215599738 ...`
+   - In the first line which `gh run watch` shows, after "Release ·": `* v0.4.4 Release · 40215599738`. The other
+     numbers it shows, `(ID 121252356794)` after each job, are job IDs, which are not what is needed here (they are
+     only used to get one job's log, see below).
+   - In the address of the run's page on the Actions tab: `.../marco-sparko/actions/runs/40215599738`
+   - Listed with the recent runs, on either machine, with
+     `gh run list -R bruceskingle/marco-sparko --workflow release.yml --limit 5`
+     (the ID is the long number in the ID column, the newest run is first).
+
+3. Set `$RUN` to it. The variables set on the Mac are not set in PowerShell, so this is always needed there. With the
+   number from step 2 in place of 40215599738:
+
+   ```
+   $RUN = "40215599738"
+   ```
+
+   or, to use the latest run without looking up its number:
+
+   ```
+   $RUN = gh run list -R bruceskingle/marco-sparko --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId'
+   ```
+
+   `echo $RUN` shows which run it is set to.
+
+4. Download the installer, `windows-arm64` on an ARM PC or `windows-x64` on an Intel or AMD PC:
+
+   ```
+   gh run download $RUN -R bruceskingle/marco-sparko -n windows-arm64 --dir $HOME\Downloads\marco-sparko-test
+   ```
+
+   `-R` means these commands work in any directory. The setup.exe is in `Downloads\marco-sparko-test`.
 
 The artifacts can also be downloaded from the run's page on the Actions tab of the marco-sparko repo, under
 **Artifacts** at the bottom of the Summary (only the name is a link).
