@@ -69,6 +69,14 @@ body {
     /* color: #0f172a; */
 }
 
+/* The app icon in the top right corner of the home page. */
+.home-icon {
+    float: right;
+    width: 128px;
+    height: 128px;
+    margin: 16px 16px 16px 16px;
+}
+
 #main {
     display: flex;
     flex-direction: column;

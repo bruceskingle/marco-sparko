@@ -6,6 +6,8 @@ use dioxus::prelude::*;
 
 include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 
+const APP_ICON: Asset = asset!("/assets/MarcoSparko.png");
+
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]
 pub fn Home(
@@ -136,6 +138,7 @@ pub fn Home(
             rsx! {
                 div {
                     // h1 { "This is Home #{xid}!" }
+                    img { class: "home-icon", src: APP_ICON, alt: "Marco Sparko" }
                     h1 { "Modules" }
                     for (module_id , active) in modules {
                         Link {
