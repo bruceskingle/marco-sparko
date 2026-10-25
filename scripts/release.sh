@@ -15,7 +15,7 @@ REPOS="sparko_graphql marco-sparko"
 WORKFLOW=release.yml
 # The installers attached to each release, with VERSION replaced by the version.
 INSTALLERS="MarcoSparko_VERSION_aarch64.dmg MarcoSparko_VERSION_x64.dmg MarcoSparko_VERSION_x64-setup.exe
-MarcoSparko_VERSION_x64_en-US.msi MarcoSparko_VERSION_arm64-setup.exe MarcoSparko_VERSION_arm64_en-US.msi"
+MarcoSparko_VERSION_arm64-setup.exe"
 
 GIT_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 

@@ -240,7 +240,7 @@ gh release download release$RELEASE --dir ~/Downloads/marco-sparko-$RELEASE
 On a Windows VM in PowerShell, just the Windows installers (with the version in place of 0.4.4):
 
 ```
-gh release download release0.4.4 -R bruceskingle/marco-sparko -p '*.msi' -p '*-setup.exe' --dir $HOME\Downloads\marco-sparko
+gh release download release0.4.4 -R bruceskingle/marco-sparko -p '*-setup.exe' --dir $HOME\Downloads\marco-sparko
 ```
 
 The release should have these files:
@@ -249,9 +249,7 @@ The release should have these files:
 MarcoSparko_X.X.X_aarch64.dmg
 MarcoSparko_X.X.X_x64.dmg
 MarcoSparko_X.X.X_x64-setup.exe
-MarcoSparko_X.X.X_x64_en-US.msi
 MarcoSparko_X.X.X_arm64-setup.exe
-MarcoSparko_X.X.X_arm64_en-US.msi
 ```
 
 </details>

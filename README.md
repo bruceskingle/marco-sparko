@@ -63,7 +63,7 @@ latest release:
 
 Look for the one with the <img src="docs/gettingStarted/latest.png" width="60"> label, and then select the correct version for your computer. 
 
-The ```.dmg``` files are for Mac OSX and the ```.exe``` and ```.msi``` ones are for Microsoft Windows. The ```.exe``` and ```.msi``` files are just different ways of installing, the detailed installation instructions show the ```setup.exe``` version so unless you have a preference for the ```.msi``` approach you should use that.
+The ```.dmg``` files are for Mac OSX and the ```setup.exe``` ones are for Microsoft Windows. Releases up to 0.4.3 also had ```.msi``` installers for Windows, which install the same app.
 
 The ```x86``` files are for Intel based computers and the ```aarch64/arm64``` ones are for ARM CPUs, including "Apple Silicone" or Apple M1, M2 etc processors.
 

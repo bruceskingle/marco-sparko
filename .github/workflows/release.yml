@@ -115,43 +115,39 @@ jobs:
       - name: Run the tests
         run: cargo test --locked
 
-      # The Windows installers are named, as from dx 0.7.10 the default is only the NSIS one.
+      # The defaults: a .dmg on macOS and an NSIS setup.exe on Windows.
       - name: Build the installers
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            dx bundle --release --package-types msi --package-types nsis
-          else
-            dx bundle --release
-          fi
+        run: dx bundle --release
 
       - name: Collect the installers
         id: collect
         run: |
           mkdir -p dist
-          find target/dx -path '*/bundle/*' -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \) -exec cp {} dist/ \;
+          find target/dx -path '*/bundle/*' -type f \( -name '*.dmg' -o -name '*-setup.exe' \) -exec cp {} dist/ \;
           ls -l dist
           if [ -z "$(ls dist)" ]; then
             echo "No installers were built"
             exit 1
           fi
 
-      # Installs the MSI as a user would and checks that the app starts and is still running 30 seconds later.
+      # Installs the app as a user would, silently, and checks that it starts and is still running 30 seconds later.
       - name: Check the installed app starts
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $msi = Get-ChildItem dist -Filter *.msi | Select-Object -First 1
-          if (-not $msi) {
-            throw "No MSI was built, see Build the installers"
+          $setup = Get-ChildItem dist -Filter *-setup.exe | Select-Object -First 1
+          if (-not $setup) {
+            throw "No setup.exe was built, see Build the installers"
           }
-          $install = Start-Process msiexec -ArgumentList "/i `"$($msi.FullName)`" /qn /l*v msi.log" -Wait -PassThru
+          $install = Start-Process $setup.FullName -ArgumentList "/S" -Wait -PassThru
           if ($install.ExitCode -ne 0) {
-            Get-Content msi.log -Tail 50
-            throw "The MSI failed to install, exit code $($install.ExitCode)"
+            throw "The installer failed, exit code $($install.ExitCode)"
           }
 
-          $exe = Get-ChildItem "$env:ProgramFiles", "$env:LOCALAPPDATA\Programs" -Recurse -Depth 2 -Filter *.exe -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like '*marco*' } |
+          # Installed for the current user in LOCALAPPDATA, or for everyone in Program Files. The uninstaller is in the
+          # same directory, so is left out.
+          $exe = Get-ChildItem "$env:LOCALAPPDATA", "$env:LOCALAPPDATA\Programs", "$env:ProgramFiles" -Recurse -Depth 1 -Filter *.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like '*marco*' -and $_.Name -notlike '*uninstall*' } |
             Select-Object -First 1
           if (-not $exe) {
             throw "The installed app was not found"
