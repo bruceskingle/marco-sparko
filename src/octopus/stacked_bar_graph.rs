@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use sparko_graphql::types::{Currency, DateTime};
@@ -7,7 +9,8 @@ const LEFT: f64 = 64.0;
 const RIGHT: f64 = 16.0;
 const TOP: f64 = 44.0;
 const BOTTOM: f64 = 32.0;
-const MAX_X_TICKS: usize = 12;
+/// The space around an x axis label in its band.
+const LABEL_PADDING: f64 = 4.0;
 const Y_TICKS: f64 = 4.0;
 const BAR_GAP: f64 = 2.0;
 /// An estimate, a little on the wide side, of the width of a character of the 12px axis labels, to leave out x axis
@@ -23,7 +26,12 @@ pub enum StackedBarMode {
     Cost,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+/// The most bars a graph should have, more make dragging across them to zoom too slow to follow. Pages disable the
+/// periods that would have more.
+pub const MAX_BARS: usize = 2200;
+
+/// In order from the shortest, so that a page can show the next longer period when one is too short for its range.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StackedBarPeriod {
     Raw,
     /// Consecutive readings with the same unit rates, so the bars have different widths.
@@ -67,6 +75,9 @@ pub struct StackedBarPoint {
     pub start: i64,
     pub end: i64,
     pub tick_label: Option<String>,
+    /// How round the time of the tick label is, from time_tick, or 0 if they are all as good, e.g. days. When not all
+    /// of the labels fit, those with the highest ranks are shown.
+    pub tick_rank: u8,
     pub period_label: String,
     /// The value of each series, in the order of the graph's series, bottom first.
     pub values: Vec<f64>,
@@ -106,6 +117,52 @@ fn menu_position(x: f64, y: f64, menu: &[BarMenuItem]) -> String {
     let vertical = if y + height > size.height { format!("bottom: {}px;", size.height - y) } else { format!("top: {y}px;") };
     let horizontal = if x + width > size.width { format!("right: {}px;", size.width - x) } else { format!("left: {x}px;") };
     format!("{vertical} {horizontal}")
+}
+
+/// Times of day which make good x axis labels, in seconds from midnight, finest first.
+const TICK_INTERVALS: [i64; 12] = [10, 30, 60, 300, 600, 900, 1800, 3600, 3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600];
+
+/// The roundest time of day from start to end, as unix timestamps, in the timezone, and its rank, which is higher the
+/// rounder it is, e.g. midnight is the highest and a time on 10 seconds is 1, for the tick label of a bar.
+pub fn time_tick(start: i64, end: i64, tz: &'static Tz) -> Option<(i64, u8)> {
+    let offset = DateTime::from_unix_timestamp(start).ok()?.to_timezone(tz).offset().whole_seconds() as i64;
+    let local_start = start + offset;
+    TICK_INTERVALS.iter()
+        .enumerate()
+        .rev()
+        .map(|(index, interval)| (local_start + (interval - local_start.rem_euclid(*interval)).rem_euclid(*interval) - offset, index as u8 + 1))
+        .find(|(boundary, _)| *boundary < end)
+}
+
+/// The tick label and rank of a bar from start to end, its roundest time of day, with seconds if it is not on a minute.
+pub fn time_tick_label(start: i64, end: i64, tz: &'static Tz) -> (Option<String>, u8) {
+    let Some((boundary, rank)) = time_tick(start, end, tz) else {
+        return (None, 0);
+    };
+    let format = if boundary.rem_euclid(60) == 0 { "[hour]:[minute]" } else { "[hour]:[minute]:[second]" };
+    let label = DateTime::from_unix_timestamp(boundary).ok()
+        .and_then(|time| time.to_timezone(tz).format(&time::format_description::parse(format).unwrap()).ok());
+    (label, rank)
+}
+
+/// The x axis bands of tick labels, as (x, label, rank) from left to right, each from its x to the next one's, the last
+/// to end_x, as (x, width, label), and whether all of the labels fit in their bands.
+fn tick_bands(ticks: &[&(f64, String, u8)], end_x: f64) -> (Vec<(f64, f64, Option<String>)>, bool) {
+    let bands: Vec<(f64, f64, Option<String>)> = ticks.iter()
+        .enumerate()
+        .map(|(index, (tick_x, label, _))| {
+            let right = ticks.get(index + 1).map(|next| next.0).unwrap_or(end_x);
+            (*tick_x, (right - tick_x).max(0.0), Some(label.clone()))
+        })
+        .collect();
+    let fit = bands.iter()
+        .all(|(_, band_width, label)| label.as_ref().is_none_or(|label| label_width(label) <= *band_width));
+    (bands, fit)
+}
+
+/// An estimate of the width of an x axis label with the space around it.
+fn label_width(label: &str) -> f64 {
+    label.chars().count() as f64 * LABEL_CHAR_WIDTH + LABEL_PADDING
 }
 
 /// A period along the x axis, e.g. a day, shown as a faint band under the graph with its label in the middle.
@@ -213,9 +270,6 @@ pub fn StackedBarGraph(
     /// Whether the series are named above the graph, e.g. not when there is a series for each of many sessions, which
     /// the tooltip names.
     #[props(default = true)] legend: bool,
-    /// Whether each x axis label is in the middle of its bar, e.g. a day, rather than starting at the start of its bar,
-    /// e.g. the first reading of a day.
-    #[props(default)] centre_labels: bool,
     /// Called with the start and end of a bar when it is double clicked, to show it in more detail.
     #[props(default)] on_drill: Option<EventHandler<(i64, i64)>>,
     /// Called with the start of the first bar and the end of the last when the mouse is dragged across more than one
@@ -321,45 +375,42 @@ pub fn StackedBarGraph(
         .collect();
     let y_unit = axis_unit(mode, currency, &unit, if per_hour { "/h" } else { "" });
 
-    // The tick at the start of each labelled bar, and its label in the middle of the bar or starting at the tick.
-    let label_anchor = if centre_labels { "middle" } else { "start" };
-    let all_x_ticks: Vec<(f64, f64, &String)> = points
-        .iter()
-        .filter_map(|point| point.tick_label.as_ref().map(|label| {
-            let label_x = if centre_labels { (x(point.start) + x(point.end)) / 2.0 } else { x(point.start) };
-            (x(point.start), label_x, label)
-        }))
-        .collect();
-    let every = all_x_ticks.len().div_ceil(MAX_X_TICKS).max(1);
-    let x_ticks: Vec<(f64, f64, String)> = all_x_ticks
-        .into_iter()
-        .step_by(every)
-        // Leave out a label which would go off the edge, e.g. the last day of raw readings when it is near the end.
-        .filter(|(_, label_x, label)| {
-            let label_width = label.chars().count() as f64 * LABEL_CHAR_WIDTH;
-            let (left, right) = if centre_labels {
-                (label_x - label_width / 2.0, label_x + label_width / 2.0)
-            }
-            else {
-                (*label_x, label_x + label_width)
-            };
-            left >= 0.0 && right <= width
-        })
-        .map(|(tick_x, label_x, label)| (tick_x, label_x, label.clone()))
-        .collect();
-    // The position and width of each band, and its longest label which fits, if any, within the graph.
-    let bands: Vec<(f64, f64, Option<String>)> = x_bands.iter()
-        .map(|band| {
-            let left = x(band.start).max(LEFT);
-            let right = x(band.end).min(width - RIGHT);
-            let band_width = (right - left).max(0.0);
-            let label = band.labels.iter()
-                .find(|label| label.chars().count() as f64 * LABEL_CHAR_WIDTH + 4.0 <= band_width)
-                .cloned();
-            (left, band_width, label)
-        })
-        .filter(|(_, band_width, _)| *band_width > 0.0)
-        .collect();
+    // The bands under the x axis, each with its label in the middle: the x_bands, or if there are none, a band from each
+    // labelled bar to the next one shown. As many tick labels are shown as fit: those of the lowest rank which still
+    // fit with all the higher ranked ones, or if even the highest ranked ones do not fit, every so many of them, as
+    // few apart as fit.
+    let bands: Vec<(f64, f64, Option<String>)> = if x_bands.is_empty() {
+        let all_x_ticks: Vec<(f64, String, u8)> = points.iter()
+            .filter_map(|point| point.tick_label.as_ref().map(|label| (x(point.start), label.clone(), point.tick_rank)))
+            .collect();
+        let end_x = points.last().map(|point| x(point.end)).unwrap_or(LEFT);
+        let ranks: BTreeSet<u8> = all_x_ticks.iter().map(|tick| tick.2).collect();
+        let ranked = |rank: u8| all_x_ticks.iter().filter(|tick| tick.2 >= rank).collect::<Vec<_>>();
+        ranks.iter()
+            .map(|rank| tick_bands(&ranked(*rank), end_x))
+            .find(|(_, fit)| *fit)
+            .or_else(|| {
+                let top = ranked(ranks.last().copied().unwrap_or_default());
+                (1..=top.len())
+                    .map(|every| tick_bands(&top.iter().step_by(every).copied().collect::<Vec<_>>(), end_x))
+                    .find(|(_, fit)| *fit)
+            })
+            .map(|(bands, _)| bands)
+            .unwrap_or_default()
+    }
+    else {
+        x_bands.iter()
+            .map(|band| {
+                let left = x(band.start).max(LEFT);
+                let right = x(band.end).min(width - RIGHT);
+                let band_width = (right - left).max(0.0);
+                // The longest label which fits, if any.
+                let label = band.labels.iter().find(|label| label_width(label) <= band_width).cloned();
+                (left, band_width, label)
+            })
+            .filter(|(_, band_width, _)| *band_width > 0.0)
+            .collect()
+    };
 
     let legend: Vec<(f64, String, String)> = segment_names
         .iter()
@@ -417,8 +468,8 @@ pub fn StackedBarGraph(
         }
     };
     let on_down = move |index: usize| move |event: MouseEvent| {
-        // Only the left button drags, the right one opens the menu.
-        if event.trigger_button() == Some(MouseButton::Primary) {
+        // Only the left button drags, the right one opens the menu, and only when there is something to zoom to.
+        if on_zoom.is_some() && event.trigger_button() == Some(MouseButton::Primary) {
             dragged.set(Some((index, index)));
         }
     };
@@ -496,12 +547,6 @@ pub fn StackedBarGraph(
             for (legend_x, label, color) in legend {
                 rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
                 text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
-            }
-            if bands.is_empty() {
-                for (tx, lx, label) in x_ticks {
-                    line { class: "stacked-tick", x1: tx, x2: tx, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
-                    text { class: "stacked-axis-label", x: lx, y: height - 10.0, text_anchor: label_anchor, "{label}" }
-                }
             }
             // A gap of a pixel each side shows where one band ends and the next starts.
             for (band_x, band_width, label) in bands {
@@ -604,10 +649,24 @@ pub fn StackedBarGraph(
 mod tests {
     use sparko_graphql::types::Currency;
 
-    use super::{StackedBarMode, axis_label, axis_unit, day_bands, format_money, nice_step};
+    use super::{StackedBarMode, axis_label, axis_unit, day_bands, format_money, nice_step, time_tick_label};
 
     fn time(text: &str) -> i64 {
         time::OffsetDateTime::parse(text, &time::format_description::well_known::Rfc3339).unwrap().unix_timestamp()
+    }
+
+    #[test]
+    fn a_bar_is_labelled_with_its_roundest_local_time() {
+        let london = time_tz::timezones::db::europe::LONDON;
+        // 10 second bars in BST, one with a 3 hour boundary in it but not at its start, as when a reading is missing.
+        assert_eq!(time_tick_label(time("2026-10-24T14:00:10Z"), time("2026-10-24T14:00:20Z"), london), (Some(String::from("15:00:10")), 1));
+        assert_eq!(time_tick_label(time("2026-10-24T13:59:55Z"), time("2026-10-24T14:00:15Z"), london), (Some(String::from("15:00")), 9));
+        // Half hour bars, local midnight is the roundest.
+        let (_, half_past) = time_tick_label(time("2026-10-24T13:30:00Z"), time("2026-10-24T14:00:00Z"), london);
+        let (_, hour) = time_tick_label(time("2026-10-24T14:00:00Z"), time("2026-10-24T14:30:00Z"), london);
+        let (midnight, day) = time_tick_label(time("2026-10-24T23:00:00Z"), time("2026-10-24T23:30:00Z"), london);
+        assert!(half_past < hour && hour < day);
+        assert_eq!(midnight.as_deref(), Some("00:00"));
     }
 
     #[test]

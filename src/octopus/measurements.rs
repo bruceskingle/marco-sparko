@@ -19,7 +19,7 @@ use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, Uti
 
 use super::graphql::meter;
 use super::category_filter::{CategoryFilter, CategoryValues, KNOWN_LABELS, STANDING_CHARGE_LABEL};
-use super::stacked_bar_graph::{BarMenuItem, day_bands, StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries};
+use super::stacked_bar_graph::{BarMenuItem, day_bands, StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries, time_tick_label};
 use super::category_filter::SOLID;
 use super::trend_graph::{CATEGORY_LEGEND_COLOR, TrendGraph, TrendLegendItem, TrendLine, TrendSmoothing, cumulative_by_year, moving_average, range_years, year_positions};
 
@@ -28,6 +28,7 @@ struct AggregatedPoint {
     start: i64,
     end: i64,
     tick_label: Option<String>,
+    tick_rank: u8,
     period_label: String,
     /// The units of each label, in the order of the labels.
     units: Vec<f64>,
@@ -72,21 +73,22 @@ pub struct MeasurementsDataSet {
     pub data: Vec<MonthlyFixedSlotDataSet<MeasurementsConsumptionSource>>,
 }
 
-/// A smart device whose readings are fetched instead of a meter point's, see SmartDevice.
-#[derive(Clone, PartialEq, Debug)]
-pub struct MeasurementsDevice {
-    pub id: String,
-    /// Whether the readings are the ones the server models for the device, rather than measured ones.
-    pub modelled: bool,
-}
+// Readings of a smart device are not used, see the Smart Flex Devices list in pages/measurements.rs.
+// /// A smart device whose readings are fetched instead of a meter point's, see SmartDevice.
+// #[derive(Clone, PartialEq, Debug)]
+// pub struct MeasurementsDevice {
+    // pub id: String,
+    // /// Whether the readings are the ones the server models for the device, rather than measured ones.
+    // pub modelled: bool,
+// }
 
 impl MeasurementsDataSet {
-    /// The readings of the meter point mpan, or of device if it is given.
+    /// The readings of the meter point mpan.
     pub async fn new(
         account_number: &String,
         mpan: &String,
         export: bool,
-        device: Option<MeasurementsDevice>,
+        // device: Option<MeasurementsDevice>,
         start: &DateTime,
         end: &DateTime,
         reload: Option<(DateTime, DateTime)>,
@@ -98,17 +100,18 @@ impl MeasurementsDataSet {
         -> anyhow::Result<Self>
     {
 
-        let hash_key = match &device {
-            Some(device) => format!("{}#{}#{}#{}#DeviceMeasurements", account_number, mpan, device.id, if device.modelled { "Modelled" } else { "Measured" }),
-            None => format!("{}#{}#MeasurementsConsumption", account_number, mpan),
-        };
+        // let hash_key = match &device {
+        //     Some(device) => format!("{}#{}#{}#{}#DeviceMeasurements", account_number, mpan, device.id, if device.modelled { "Modelled" } else { "Measured" }),
+        //     None => format!("{}#{}#MeasurementsConsumption", account_number, mpan),
+        // };
+        let hash_key = format!("{}#{}#MeasurementsConsumption", account_number, mpan);
         let source = MeasurementsConsumptionSource{
             account_number: account_number.clone(),
             mpan: mpan.clone(),
             hash_key,
             tz,
             export,
-            device,
+            // device,
         };
         
         let data = MonthlyFixedSlotDataSet::fetch(
@@ -238,6 +241,7 @@ impl MeasurementsDataSet {
                 start: point.start,
                 end: point.end,
                 tick_label: point.tick_label,
+                tick_rank: point.tick_rank,
                 period_label: point.period_label,
                 values: categories.iter().map(|category| category.values[index]).collect(),
             })
@@ -261,8 +265,6 @@ impl MeasurementsDataSet {
                 unit,
                 per_hour: period == StackedBarPeriod::Rate,
                 x_bands,
-                // A bar of a day or longer is labelled in its middle, a reading or rate period at the start of its day.
-                centre_labels: matches!(period, StackedBarPeriod::Day | StackedBarPeriod::Week | StackedBarPeriod::Month),
                 on_drill,
                 on_zoom,
                 menu,
@@ -347,6 +349,11 @@ impl MeasurementsDataSet {
                 suffix: String::from(suffix),
             }
         }
+    }
+
+    /// The number of bars in the graph from start to end by period.
+    pub fn graph_bars(&self, start: &DateTime, end: &DateTime, tz: &'static Tz, period: StackedBarPeriod) -> usize {
+        self.graph_points(start, end, tz, period).1.len()
     }
 
     /// The readings from start to end aggregated by period, with the labels in the order of their values.
@@ -445,11 +452,12 @@ impl MeasurementsDataSet {
                     (start_date.at_midnight(tz), end_date.at_midnight(tz))
                 }
             };
+            let (tick_label, tick_rank) = match period {
+                StackedBarPeriod::Raw if single_day => time_tick_label(value.start.unix_timestamp(), value.end.unix_timestamp(), tz),
+                _ => (None, 0),
+            };
             let tick_label = match period {
-                StackedBarPeriod::Raw if single_day => {
-                    (value.start.hour() % 3 == 0 && value.start.minute() == 0)
-                        .then(|| value.start.format(&time_format).unwrap())
-                }
+                StackedBarPeriod::Raw if single_day => tick_label,
                 StackedBarPeriod::Raw => {
                     (last_date != Some(date)).then(|| date.format(&day_format).unwrap())
                 }
@@ -489,6 +497,7 @@ impl MeasurementsDataSet {
                 start: bucket_start.unix_timestamp(),
                 end: bucket_end.unix_timestamp(),
                 tick_label,
+                tick_rank,
                 period_label: group_label,
                 units: labels.iter()
                     .map(|label| value.consumption.get(label).and_then(|c| c.units.to_f64()).unwrap_or_default())
@@ -514,11 +523,11 @@ impl MeasurementsDataSet {
                     },
                     _ => {
                         let mut point = point;
-                        point.tick_label = if single_day {
-                            Some(value.start.format(&time_format).unwrap())
+                        (point.tick_label, point.tick_rank) = if single_day {
+                            time_tick_label(value.start.unix_timestamp(), value.end.unix_timestamp(), tz)
                         }
                         else {
-                            (last_run_date != Some(date)).then(|| date.format(&day_format).unwrap())
+                            ((last_run_date != Some(date)).then(|| date.format(&day_format).unwrap()), 0)
                         };
                         run_start = Some(value.start);
                         last_run_date = Some(date);
@@ -734,8 +743,8 @@ pub struct MeasurementsReading {
     unit: String,
 }
 
-/// The label of the consumption of a device reading which has no statistics, see MeasurementsReading::from.
-const DEVICE_LABEL: &str = "Device";
+// /// The label of the consumption of a device reading which has no statistics, see MeasurementsReading::from.
+// const DEVICE_LABEL: &str = "Device";
 
 impl MeasurementsReading {
     const FINAL_DELAY: Duration = Duration::from_hours(3 * 24);
@@ -817,10 +826,11 @@ impl MeasurementsReading {
             }
         }
     }
-    /// A reading from the server. A device's readings may have no statistics, or ones a meter point's do not, so for a
-    /// device statistics which are not understood are left out, and a reading without any records its value as the
-    /// consumption labelled DEVICE_LABEL.
-    fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface, query_time: &DateTime, device: bool) -> anyhow::Result<Self> {
+    /// A reading from the server.
+    // For readings of a smart device, which are not used: a device's readings may have no statistics, or ones a meter
+    // point's do not, so for a device statistics which are not understood are left out, and a reading without any
+    // records its value as the consumption labelled DEVICE_LABEL.
+    fn from(node: meter::home_and_ev_consumption_breakdown::MeasurementInterface, query_time: &DateTime /* , device: bool */) -> anyhow::Result<Self> {
         match node {
             meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
 
@@ -829,7 +839,7 @@ impl MeasurementsReading {
             meter::home_and_ev_consumption_breakdown::MeasurementInterface::IntervalMeasurementType(interval_measurement_type) => {
                 let statistics = match interval_measurement_type.measurement_interface_.meta_data_ {
                     Some(meta_data) => Some(meta_data.statistics_),
-                    None if device => Some(Vec::new()),
+                    // None if device => Some(Vec::new()),
                     None => None,
                 };
                 if let Some(statistics) = statistics {
@@ -873,7 +883,7 @@ impl MeasurementsReading {
                                     }
                                     Self::insert_consumption(&mut consumption, label, generation, &interval_measurement_type.start_at_)?;
                                 },
-                                _ if device => {},
+                                // _ if device => {},
                                 _ => {
 
                                     return Err(anyhow!(format!("Unexpected statistic type {:?}", type_)));
@@ -887,14 +897,14 @@ impl MeasurementsReading {
 
                     let standing_charge = if let Some(v) = standing_charge { v } else { Decimal::ZERO };
 
-                    if device && consumption.is_empty() {
-                        consumption.insert(String::from(DEVICE_LABEL), MeasurementsReadingConsumption {
-                            units: measured_value,
-                            cost: Decimal::ZERO,
-                            rate: Decimal::ZERO,
-                            ccy: Currency::NONE,
-                        });
-                    }
+                    // if device && consumption.is_empty() {
+                        // consumption.insert(String::from(DEVICE_LABEL), MeasurementsReadingConsumption {
+                            // units: measured_value,
+                            // cost: Decimal::ZERO,
+                            // rate: Decimal::ZERO,
+                            // ccy: Currency::NONE,
+                        // });
+                    // }
 
                     let mut reading = MeasurementsReading{
                         start: interval_measurement_type.start_at_,
@@ -924,8 +934,8 @@ pub struct MeasurementsConsumptionSource {
     pub hash_key: String,
     /// Whether the meter point is an export meter point, whose readings are generation rather than consumption.
     pub export: bool,
-    /// The device whose readings are fetched instead of the meter point's.
-    pub device: Option<MeasurementsDevice>,
+    // /// The device whose readings are fetched instead of the meter point's.
+    // pub device: Option<MeasurementsDevice>,
 }
 
 impl MeasurementsConsumptionSource {
@@ -940,15 +950,15 @@ impl MeasurementsConsumptionSource {
             } else {
                 super::graphql::ReadingDirectionType::Consumption
             });
+        let electricity_filters = electricity_filters.with_market_supply_point_id(self.mpan.clone());
         // A device is only linked to a property, not to a meter point, but the server may only find it within a
         // meter point, so it is filtered by both.
-        let electricity_filters = electricity_filters.with_market_supply_point_id(self.mpan.clone());
-        let electricity_filters = match &self.device {
-            Some(device) => electricity_filters
-                .with_device_id(device.id.clone())
-                .with_modelled_sub_meter_readings(device.modelled),
-            None => electricity_filters,
-        };
+        // let electricity_filters = match &self.device {
+        //     Some(device) => electricity_filters
+        //         .with_device_id(device.id.clone())
+        //         .with_modelled_sub_meter_readings(device.modelled),
+        //     None => electricity_filters,
+        // };
         utility_filters.push(UtilityFiltersInput::builder()
             .with_electricity_filters(electricity_filters.build()?)
             .build()?
@@ -1045,7 +1055,7 @@ impl SlotSource for MeasurementsConsumptionSource {
         //         // .electricity_meter_points_.first().ok_or("No meter points in response")?
         //         .measurements_;
         let query_time = DateTime::now(self.tz);
-        let device = self.device.is_some();
+        // let device = self.device.is_some();
         Ok(response
             .account_
             .ok_or(anyhow!("No account in response"))?
@@ -1055,7 +1065,7 @@ impl SlotSource for MeasurementsConsumptionSource {
             .edges
             .into_iter()
             .map(move |edge| {
-                MeasurementsReading::from(edge.node, &query_time, device)
+                MeasurementsReading::from(edge.node, &query_time /* , device */)
                 // match edge.node {
                     
                 //     meter::home_and_ev_consumption_breakdown::MeasurementInterface::MeasurementType(abstract_measurement_interface) => {
@@ -1105,6 +1115,7 @@ mod tests {
             start: 0,
             end: 1,
             tick_label: None,
+            tick_rank: 0,
             period_label: String::new(),
             units: vec![1.0, 2.0],
             costs: vec![5.0, 6.0],

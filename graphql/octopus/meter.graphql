@@ -459,3 +459,15 @@ fragment chargingSessionFields on DeviceChargingSessionConnection {
     }
   }
 }
+
+query meterTelemetry($deviceId: String!, $start: DateTime, $end: DateTime, $grouping: TelemetryGrouping) {
+  smartMeterTelemetry(deviceId: $deviceId, start: $start, end: $end, grouping: $grouping) {
+    readAt
+    consumption
+    export
+    demand
+    consumptionDelta
+    costDelta
+    costDeltaWithTax
+  }
+}

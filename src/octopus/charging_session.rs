@@ -369,6 +369,7 @@ pub fn graph_points(sessions: &[&ChargingSession], start: &DateTime, end: &DateT
                     start: session_start.unix_timestamp(),
                     end: session_end.unix_timestamp(),
                     tick_label,
+                    tick_rank: 0,
                     period_label: format!(
                         "{} {}–{}",
                         session_start.format(&date_format).unwrap_or_default(),
@@ -420,6 +421,7 @@ pub fn graph_points(sessions: &[&ChargingSession], start: &DateTime, end: &DateT
             start: from,
             end: to,
             tick_label: Some(tick_label),
+            tick_rank: 0,
             period_label,
             values,
         });

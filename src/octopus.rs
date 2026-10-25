@@ -7,6 +7,7 @@ mod property;
 mod meter_point;
 mod smart_device;
 mod charging_session;
+mod telemetry;
 mod bill;
 mod meter;
 mod line_items;
@@ -234,7 +235,7 @@ impl Module for OctopusModule {
                 path: "properties",
             },
             PageInfo {
-                label: "Measurements",
+                label: "Meters",
                 path: "measurements",
             },
             PageInfo {

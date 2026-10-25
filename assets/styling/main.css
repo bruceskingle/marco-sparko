@@ -751,31 +751,48 @@ button.danger:disabled {
     margin-left: 12px;
 }
 
+/* Of type rather than child, as a toggle hint can follow a button. */
 .view-toggle button {
     border-radius: 0;
 }
 
-.view-toggle button:first-child {
+.view-toggle button:first-of-type {
     border-radius: 4px 0 0 4px;
 }
 
-.view-toggle button:last-child {
+.view-toggle button:last-of-type {
     border-radius: 0 4px 4px 0;
 }
 
-.view-toggle button + button {
-    border-left: none;
+/* The buttons overlap by their borders rather than one dropping its left border, so that the hovered one, raised above
+   its neighbours, shows its whole border. */
+.view-toggle button ~ button {
+    margin-left: -1px;
 }
 
-.view-toggle button:disabled {
+.view-toggle button:hover {
+    position: relative;
+    z-index: 1;
+}
+
+.view-toggle button:disabled,
+.view-toggle button.unavailable {
     opacity: 0.4;
     cursor: default;
 }
 
-.view-toggle button:disabled:hover {
-    background-color: #2a2a2f;
-    color: var(--accent);
-    border-color: #404045;
+/* Why an unavailable toggle button can not be chosen, shown under where it was clicked. */
+.view-toggle .toggle-hint {
+    position: fixed;
+    transform: translate(-50%, 18px);
+    z-index: 20;
+    padding: 4px 8px;
+    border: 1px solid #707080;
+    border-radius: 4px;
+    background-color: #1a1a1f;
+    color: #ffffff;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 .view-toggle button.active {
@@ -885,4 +902,18 @@ button.danger:disabled {
 .note {
     color: #a0a0a8;
     font-size: 0.9em;
+}
+
+/* The meter's readings every 10 seconds, high enough for the loading dialog over them when there are none yet. */
+.telemetry-content {
+    min-height: 240px;
+}
+
+.telemetry-table th.quantity {
+    width: 6em;
+    min-width: 6em;
+}
+
+.telemetry-table tr.total td {
+    font-weight: bold;
 }

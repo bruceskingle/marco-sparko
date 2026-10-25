@@ -7,3 +7,4 @@ pub mod color_panel;
 pub mod date_range_picker;
 pub mod delete_profile;
 pub mod export;
+pub mod toggle_button;

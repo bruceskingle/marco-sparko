@@ -219,7 +219,6 @@ pub fn ChargingSessions(account_id: String, device_id: String, device_name: Stri
                             mode: StackedBarMode::Units,
                             currency: Currency::NONE,
                             unit: String::from("kWh"),
-                            centre_labels: period() != StackedBarPeriod::Raw,
                             on_drill: (period() != StackedBarPeriod::Raw).then(|| EventHandler::new(on_drill)),
                             on_zoom: EventHandler::new(on_zoom),
                             menu,
