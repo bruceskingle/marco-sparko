@@ -8,6 +8,7 @@ mod meter_point;
 mod smart_device;
 mod charging_session;
 mod telemetry;
+mod rate_limit;
 mod bill;
 mod meter;
 mod line_items;

@@ -471,3 +471,20 @@ query meterTelemetry($deviceId: String!, $start: DateTime, $end: DateTime, $grou
     costDeltaWithTax
   }
 }
+
+# The rate limits of the fields which have them, to find when a field which is blocked for too many requests can be
+# requested again.
+query rateLimit {
+  rateLimitInfo {
+    fieldSpecificRateLimits(first: 100) {
+      edges {
+        node {
+          field
+          rate
+          ttl
+          isBlocked
+        }
+      }
+    }
+  }
+}

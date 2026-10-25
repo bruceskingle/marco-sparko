@@ -29,6 +29,7 @@ use super::measurements::graphql_error_descriptions;
 const MAX_SHOWN: usize = 9000;
 const HALF_HOUR: i64 = 1800;
 const BAR_COLOR: &str = "#06b6d4";
+const EXPORT_COLOR: &str = "#f59e0b";
 
 #[derive(Clone, Copy, PartialEq)]
 enum TelemetryView {
@@ -60,11 +61,23 @@ enum TelemetryMode {
 impl TelemetryMode {
     const ALL: [TelemetryMode; 2] = [TelemetryMode::Energy, TelemetryMode::Demand];
 
-    /// The value of a period, in the units of the graph: kWh or kW.
+    /// The value of a period, in the units of the graph: kWh imported or average kW.
     fn value(&self, point: &TelemetryPoint) -> f64 {
         match self {
             TelemetryMode::Energy => point.energy / 1000.0,
             TelemetryMode::Demand => point.demand.unwrap_or_default() / 1000.0,
+        }
+    }
+
+    /// The imported and, as a negative value so that it is drawn below zero, exported value of a period, in the units
+    /// of the graph. The average power is net, so it is one or the other.
+    fn values(&self, point: &TelemetryPoint) -> Vec<f64> {
+        match self {
+            TelemetryMode::Energy => vec![point.energy / 1000.0, -point.export / 1000.0],
+            TelemetryMode::Demand => {
+                let demand = point.demand.unwrap_or_default() / 1000.0;
+                vec![demand.max(0.0), demand.min(0.0)]
+            }
         }
     }
 
@@ -436,7 +449,7 @@ fn readings_table(points: &[TelemetryPoint], tz: &'static Tz) -> Element {
 
     // The date is only shown when it is not the same as the row before.
     let mut previous_date = String::new();
-    let cells: Vec<(String, String, String, String, String, usize)> = rows.iter()
+    let cells: Vec<(String, String, String, String, String, String, usize)> = rows.iter()
         .map(|point| {
             let (start, end) = (local(point.start), local(point.end));
             let date = start.map(|start| start.format(&date_format).unwrap_or_default()).unwrap_or_default();
@@ -447,6 +460,7 @@ fn readings_table(points: &[TelemetryPoint], tz: &'static Tz) -> Element {
                 start.map(|start| start.format(&time_format).unwrap_or_default()).unwrap_or_default(),
                 end.map(|end| end.format(&time_format).unwrap_or_default()).unwrap_or_default(),
                 format!("{:.3}", point.energy / 1000.0),
+                format!("{:.3}", point.export / 1000.0),
                 point.demand.map(|demand| format!("{:.3}", demand / 1000.0)).unwrap_or_default(),
                 point.readings,
             )
@@ -454,6 +468,7 @@ fn readings_table(points: &[TelemetryPoint], tz: &'static Tz) -> Element {
         .collect();
 
     let total_energy: f64 = rows.iter().map(|point| point.energy).sum();
+    let total_export: f64 = rows.iter().map(|point| point.export).sum();
     let total_readings: usize = rows.iter().map(|point| point.readings).sum();
     // The average power over all the readings.
     let (demand_total, demand_readings) = rows.iter()
@@ -467,16 +482,18 @@ fn readings_table(points: &[TelemetryPoint], tz: &'static Tz) -> Element {
                 th { "Date" }
                 th { "Start" }
                 th { "End" }
-                th { class: "quantity", "Energy" br {} "(kWh)" }
+                th { class: "quantity", "Import" br {} "(kWh)" }
+                th { class: "quantity", "Export" br {} "(kWh)" }
                 th { class: "quantity", "Avg Power" br {} "(kW)" }
                 th { class: "quantity", "Readings" }
             }
-            for (date, start, end, energy, demand, readings) in cells {
+            for (date, start, end, energy, export, demand, readings) in cells {
                 tr {
                     td { "{date}" }
                     td { "{start}" }
                     td { "{end}" }
                     td { class: "numeric", "{energy}" }
+                    td { class: "numeric", "{export}" }
                     td { class: "numeric", "{demand}" }
                     td { class: "numeric", "{readings}" }
                 }
@@ -486,6 +503,7 @@ fn readings_table(points: &[TelemetryPoint], tz: &'static Tz) -> Element {
                 td {}
                 td {}
                 td { class: "numeric derived", {format!("{:.3}", total_energy / 1000.0)} }
+                td { class: "numeric derived", {format!("{:.3}", total_export / 1000.0)} }
                 td { class: "numeric derived", "{average_demand}" }
                 td { class: "numeric derived", "{total_readings}" }
             }
@@ -549,7 +567,7 @@ fn readings_graph(points: &[TelemetryPoint], start: &DateTime, end: &DateTime, p
                 tick_label,
                 tick_rank,
                 period_label,
-                values: vec![mode.value(point)],
+                values: mode.values(point),
             })
         })
         .collect();
@@ -557,11 +575,13 @@ fn readings_graph(points: &[TelemetryPoint], start: &DateTime, end: &DateTime, p
     rsx! {
         StackedBarGraph {
             points: bars,
-            series: vec![StackedBarSeries { label: mode.to_string(), color: String::from(BAR_COLOR) }],
+            series: vec![
+                StackedBarSeries { label: String::from("Import"), color: String::from(BAR_COLOR) },
+                StackedBarSeries { label: String::from("Export"), color: String::from(EXPORT_COLOR) },
+            ],
             mode: mode.graph_mode(),
             currency: Currency::NONE,
             unit: String::from(mode.unit()),
-            legend: false,
             on_drill: period.shorter().map(|_| EventHandler::new(on_drill)),
             // A half hour is the shortest range, so one can not be zoomed into.
             on_zoom: (end.unix_timestamp() - start.unix_timestamp() > HALF_HOUR).then(|| EventHandler::new(on_zoom)),

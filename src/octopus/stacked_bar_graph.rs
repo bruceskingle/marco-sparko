@@ -311,22 +311,26 @@ pub fn StackedBarGraph(
     let scale = move |point: &StackedBarPoint| {
         if per_hour { 3600.0 / (point.end - point.start).max(1) as f64 } else { 1.0 }
     };
+    // The net total of each bar, for its tooltip.
     let totals: Vec<f64> = points
         .iter()
-        .map(|point| point.values.iter().map(|value| value.max(0.0)).sum())
+        .map(|point| point.values.iter().sum())
         .collect();
-    let max_value = points
-        .iter()
-        .zip(&totals)
-        .map(|(point, total)| total * scale(point))
-        .fold(0.0, f64::max);
+    // Positive values are stacked up from zero and negative ones down from it, e.g. energy exported, so the y axis goes
+    // from the lowest stack of negative values, if there are any, to the highest of positive ones.
+    let stack = |point: &StackedBarPoint, positive: bool| point.values.iter()
+        .filter(|value| (**value > 0.0) == positive)
+        .sum::<f64>() * scale(point);
+    let max_value = points.iter().map(|point| stack(point, true)).fold(0.0, f64::max);
+    let min_value = points.iter().map(|point| stack(point, false)).fold(0.0, f64::min);
     let format_value = |value: f64| match mode {
         StackedBarMode::Units => format!("{value:.3} {unit}"),
         StackedBarMode::Cost => format_money(value, currency),
     };
-    let (step, decimals) = nice_step(max_value / Y_TICKS);
-    let y_max = (max_value / step).ceil().max(1.0) * step;
-    let y = |value: f64| TOP + plot_height - value / y_max * plot_height;
+    let (step, decimals) = nice_step((max_value - min_value) / Y_TICKS);
+    let y_min = (min_value / step).floor() * step;
+    let y_max = ((max_value / step).ceil() * step).max(y_min + step);
+    let y = |value: f64| TOP + plot_height - (value - y_min) / (y_max - y_min) * plot_height;
 
     // Each segment of each bar, with the bar and series it is of, and its colour and position.
     let bars: Vec<(usize, usize, String, f64, f64, f64, f64)> = points
@@ -338,7 +342,8 @@ pub fn StackedBarGraph(
             let bar_x = x(point.start) + gap / 2.0;
             let bar_width = (slot_width - gap).max(0.0);
             let bar_scale = scale(point);
-            let mut baseline = 0.0;
+            // The ends of the stacks of positive and negative values so far.
+            let (mut above, mut below) = (0.0, 0.0);
 
             point
                 .values
@@ -347,27 +352,25 @@ pub fn StackedBarGraph(
                 .zip(segment_names.iter())
                 .enumerate()
                 // Nothing is drawn for an empty segment, e.g. a series which is not in this bar.
-                .filter(|(_, (value, _))| *value > 0.0)
+                .filter(|(_, (value, _))| *value != 0.0)
                 .map(move |(series, (value, (_, color)))| {
                     let value = value * bar_scale;
-                    let top = y(baseline + value);
-                    let segment = (
-                        bar,
-                        series,
-                        color.clone(),
-                        bar_x,
-                        top,
-                        bar_width,
-                        y(baseline) - top,
-                    );
-                    baseline += value;
-                    segment
+                    let (from, to) = if value > 0.0 {
+                        above += value;
+                        (above - value, above)
+                    }
+                    else {
+                        below += value;
+                        (below, below - value)
+                    };
+                    (bar, series, color.clone(), bar_x, y(to), bar_width, y(from) - y(to))
                 })
         })
         .collect();
 
     let y_ticks: Vec<(f64, String)> = (0..)
-        .map(|i| i as f64 * step)
+        // From a whole number of steps, so that zero is not a rounding error from it, e.g. -0.0.
+        .map(|i| ((y_min / step).round() + i as f64) * step + 0.0)
         .take_while(|value| *value <= y_max + step / 2.0)
         .map(|value| {
             (y(value), axis_label(value, decimals, mode, currency))

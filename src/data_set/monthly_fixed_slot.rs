@@ -129,42 +129,146 @@ const RETRIES: u32 = 5;
 /// The delay before the first retry, which doubles for each retry after it.
 const FIRST_RETRY_DELAY: Duration = Duration::from_secs(2);
 
-/// Whether a request which failed with this error may succeed if it is made again, e.g. after a network error or a
-/// gateway timeout.
+/// The error code of Octopus's rate limit, which is a GraphQL error rather than an HTTP 429.
+const TOO_MANY_REQUESTS: &str = "KT-CT-1199";
+
+/// Whether a request failed as too many requests have been made.
+fn is_rate_limited(error: &sparko_graphql::Error) -> bool {
+    match error {
+        sparko_graphql::Error::HttpError(status, _) => status.as_u16() == 429,
+        sparko_graphql::Error::GraphQLError(errors) => errors.iter()
+            .any(|error| error.extensions.get("errorCode").and_then(|code| code.as_str()) == Some(TOO_MANY_REQUESTS)),
+        _ => false,
+    }
+}
+
+/// Whether a request which failed with this error may succeed if it is made again, e.g. after a network error, a
+/// gateway timeout or too many requests.
 fn is_transient(error: &sparko_graphql::Error) -> bool {
     match error {
         sparko_graphql::Error::IOError(_) => true,
-        sparko_graphql::Error::HttpError(status, _) => status.is_server_error() || status.as_u16() == 429,
-        _ => false,
+        sparko_graphql::Error::HttpError(status, _) => status.is_server_error() || is_rate_limited(error),
+        _ => is_rate_limited(error),
+    }
+}
+
+/// When a rate limit which blocks a request ends, as a unix timestamp, and the rate it allows, e.g. "125/h".
+pub struct RateLimitBlock {
+    pub until: i64,
+    pub rate: Option<String>,
+}
+
+/// A way of finding out when a rate limit ends, so that a request which was refused for too many requests is made
+/// again then, rather than after the retry delays, which are far too short for e.g. an hourly limit.
+pub trait RateLimitReset {
+    /// None if it is not known, e.g. the request for it failed too.
+    fn blocked_until(&self) -> impl Future<Output = Option<RateLimitBlock>>;
+}
+
+/// No way of finding out when a rate limit ends, so the retry delays are used.
+pub struct NoRateLimitReset;
+
+impl RateLimitReset for NoRateLimitReset {
+    async fn blocked_until(&self) -> Option<RateLimitBlock> {
+        None
+    }
+}
+
+/// The number of times a request is made again after waiting for a rate limit to end, in case it is still blocked.
+const RATE_LIMIT_WAITS: u32 = 3;
+/// How long after a rate limit ends a request is made again, in case of a difference between the clocks.
+const RATE_LIMIT_MARGIN: i64 = 5;
+
+/// A rate as Octopus gives it, e.g. "125/h", in words, e.g. "125 requests an hour".
+fn rate_in_words(rate: &str) -> String {
+    let Some((count, unit)) = rate.split_once('/') else {
+        return String::from(rate);
+    };
+    let per = match unit {
+        "s" => "a second",
+        "m" => "a minute",
+        "h" => "an hour",
+        "d" => "a day",
+        _ => return String::from(rate),
+    };
+    format!("{count} requests {per}")
+}
+
+/// A number of seconds as minutes and seconds, e.g. 4:05.
+fn minutes_and_seconds(seconds: i64) -> String {
+    format!("{}:{:02}", seconds / 60, seconds % 60)
+}
+
+/// A short description of a transient error, for progress messages, e.g. "Too many requests" rather than the whole
+/// GraphQL error.
+fn brief(error: &sparko_graphql::Error) -> String {
+    match error {
+        sparko_graphql::Error::GraphQLError(errors) => {
+            let messages: Vec<&str> = errors.iter()
+                .filter_map(|error| error.message.as_deref())
+                .map(|message| message.trim_end_matches('.'))
+                .collect();
+            if messages.is_empty() { String::from("Octopus returned an error") } else { messages.join(", ") }
+        },
+        sparko_graphql::Error::IOError(_) => String::from("Could not connect to Octopus"),
+        sparko_graphql::Error::HttpError(status, _) => format!("Octopus returned {status}"),
+        _ => error.to_string(),
     }
 }
 
 /// Make a request, returning None without waiting for the response if the fetch is cancelled first.
 /// A request which fails with a transient error is made again, with the same query and so the same cursor, after a
-/// delay. Progress messages from the request are passed on to progress with the given prefix.
-async fn call_unless_cancelled<Q: GraphQLQuery<R>, R: GraphQLResponse>(
+/// delay, or if it was refused for too many requests and rate_limit knows when that ends, then. Progress messages from
+/// the request are passed on to progress with the given prefix.
+pub async fn call_unless_cancelled<Q: GraphQLQuery<R>, R: GraphQLResponse>(
     request_manager: &impl GraphQLCaller,
     query: &Q,
     cancel: &CancelToken,
     progress: &(impl ProgressMonitor + ?Sized),
     prefix: &str,
+    rate_limit: &impl RateLimitReset,
 ) -> anyhow::Result<Option<R>> {
     let request_progress = |message: String| progress.progress(format!("{prefix}: {message}"));
+    // Sleeps for the duration, returning false if the fetch is cancelled first.
+    let sleep = |duration: Duration| async move {
+        matches!(select(pin!(tokio::time::sleep(duration)), pin!(cancel.cancelled())).await, Either::Left(_))
+    };
     let mut delay = FIRST_RETRY_DELAY;
     let mut retries = 0;
+    let mut rate_limit_waits = 0;
     loop {
-        match select(pin!(request_manager.call3(query, None, &request_progress)), pin!(cancel.cancelled())).await {
+        let error = match select(pin!(request_manager.call3(query, None, &request_progress)), pin!(cancel.cancelled())).await {
             Either::Right(_) => return Ok(None),
             Either::Left((Ok(response), _)) => return Ok(Some(response)),
-            Either::Left((Err(error), _)) if retries < RETRIES && is_transient(&error) => {
-                retries += 1;
-                request_progress(format!("request failed ({error}), retry {retries} of {RETRIES} in {}s", delay.as_secs()));
-                if let Either::Right(_) = select(pin!(tokio::time::sleep(delay)), pin!(cancel.cancelled())).await {
+            Either::Left((Err(error), _)) => error,
+        };
+        let block = if rate_limit_waits < RATE_LIMIT_WAITS && is_rate_limited(&error) { rate_limit.blocked_until().await } else { None };
+        if let Some(block) = block {
+            rate_limit_waits += 1;
+            let allowed = block.rate.as_deref().map(|rate| format!(", Octopus allows {}", rate_in_words(rate))).unwrap_or_default();
+            // Counts down to the end of the block, a second at a time.
+            loop {
+                let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|now| now.as_secs() as i64).unwrap_or_default();
+                let left = block.until + RATE_LIMIT_MARGIN - now;
+                if left <= 0 {
+                    break;
+                }
+                request_progress(format!("{}{allowed}, continuing in {}", brief(&error), minutes_and_seconds(left)));
+                if !sleep(Duration::from_secs(1)).await {
                     return Ok(None);
                 }
-                delay *= 2;
-            },
-            Either::Left((Err(error), _)) => return Err(error.into()),
+            }
+        }
+        else if retries < RETRIES && is_transient(&error) {
+            retries += 1;
+            request_progress(format!("{}, trying again in {}s (retry {retries} of {RETRIES})", brief(&error), delay.as_secs()));
+            if !sleep(delay).await {
+                return Ok(None);
+            }
+            delay *= 2;
+        }
+        else {
+            return Err(error.into());
         }
     }
 }
@@ -458,7 +562,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
                 requests += 1;
                 let query = source.initial_query(&window_start, &window_end)?;
-                let mut next_response = call_unless_cancelled(request_manager, &query, cancel, progress, &prefix(requests, rows)).await?;
+                let mut next_response = call_unless_cancelled(request_manager, &query, cancel, progress, &prefix(requests, rows), &NoRateLimitReset).await?;
 
                 while let Some(response) = next_response {
                     let cq = source.continuation_query(&window_start, &window_end, &response);
@@ -522,7 +626,7 @@ impl<S: SlotSource> MonthlyFixedSlotDataSet<S>
 
                     if let Some(continuation_query) = cq? {
                         requests += 1;
-                        next_response = call_unless_cancelled(request_manager, &continuation_query, cancel, progress, &prefix(requests, rows)).await?;
+                        next_response = call_unless_cancelled(request_manager, &continuation_query, cancel, progress, &prefix(requests, rows), &NoRateLimitReset).await?;
                     }
                     else {
                         break;
@@ -793,7 +897,7 @@ mod window_complete_tests {
 
 #[cfg(test)]
 mod retry_tests {
-    use super::is_transient;
+    use super::{brief, is_transient, rate_in_words};
 
     #[test]
     fn network_errors_gateway_timeouts_and_rate_limits_are_retried_but_not_other_errors() {
@@ -807,6 +911,14 @@ mod retry_tests {
         assert!(!is_transient(&http(400)));
         assert!(!is_transient(&http(401)));
         assert!(!is_transient(&Error::InternalError(String::from("bad"))));
+        let graphql = |code: &str| Error::GraphQLError(std::sync::Arc::new(vec![
+            serde_json::from_value(serde_json::json!({"message": "Too many requests.", "extensions": {"errorCode": code}})).unwrap(),
+        ]));
+        assert!(is_transient(&graphql("KT-CT-1199")));
+        assert!(!is_transient(&graphql("KT-GB-4051")));
+        assert_eq!(brief(&graphql("KT-CT-1199")), "Too many requests");
+        assert_eq!(rate_in_words("125/h"), "125 requests an hour");
+        assert_eq!(rate_in_words("odd"), "odd");
     }
 }
 

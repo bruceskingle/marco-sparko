@@ -15,10 +15,46 @@
   period before each of them: Last Week, Prev 7 Days, Last Month and Prev 30 Days.
 - **Previous and next period buttons** either side of the date range, to step back or forward by the same period. The
   next button is greyed out when the period already reaches the present.
+- **EV Charging.** A new EV Charging page lists your Octopus smart charging devices, with the make, model and battery
+  size of the EV configured in Octopus and the charger's power. Each has a **Charging Sessions** page which shows:
+  - A **table** of its sessions, with when each started and ended, how long it took, the energy added, the average
+    power, the cost, the energy added as a percentage of the configured battery size, and any problems Octopus
+    reported.
+  - A **graph** of the sessions, a bar for each session (which runs across days when a session does), or totalled by
+    day, week or month with each session in its own colour, and a **trend** graph. Hover over a session to see its
+    details, and double click to show just that session.
+  - A **Categories** menu to choose which sessions are shown: smart or public charging, and those which reached a
+    full charge, did not charge, or failed with an error.
+  - The sessions are saved, so only new ones are downloaded, and can be reloaded from the right click menu.
+- **Home Mini.** If you have an Octopus Home Mini, its readings of your meter every 10 seconds can be shown. Open it
+  from the Device ID of the Home Mini in the Smart Device Network on the Meters or Properties page.
+  - The readings as a **table**, a **graph** or a **trend**, of **Energy** or **Power**, for each reading, or totalled by
+    minute, 10 minutes, half hour, day, week or month.
+  - **Import and export.** If you export electricity, e.g. from solar panels, the energy exported is shown below zero
+    on the graph and in its own column in the table.
+  - Drill down, zoom, the right click menu and export work as on the Meters graph.
+  - Octopus only keeps the last 30 days of Home Mini readings, so everything downloaded is saved, and readings older
+    than 30 days are still shown from what was saved. Readings are downloaded in as few requests as possible, and if
+    Octopus's limit of 125 requests an hour is reached, the download waits until it can continue, with a countdown,
+    rather than failing.
+- **Smart devices.** The Meters page also shows each property's **Smart Device Network**, the meters and in-home
+  devices such as the Home Mini, described in plain words, and your **Smart Flex Devices**, e.g. EV chargers, which
+  link to their charging sessions. The Properties page shows each property's meters and its Smart Device Network.
 
 ## Improved
-- The labels along the bottom of the graph are centred on their bars for days, weeks and months, and start at the
-  start of the day for rate periods and half hour readings. A label which would not fit is left out.
+- The Measurements page is now called **Meters**, and opens on the Graph view.
+- The labels along the bottom of the graphs are shown on a shaded band, centred on what they label. As many are shown
+  as fit, so a wide window labels every bar, and when they do not all fit the roundest times are kept, e.g. every
+  hour rather than every half hour. Graphs of several days of readings have a band for each day.
+- Periods which would put too many bars on the graph for the dates shown, e.g. 10 second readings over a week, are
+  greyed out, so that dragging to zoom stays quick. Click one to see why, and zoom in to use it. If the period chosen
+  is too short for the dates, the next longer one is shown until you zoom back in.
+- Clicking Cancel while data is downloading shows that it is cancelling.
+- The button which collapses the menu on the left looks neater.
+- When Octopus is busy or refuses a request for being one too many, the progress shows a short reason, e.g. "Too many
+  requests", rather than the whole error.
+- Highlighting when the mouse is over a button in a group now shows its whole border, and greyed out buttons are
+  highlighted in the same faded way as the other greyed out buttons.
 - Data which has already been downloaded is no longer downloaded again just because only part of a month was looked
   at.
 - The browser style right click menu (with Reload and other options which could leave the app in a broken state) no
