@@ -246,6 +246,19 @@ pub(crate) fn axis_label(value: f64, decimals: usize, mode: StackedBarMode, curr
 }
 
 /// The units of the y axis labels, shown once above them, followed by suffix, e.g. kwh/day or £/h
+/// The suffix of the unit of values per a number of seconds, e.g. /h for 3600.
+fn per_suffix(seconds: i64) -> String {
+    match seconds {
+        60 => String::from("/min"),
+        3600 => String::from("/h"),
+        86400 => String::from("/day"),
+        _ if seconds % 86400 == 0 => format!("/{}days", seconds / 86400),
+        _ if seconds % 3600 == 0 => format!("/{}h", seconds / 3600),
+        _ if seconds % 60 == 0 => format!("/{}min", seconds / 60),
+        _ => format!("/{seconds}s"),
+    }
+}
+
 pub(crate) fn axis_unit(mode: StackedBarMode, currency: Currency, unit: &str, suffix: &str) -> String {
     match mode {
         StackedBarMode::Units => format!("{unit}{suffix}"),
@@ -267,6 +280,8 @@ pub fn StackedBarGraph(
     /// Draw a histogram, where bar heights are per hour so that the area of each bar is its total. Needed when the bars
     /// have different widths.
     #[props(default)] per_hour: bool,
+    /// Draw a histogram per this many seconds, as for per_hour, e.g. 10 for kWh per 10 seconds.
+    #[props(default)] per_seconds: Option<i64>,
     /// Whether the series are named above the graph, e.g. not when there is a series for each of many sessions, which
     /// the tooltip names.
     #[props(default = true)] legend: bool,
@@ -307,9 +322,13 @@ pub fn StackedBarGraph(
     let segment_names: Vec<(String, String)> = series.iter()
         .map(|series| (series.label.clone(), series.color.clone()))
         .collect();
-    // The factor from a bar's values to its height.
+    // The factor from a bar's values to its height, for a histogram per this many seconds, if it is one.
+    let per = per_seconds.or(per_hour.then_some(3600));
     let scale = move |point: &StackedBarPoint| {
-        if per_hour { 3600.0 / (point.end - point.start).max(1) as f64 } else { 1.0 }
+        match per {
+            Some(per) => per as f64 / (point.end - point.start).max(1) as f64,
+            None => 1.0,
+        }
     };
     // The net total of each bar, for its tooltip.
     let totals: Vec<f64> = points
@@ -376,7 +395,7 @@ pub fn StackedBarGraph(
             (y(value), axis_label(value, decimals, mode, currency))
         })
         .collect();
-    let y_unit = axis_unit(mode, currency, &unit, if per_hour { "/h" } else { "" });
+    let y_unit = axis_unit(mode, currency, &unit, &per.map(per_suffix).unwrap_or_default());
 
     // The bands under the x axis, each with its label in the middle: the x_bands, or if there are none, a band from each
     // labelled bar to the next one shown. As many tick labels are shown as fit: those of the lowest rank which still
@@ -541,21 +560,28 @@ pub fn StackedBarGraph(
                 hovered_series.set(None);
                 dragged.set(None);
             },
-            for (ty, label) in y_ticks {
-                line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
-                text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
+            // Each tick is a keyed group, as unkeyed items of more than one element can leave old labels behind when the
+            // number of ticks changes.
+            for (index, (ty, label)) in y_ticks.into_iter().enumerate() {
+                g { key: "{index}",
+                    line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
+                    text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
+                }
             }
             // The units of the y axis labels, above them in the row of the legend.
-            text { class: "stacked-axis-label", x: LEFT - 8.0, y: 24.0, text_anchor: "end", "{y_unit}" }
+            // From the left edge, as with a period, e.g. kWh/10s, it can be wider than the labels under it.
+            text { class: "stacked-axis-label", x: 4.0, y: 24.0, text_anchor: "start", "{y_unit}" }
             for (legend_x, label, color) in legend {
                 rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
                 text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
             }
             // A gap of a pixel each side shows where one band ends and the next starts.
-            for (band_x, band_width, label) in bands {
-                rect { class: "stacked-x-band", x: band_x + 1.0, y: TOP + plot_height + 4.0, width: (band_width - 2.0).max(0.0), height: BOTTOM - 6.0 }
-                if let Some(label) = label {
-                    text { class: "stacked-axis-label", x: band_x + band_width / 2.0, y: height - 10.0, text_anchor: "middle", "{label}" }
+            for (index, (band_x, band_width, label)) in bands.into_iter().enumerate() {
+                g { key: "{index}",
+                    rect { class: "stacked-x-band", x: band_x + 1.0, y: TOP + plot_height + 4.0, width: (band_width - 2.0).max(0.0), height: BOTTOM - 6.0 }
+                    if let Some(label) = label {
+                        text { class: "stacked-axis-label", x: band_x + band_width / 2.0, y: height - 10.0, text_anchor: "middle", "{label}" }
+                    }
                 }
             }
             if !segment_tooltip {

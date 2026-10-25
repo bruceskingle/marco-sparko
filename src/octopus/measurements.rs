@@ -17,6 +17,7 @@ use crate::data_set::{CancelToken, MonthlyFixedSlotDataSet, SlotSource};
 use crate::octopus::decimal::Decimal;
 use crate::octopus::graphql::{ElectricityFiltersInput, ReadingFrequencyType, UtilityFiltersInput};
 
+use super::electricity::MeterHalfHour;
 use super::graphql::meter;
 use super::category_filter::{CategoryFilter, CategoryValues, KNOWN_LABELS, STANDING_CHARGE_LABEL};
 use super::stacked_bar_graph::{BarMenuItem, day_bands, StackedBarGraph, StackedBarMode, StackedBarPeriod, StackedBarPoint, StackedBarSeries, time_tick_label};
@@ -56,7 +57,7 @@ fn ordered_labels<'a>(readings: impl IntoIterator<Item = &'a MeasurementsReading
 }
 
 /// The distinct labels, the known ones first in their usual order, then any others in alphabetical order.
-fn order_labels<'a>(labels: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+pub(crate) fn order_labels<'a>(labels: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     let all: BTreeSet<&str> = labels.into_iter().collect();
     let is_known = |label: &str| KNOWN_LABELS.iter().any(|(known, _)| *known == label);
 
@@ -166,6 +167,20 @@ impl MeasurementsDataSet {
                 }
             }
         }
+    }
+
+    /// The units of each label of each reading from start to end, leaving out readings with none, see is_partial.
+    pub fn half_hours(&self, start: &DateTime, end: &DateTime) -> Vec<MeterHalfHour> {
+        self.readings(start, end)
+            .filter(|reading| !reading.is_partial())
+            .map(|reading| MeterHalfHour {
+                start: reading.start.unix_timestamp(),
+                end: reading.end.unix_timestamp(),
+                units: reading.consumption.iter()
+                    .map(|(label, consumption)| (label.clone(), consumption.units.to_f64().unwrap_or_default()))
+                    .collect(),
+            })
+            .collect()
     }
 
     /// The categories which can be shown in the graphs for the readings from start to end, the standing charge (for

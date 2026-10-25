@@ -262,9 +262,12 @@ pub fn TrendGraph(
                     Err(error) => eprintln!("Failed to read trend graph size: {error:?}"),
                 }
             },
-            for (ty, label) in y_ticks {
-                line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
-                text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
+            // Keyed groups, see StackedBarGraph.
+            for (index, (ty, label)) in y_ticks.into_iter().enumerate() {
+                g { key: "{index}",
+                    line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
+                    text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
+                }
             }
             // The units of the y axis labels, above them in the row of the legend.
             text { class: "stacked-axis-label", x: LEFT - 8.0, y: 24.0, text_anchor: "end", "{y_unit}" }
@@ -280,9 +283,11 @@ pub fn TrendGraph(
                 }
                 text { class: "stacked-axis-label", x: legend_x + LEGEND_SAMPLE_LENGTH + 6.0, y: 24.0, "{item.label}" }
             }
-            for (tick_x, label_x, name) in month_ticks {
-                line { class: "stacked-tick", x1: tick_x, x2: tick_x, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
-                text { class: "stacked-axis-label", x: label_x, y: height - 10.0, text_anchor: "middle", "{name}" }
+            for (index, (tick_x, label_x, name)) in month_ticks.into_iter().enumerate() {
+                g { key: "{index}",
+                    line { class: "stacked-tick", x1: tick_x, x2: tick_x, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
+                    text { class: "stacked-axis-label", x: label_x, y: height - 10.0, text_anchor: "middle", "{name}" }
+                }
             }
             for (points, color, dash) in paths {
                 polyline {

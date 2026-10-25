@@ -14,13 +14,18 @@ pub const TOTAL_LABEL: &str = "Total";
 const STANDING_CHARGE_COLOR: &str = "#b8c0cc";
 const TOTAL_COLOR: &str = "#f5f5f5";
 
-/// The labels of the current home and EV rates with their default colours, in the order they are shown. Readings may
-/// have other labels, e.g. older readings have time of use buckets, which come after these.
-pub const KNOWN_LABELS: [(&str, &str); 4] = [
+/// The labels of the current home and EV rates with their default colours, in the order they are shown, then those of
+/// the Electricity page, see electricity.rs. Readings may have other labels, e.g. older readings have time of use
+/// buckets, which come after these.
+pub const KNOWN_LABELS: [(&str, &str); 8] = [
     ("Home Low Rate", "#46ee43"),
     ("Home Standard Rate", "#f6671f"),
     ("EV Low Rate", "#271cff"),
     ("EV Standard Rate", "#f72525"),
+    (super::electricity::LOW_ESTIMATED_LABEL, "#a6f5a4"),
+    (super::electricity::STANDARD_ESTIMATED_LABEL, "#fab48f"),
+    (super::electricity::UNMETERED_LABEL, "#8a8a99"),
+    (super::electricity::EXPORT_LABEL, "#f59e0b"),
 ];
 
 /// Default colours for labels which are not in KNOWN_LABELS, used in turn.

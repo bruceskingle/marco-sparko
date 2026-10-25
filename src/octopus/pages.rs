@@ -11,8 +11,10 @@ mod measurements;
 mod charging_sessions;
 mod ev_charging;
 mod telemetry;
+mod electricity;
 
 pub use bills::BillsPage;
 pub use properties::PropertiesPage;
 pub use measurements::MeasurementsPage;
 pub use ev_charging::EvChargingPage;
+pub use electricity::ElectricityPage;

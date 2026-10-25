@@ -44,6 +44,21 @@
 - **Smart devices.** The Meters page also shows each property's **Smart Device Network**, the meters and in-home
   devices such as the Home Mini, described in plain words, and your **Smart Flex Devices**, e.g. EV chargers, which
   link to their charging sessions. The Properties page shows each property's meters and its Smart Device Network.
+- **Electricity (first version).** A new Electricity page combines everything known about your electricity into one
+  graph or table: import above zero, split into the rates it is billed at, e.g. Home Low Rate and EV Low Rate, and
+  export below zero.
+  - Each half hour comes from the Home Mini's readings every 10 seconds where it has all of them, which also show the
+    detail within the half hour, otherwise from the meters' half hourly readings. The two agree to within 0.1%.
+  - The rates come from the meter's readings, which arrive a few days later. Until then they are estimated, shown in
+    paler colours: the low rate in your tariff's cheap times, and on Intelligent Octopus also when the car was charging
+    outside them, otherwise the standard rate.
+  - Energy or Power, for each reading up to a month at a time, with drill down, zoom, the right click menu, Reload and
+    Export as on the other graphs. Energy is drawn so that each bar's area is its energy, as bars can be different
+    lengths.
+  - Octopus's split of the import between home and EV is shown as it gives it, with the car's share placed where it was
+    charging. Octopus does not appear to measure how much the car took when, so within a half hour this is only an
+    approximation, e.g. a car whose charging tapers off at the end is shown at a constant power. We intend to revisit
+    this, e.g. with the charger's own readings, probably in a later release.
 
 ## Improved
 - The Measurements page is now called **Meters**, and opens on the Graph view.

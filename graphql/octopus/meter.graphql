@@ -295,6 +295,16 @@ query activeMeterPointsWithAgreements($accountNumber: String!) {
               __typename
             }
           }
+          # When each rate applies, e.g. ECO7_NIGHT from 23:30 to 05:30, for tariffs with times of use.
+          timeOfUseScheme {
+            name
+            timezone
+            timeslots {
+              timeslot
+              activeFrom
+              activeTo
+            }
+          }
           __typename
         }
         __typename

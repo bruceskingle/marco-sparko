@@ -14,6 +14,7 @@ mod meter;
 mod line_items;
 mod meter_agreement;
 mod measurements;
+mod electricity;
 mod stacked_bar_graph;
 mod trend_graph;
 mod category_filter;
@@ -29,7 +30,7 @@ use async_trait::async_trait;
 use dioxus::prelude::*;
 
 use context::{OctopusContext, OctopusRoot};
-use pages::{BillsPage, EvChargingPage, MeasurementsPage, PropertiesPage};
+use pages::{BillsPage, ElectricityPage, EvChargingPage, MeasurementsPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
 
 use time_tz::timezones;
@@ -240,6 +241,10 @@ impl Module for OctopusModule {
                 path: "measurements",
             },
             PageInfo {
+                label: "Electricity",
+                path: "electricity",
+            },
+            PageInfo {
                 label: "EV Charging",
                 path: "ev",
             },
@@ -407,6 +412,11 @@ impl Module for OctopusModule {
             "ev" => {
                 rsx! {
                     EvChargingPage { path }
+                }
+            },
+            "electricity" => {
+                rsx! {
+                    ElectricityPage { path }
                 }
             },
             _ => {

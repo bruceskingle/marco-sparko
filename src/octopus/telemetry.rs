@@ -410,12 +410,26 @@ fn calendar_bounds(date: Date, period: TelemetryPeriod, tz: &'static Tz) -> (i64
     (Date::from(start).at_midnight(tz).unix_timestamp(), Date::from(end).at_midnight(tz).unix_timestamp())
 }
 
+/// The start and end of the period containing time, all as unix timestamps, in the timezone for days, weeks and months.
+pub fn period_bounds(time: i64, period: TelemetryPeriod, tz: &'static Tz) -> (i64, i64) {
+    match period.seconds() {
+        Some(seconds) => {
+            let start = time - time.rem_euclid(seconds);
+            (start, start + seconds)
+        },
+        None => match DateTime::from_unix_timestamp(time) {
+            Ok(time) => calendar_bounds(time.to_timezone(tz).to_date(), period, tz),
+            Err(_) => (time, time),
+        },
+    }
+}
+
 /// The energy imported up to reading since previous, the reading before it, in Wh. This is the change in the meter's
 /// import register, consumption, which is exact however far apart the readings are, so readings which are missing do
 /// not lose any energy, it is in the reading after them. A reading's consumption_delta is the energy since the reading
 /// before, and usually covers a reading which is missing too, but not always, so it is only used when there are no
 /// register readings, e.g. for the first reading, or the register goes down, e.g. if the meter is replaced.
-fn energy_since(previous: Option<&TelemetryReading>, reading: &TelemetryReading) -> f64 {
+pub(crate) fn energy_since(previous: Option<&TelemetryReading>, reading: &TelemetryReading) -> f64 {
     match (previous.and_then(|previous| previous.consumption), reading.consumption) {
         (Some(before), Some(after)) if after >= before => after - before,
         _ => reading.consumption_delta.unwrap_or_default(),
@@ -431,9 +445,10 @@ fn export_since(previous: Option<&TelemetryReading>, reading: &TelemetryReading)
     }
 }
 
-/// A point for each reading from start to end, from its time to the next reading's, so that they meet although some 10
-/// second slots have no reading, see BOUNDARY_SECONDS. The last is 10 seconds long. Readings before start are not
-/// included, but the last of them gives the energy of the first reading from start.
+/// A point for each reading from start to end, from the reading before it to its time, which is the time its energy was
+/// used in, see energy_since, so that they meet although some 10 second slots have no reading, see BOUNDARY_SECONDS. A
+/// reading with none before it is 10 seconds long. Readings before start are not included, but the last of them gives
+/// the energy and start of the first reading from start.
 fn reading_points(readings: &[TelemetryReading], start: i64, end: i64) -> Vec<TelemetryPoint> {
     let mut points: Vec<TelemetryPoint> = Vec::new();
     let mut previous: Option<&TelemetryReading> = None;
@@ -442,12 +457,9 @@ fn reading_points(readings: &[TelemetryReading], start: i64, end: i64) -> Vec<Te
         if reading.read_at < start {
             continue;
         }
-        if let Some(last) = points.last_mut() {
-            last.end = reading.read_at;
-        }
         points.push(TelemetryPoint {
-            start: reading.read_at,
-            end: (reading.read_at + READING_SECONDS).min(end),
+            start: since.map(|since| since.read_at).unwrap_or(reading.read_at - READING_SECONDS),
+            end: reading.read_at,
             energy: energy_since(since, reading),
             export: export_since(since, reading),
             demand: reading.demand,
@@ -648,12 +660,12 @@ mod tests {
         let minute = aggregate(&readings, start, start + 60, TelemetryPeriod::Minute, london);
         // The first reading has no register reading before it, so uses its delta, then the register's 15 Wh.
         assert_eq!(minute[0].energy, 3.0 + 15.0);
-        // At 10 seconds each reading lasts until the next, so the one before the missing ones is 30 seconds long.
+        // At 10 seconds each reading lasts from the one before, so the one after the missing ones is 30 seconds long.
         let periods = aggregate(&readings, start, start + 60, TelemetryPeriod::TenSeconds, london);
         let energies: Vec<f64> = periods.iter().map(|period| period.energy).collect();
         assert_eq!(energies, [3.0, 3.0, 9.0, 3.0]);
         let lengths: Vec<i64> = periods.iter().map(|period| period.end - period.start).collect();
-        assert_eq!(lengths, [10, 30, 10, 10]);
+        assert_eq!(lengths, [10, 10, 30, 10]);
 
         // From the second reading, the first is only used for the register reading before it, and is not counted.
         let from_second = aggregate(&readings, start + 10, start + 60, TelemetryPeriod::Day, london);

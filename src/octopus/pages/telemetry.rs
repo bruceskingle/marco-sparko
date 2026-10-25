@@ -582,6 +582,9 @@ fn readings_graph(points: &[TelemetryPoint], start: &DateTime, end: &DateTime, p
             mode: mode.graph_mode(),
             currency: Currency::NONE,
             unit: String::from(mode.unit()),
+            // Energy is drawn as a histogram, as a reading after a missing one is longer, and months are, so that each
+            // bar's area is its energy.
+            per_seconds: (mode == TelemetryMode::Energy).then(|| period.seconds().unwrap_or(86400)),
             on_drill: period.shorter().map(|_| EventHandler::new(on_drill)),
             // A half hour is the shortest range, so one can not be zoomed into.
             on_zoom: (end.unix_timestamp() - start.unix_timestamp() > HALF_HOUR).then(|| EventHandler::new(on_zoom)),
