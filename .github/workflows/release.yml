@@ -154,9 +154,15 @@ jobs:
           }
           Write-Host "Starting $($exe.FullName)"
 
-          $app = Start-Process $exe.FullName -PassThru
+          # Its output is kept, and a panic shows where it happened, to see why if it does not start.
+          $env:RUST_BACKTRACE = "1"
+          $app = Start-Process $exe.FullName -PassThru -RedirectStandardOutput app-stdout.log -RedirectStandardError app-stderr.log
           Start-Sleep -Seconds 30
           if ($app.HasExited) {
+            Write-Host "=== stdout"
+            Get-Content app-stdout.log -Tail 100
+            Write-Host "=== stderr"
+            Get-Content app-stderr.log -Tail 100
             throw "The app exited with code $($app.ExitCode)"
           }
           Stop-Process -Id $app.Id
