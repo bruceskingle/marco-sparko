@@ -5,6 +5,8 @@ mod decimal;
 mod viewer_data_set;
 mod property;
 mod meter_point;
+mod smart_device;
+mod charging_session;
 mod bill;
 mod meter;
 mod line_items;
@@ -25,7 +27,7 @@ use async_trait::async_trait;
 use dioxus::prelude::*;
 
 use context::{OctopusContext, OctopusRoot};
-use pages::{BillsPage, MeasurementsPage, PropertiesPage};
+use pages::{BillsPage, EvChargingPage, MeasurementsPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
 
 use time_tz::timezones;
@@ -235,6 +237,10 @@ impl Module for OctopusModule {
                 label: "Measurements",
                 path: "measurements",
             },
+            PageInfo {
+                label: "EV Charging",
+                path: "ev",
+            },
         )
     }
 
@@ -394,6 +400,11 @@ impl Module for OctopusModule {
             "measurements" => {
                 rsx! {
                     MeasurementsPage { path }
+                }
+            },
+            "ev" => {
+                rsx! {
+                    EvChargingPage { path }
                 }
             },
             _ => {

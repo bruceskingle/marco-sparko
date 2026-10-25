@@ -211,6 +211,12 @@ th {
     font-weight: bold;
 }
 
+/* A good outcome, the opposite of invalid. */
+.ok {
+    color: var(--ok);
+    font-weight: bold;
+}
+
 .fetched {
     background-color: var(--fetched);
 }
@@ -444,6 +450,8 @@ h6 {
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
+    /* Tables are their own width, not stretched to the window's. The graphs fill it as they are 100% wide. */
+    align-items: flex-start;
     min-height: 0;
 }
 
@@ -810,6 +818,11 @@ button.danger:disabled {
     fill: transparent;
 }
 
+/* A period along the x axis, e.g. a day, behind its label. */
+.stacked-consumption-graph .stacked-x-band {
+    fill: rgba(255, 255, 255, 0.12);
+}
+
 /* The bars being dragged across to zoom to them. */
 .stacked-consumption-graph .stacked-selection {
     fill: rgba(255, 255, 255, 0.15);
@@ -844,3 +857,32 @@ button.danger:disabled {
     fill: #ffffff;
 }
 
+/* The Measured and Modelled links of a smart device. */
+.device-link + .device-link {
+    margin-left: 16px;
+}
+
+/* A charging session in which the car was plugged in but did not charge. */
+.charging-sessions tr.plugged-in td {
+    color: #808088;
+}
+
+/* The charging sessions, high enough for the loading dialog over them when there are none yet. */
+.charging-sessions-content {
+    min-height: 240px;
+}
+
+/* The energy, power and battery percentage columns, all the same width. */
+.charging-sessions th.quantity {
+    width: 6em;
+    min-width: 6em;
+}
+
+.charging-sessions tr.total td {
+    font-weight: bold;
+}
+
+.note {
+    color: #a0a0a8;
+    font-size: 0.9em;
+}

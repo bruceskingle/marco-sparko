@@ -11,9 +11,34 @@ use crate::data_set::CancelToken;
 use crate::octopus::category_filter::{CategoryFilter, CategoryFilterMenu};
 use crate::octopus::trend_graph::{TrendSmoothing, range_years};
 use crate::octopus::context::OctopusContext;
-use crate::octopus::measurements::MeasurementsDataSet;
+use crate::octopus::measurements::{MeasurementsDataSet, MeasurementsDevice};
 use crate::octopus::meter_point::MeterPointDataSet;
+use crate::octopus::smart_device::SmartDeviceDataSet;
 use crate::octopus::stacked_bar_graph::{BarClick, BarMenuItem, StackedBarMode, StackedBarPeriod};
+
+/// Each GraphQL error from the server in error, as its message, its description, which is often advice about the
+/// message, and its code, e.g. "Unable to find matching device for this request. Ensure the device id is correct.
+/// (KT-CT-4716)", or None if it is not from GraphQL errors.
+fn graphql_error_descriptions(error: &anyhow::Error) -> Option<Vec<String>> {
+    let errors = error.chain().find_map(|cause| match cause.downcast_ref::<sparko_graphql::Error>() {
+        Some(sparko_graphql::Error::GraphQLError(errors)) => Some(errors.clone()),
+        _ => None,
+    })?;
+    let text = |value: Option<&serde_json::Value>| value.and_then(|value| value.as_str()).map(String::from);
+    Some(errors.iter()
+        .map(|error| {
+            let parts: Vec<String> = [error.message.clone(), text(error.extensions.get("errorDescription"))]
+                .into_iter()
+                .flatten()
+                .collect();
+            let description = if parts.is_empty() { String::from("Unknown error") } else { parts.join(" ") };
+            match text(error.extensions.get("errorCode")) {
+                Some(code) => format!("{description} ({code})"),
+                None => description,
+            }
+        })
+        .collect())
+}
 
 #[derive(Props, Clone, PartialEq)]
 pub struct MeasurementsPageProps {
@@ -33,6 +58,15 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
         }
     });
 
+    // The smart devices on the account, whose readings can be shown like a meter point's.
+    let devices_resource = use_resource({
+        let context = context.clone();
+        move || {
+            let context = context.clone();
+            async move { SmartDeviceDataSet::new(&context.account_id, &context.cache_config, &*context.request_manager).await }
+        }
+    });
+
     match &*meter_points_resource.read() {
         None => rsx! {
             div { "Loading Meter Points for account {context.account_id}..." }
@@ -40,8 +74,26 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
         Some(Err(error)) => Err(anyhow!("Failed to load Meter Points: {error:?}"))?,
         Some(Ok(meter_point_list)) => {
 
+            // Are we looking at a device? Its path is device, its ID, modelled or measured, and the meter point to
+            // fetch them for.
+            if let (Some("device"), Some(device_id), Some(mpan)) = (props.path.first().map(String::as_str), props.path.get(1), props.path.get(3)) {
+                let modelled = props.path.get(2).is_some_and(|mode| mode == "modelled");
+                let export = meter_point_list.meter_points.iter()
+                    .find(|meter_point| &meter_point.mpan_ == mpan)
+                    .is_some_and(|meter_point| matches!(meter_point.direction_, Some(crate::octopus::graphql::ElectricityDirection::Export)));
+                rsx! {
+                    MeasurementsConsumption {
+                        key: "{device_id}#{modelled}#{mpan}",
+                        account_id: context.account_id.clone(),
+                        mpan: mpan.clone(),
+                        export,
+                        device: MeasurementsDevice { id: device_id.clone(), modelled },
+                        billing_timezone: context.billing_timezone,
+                    }
+                }
+            }
             // Are we looking at one meter?
-            if let Some(mpan) = props.path.first() {
+            else if let Some(mpan) = props.path.first() {
                     // Export meter points have generation readings rather than consumption.
                     let export = meter_point_list.meter_points.iter()
                         .find(|meter_point| &meter_point.mpan_ == mpan)
@@ -52,6 +104,7 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
                             account_id: context.account_id.clone(),
                             mpan: mpan.clone(),
                             export,
+                            device: None,
                             billing_timezone: context.billing_timezone,
                         }
                     }
@@ -110,6 +163,15 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
                 }
 
 
+                // The meter points a device's readings can be fetched for, export first, with their direction.
+                let mut device_meter_points: Vec<(String, String)> = meter_point_list.meter_points.iter()
+                    .filter_map(|meter_point| meter_point.direction_.as_ref().map(|direction| {
+                        let direction = if matches!(direction, crate::octopus::graphql::ElectricityDirection::Export) { "Export" } else { "Import" };
+                        (String::from(direction), meter_point.mpan_.clone())
+                    }))
+                    .collect();
+                device_meter_points.sort_by_key(|(direction, _)| direction != "Export");
+
                 rsx! {
                     h1 { "Meter Points" }
                     table {
@@ -123,6 +185,64 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
                             {line}
                         }
                     }
+                    h1 { "Smart Devices" }
+                    match &*devices_resource.read() {
+                        None => rsx! {
+                            div { "Loading smart devices..." }
+                        },
+                        Some(Err(error)) => rsx! {
+                            div { class: "invalid", "Failed to load smart devices: {error}" }
+                        },
+                        Some(Ok(device_list)) if device_list.devices.is_empty() => rsx! {
+                            div { "There are no smart devices on this account" }
+                        },
+                        Some(Ok(device_list)) => rsx! {
+                            table {
+                                tr { class: "header",
+                                    th { "Name" }
+                                    th { "Type" }
+                                    th { "Provider" }
+                                    th { "Readings" }
+                                }
+                                for device in device_list.devices.iter().cloned() {
+                                    tr {
+                                        td { {device.name.clone().unwrap_or_default()} }
+                                        td { "{device.device_type}" }
+                                        td { "{device.provider}" }
+                                        td {
+                                            // Measured readings, and the readings the server models for the device, for
+                                            // each meter point, export first.
+                                            for (direction, mpan) in device_meter_points.iter().cloned() {
+                                                div {
+                                                    "{direction}: "
+                                                    for (label, mode) in [("Measured", "measured"), ("Modelled", "modelled")] {
+                                                        span {
+                                                            class: "link device-link",
+                                                            onclick: {
+                                                                let id = device.id.clone();
+                                                                let mpan = mpan.clone();
+                                                                move |_| {
+                                                                    let mut path_signal = use_context::<Signal<Vec<String>>>();
+                                                                    path_signal.set(vec![
+                                                                        String::from("measurements"),
+                                                                        String::from("device"),
+                                                                        id.clone(),
+                                                                        String::from(mode),
+                                                                        mpan.clone(),
+                                                                    ]);
+                                                                }
+                                                            },
+                                                            "{label}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    }
                 }
             }
         },
@@ -135,6 +255,8 @@ struct MeasurementsConsumptionProps {
     mpan: String,
     /// Whether this is an export meter point.
     export: bool,
+    /// The device whose readings are shown for the meter point, instead of the meter point's own.
+    device: Option<MeasurementsDevice>,
     billing_timezone: &'static Tz,
 }
 
@@ -143,6 +265,7 @@ impl PartialEq for MeasurementsConsumptionProps {
         self.account_id == other.account_id
             && self.mpan == other.mpan
             && self.export == other.export
+            && self.device == other.device
             && std::ptr::eq(self.billing_timezone, other.billing_timezone)
     }
 }
@@ -266,6 +389,7 @@ fn MeasurementsConsumption(props: MeasurementsConsumptionProps) -> Element {
             account_id: props.account_id.clone(),
             mpan: props.mpan.clone(),
             export: props.export,
+            device: props.device.clone(),
             billing_timezone: tz,
             start,
             end,
@@ -360,6 +484,7 @@ struct MeasurementsDetailProps {
     account_id: String,
     mpan: String,
     export: bool,
+    device: Option<MeasurementsDevice>,
     billing_timezone: &'static Tz,
     start: DateTime,
     /// Exclusive end of the range
@@ -402,6 +527,7 @@ impl PartialEq for MeasurementsDetailProps {
         self.account_id == other.account_id
             && self.mpan == other.mpan
             && self.export == other.export
+            && self.device == other.device
             && self.start == other.start
             && self.end == other.end
             && self.view == other.view
@@ -427,6 +553,8 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
     // Set by the cancel buttons, the fetch then stops and returns the data it has so far. Each reload has a new one, so
     // that cancelling a reload does not cancel the next.
     let mut cancel = use_signal(CancelToken::new);
+    // Set when a Cancel button is clicked, so that it shows the fetch is stopping, until the next fetch starts.
+    let mut cancelling = use_signal(|| false);
 
     // A period to fetch again from the server, however up to date the cache is, set from the bar menu.
     let mut reload = use_signal(|| None::<(DateTime, DateTime)>);
@@ -441,8 +569,9 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
             let context = context.clone();
             let reload = reload();
             async move {
+                cancelling.set(false);
                 let monitor = move |message: String| { let mut progress = progress; progress.set(message) };
-                MeasurementsDataSet::new(&props.account_id, &props.mpan, props.export,
+                MeasurementsDataSet::new(&props.account_id, &props.mpan, props.export, props.device.clone(),
                     &props.start, &props.end, reload,
                     props.billing_timezone, &monitor,
                     &cancel, &context.cache_config, &*context.request_manager).await.map(Arc::new)
@@ -530,11 +659,33 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
             div {
                 {format!("Loading measurements for meter {}...", props.mpan)}
                 " "
-                button { r#type: "button", onclick: move |_| cancel.peek().cancel(), "Cancel" }
+                button {
+                    r#type: "button",
+                    disabled: cancelling(),
+                    onclick: move |_| {
+                        cancel.peek().cancel();
+                        cancelling.set(true);
+                    },
+                    if cancelling() { "Cancelling…" } else { "Cancel" }
+                }
             }
             div { "{progress}" }
         },
-        Some(Err(error)) => Err(anyhow!("Failed to load measurements for meter {}: {error:?}", props.mpan))?,
+        // Errors from Octopus, e.g. that the account may not read a device, are explained here, others go to the
+        // error page.
+        Some(Err(error)) => match graphql_error_descriptions(error) {
+            Some(descriptions) => rsx! {
+                div { class: "error",
+                    "Octopus did not provide the measurements for {props.mpan}:"
+                    ul {
+                        for description in descriptions {
+                            li { "{description}" }
+                        }
+                    }
+                }
+            },
+            None => Err(anyhow!("Failed to load measurements for meter {}: {error:?}", props.mpan))?,
+        },
         Some(Ok(consumption)) => {
             let content = match props.view {
                 ConsumptionView::Table => consumption.display(&props.start, &props.end),
@@ -570,7 +721,15 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
                                 h3 { "Reloading" }
                                 div { "{progress}" }
                                 div { class: "modal-buttons",
-                                    button { r#type: "button", onclick: move |_| cancel.peek().cancel(), "Cancel" }
+                                    button {
+                                        r#type: "button",
+                                        disabled: cancelling(),
+                                        onclick: move |_| {
+                                            cancel.peek().cancel();
+                                            cancelling.set(true);
+                                        },
+                                        if cancelling() { "Cancelling…" } else { "Cancel" }
+                                    }
                                 }
                             }
                         }

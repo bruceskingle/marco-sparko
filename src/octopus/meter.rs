@@ -393,12 +393,15 @@ impl AgreementLineItems {
                  let data_set = MonthlyDataSet::new(&hash_key,
                     date,
                     Duration::from_hours(24),
+                    // TODO: let the user reload a bill's line items, as for charging sessions, in case they are wrong.
+                    false,
                     initial_query_provider,
                     continuation_query_provider,
                     response_iterator,
                     indexer,
                     config,
-                    request_manager
+                    request_manager,
+                    &sparko_graphql::NoProgress,
                 ).await?;
 
                 let mut data = BTreeMap::new();
@@ -460,12 +463,15 @@ impl AgreementLineItems {
                  let data_set = MonthlyDataSet::new(&hash_key,
                     date,
                     Duration::from_hours(24),
+                    // TODO: let the user reload a bill's line items, as for charging sessions, in case they are wrong.
+                    false,
                     initial_query_provider,
                     continuation_query_provider,
                     response_iterator,
                     indexer,
                     config,
-                    request_manager
+                    request_manager,
+                    &sparko_graphql::NoProgress,
                 ).await?;
 
                 (data_set.start_date, data_set.next_date, data_set.data)

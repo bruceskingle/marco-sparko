@@ -1,6 +1,7 @@
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
-use sparko_graphql::types::Currency;
+use sparko_graphql::types::{Currency, DateTime};
+use time_tz::Tz;
 
 const LEFT: f64 = 64.0;
 const RIGHT: f64 = 16.0;
@@ -107,6 +108,44 @@ fn menu_position(x: f64, y: f64, menu: &[BarMenuItem]) -> String {
     format!("{vertical} {horizontal}")
 }
 
+/// A period along the x axis, e.g. a day, shown as a faint band under the graph with its label in the middle.
+#[derive(Clone, PartialEq, Debug)]
+pub struct XBand {
+    /// Unix timestamps.
+    pub start: i64,
+    pub end: i64,
+    /// Ways of labelling it, longest first, the longest which fits is shown, e.g. "Wed 14 Oct", "14 Oct", "14".
+    pub labels: Vec<String>,
+}
+
+/// A band for each day from start to end, as unix timestamps, in the timezone, for the x axis of a graph whose bars
+/// are not periods which are easy to label, e.g. charging sessions or readings over several days.
+pub fn day_bands(start: i64, end: i64, tz: &'static Tz) -> Vec<XBand> {
+    let long_format = time::format_description::parse("[weekday repr:short] [day] [month repr:short]").unwrap();
+    let short_format = time::format_description::parse("[day] [month repr:short]").unwrap();
+    let day_format = time::format_description::parse("[day padding:none]").unwrap();
+    let Ok(first) = DateTime::from_unix_timestamp(start) else {
+        return Vec::new();
+    };
+    let mut bands = Vec::new();
+    let mut day = first.to_timezone(tz).to_date();
+    loop {
+        let (day_start, day_end) = (day.at_midnight(tz), day.next_day().at_midnight(tz));
+        if day_start.unix_timestamp() >= end {
+            break;
+        }
+        bands.push(XBand {
+            start: day_start.unix_timestamp(),
+            end: day_end.unix_timestamp(),
+            labels: [&long_format, &short_format, &day_format].iter()
+                .map(|format| day.format(format).unwrap_or_default())
+                .collect(),
+        });
+        day = day.next_day();
+    }
+    bands
+}
+
 /// A readable step between y axis ticks of at least raw, e.g. 0.25 or 50, and the number of decimal places it needs.
 pub(super) fn nice_step(raw: f64) -> (f64, usize) {
     if !(raw > 0.0) {
@@ -171,6 +210,9 @@ pub fn StackedBarGraph(
     /// Draw a histogram, where bar heights are per hour so that the area of each bar is its total. Needed when the bars
     /// have different widths.
     #[props(default)] per_hour: bool,
+    /// Whether the series are named above the graph, e.g. not when there is a series for each of many sessions, which
+    /// the tooltip names.
+    #[props(default = true)] legend: bool,
     /// Whether each x axis label is in the middle of its bar, e.g. a day, rather than starting at the start of its bar,
     /// e.g. the first reading of a day.
     #[props(default)] centre_labels: bool,
@@ -181,8 +223,16 @@ pub fn StackedBarGraph(
     #[props(default)] on_zoom: Option<EventHandler<(i64, i64)>>,
     /// The menu shown when a bar is right clicked, instead of the webview's menu.
     #[props(default)] menu: Vec<BarMenuItem>,
+    /// Whether the tooltip is for the segment the mouse is over, showing just that series and the bar's total, rather
+    /// than every series in the bar, e.g. when there is a series for each of many sessions.
+    #[props(default)] segment_tooltip: bool,
+    /// Bands under the graph, e.g. for each day, in place of the x axis labels of the bars, for when the bars are not
+    /// periods which are easy to label, e.g. charging sessions.
+    #[props(default)] x_bands: Vec<XBand>,
 ) -> Element {
     let mut hovered = use_signal::<Option<usize>>(|| None);
+    // The series of the segment the mouse is over, with segment_tooltip.
+    let mut hovered_series = use_signal::<Option<usize>>(|| None);
     // The bars where a drag started and where it is now, while the mouse button is down.
     let mut dragged = use_signal::<Option<(usize, usize)>>(|| None);
     // The bar which was right clicked and where, while its menu is open.
@@ -224,9 +274,11 @@ pub fn StackedBarGraph(
     let y_max = (max_value / step).ceil().max(1.0) * step;
     let y = |value: f64| TOP + plot_height - value / y_max * plot_height;
 
-    let bars: Vec<(String, f64, f64, f64, f64)> = points
+    // Each segment of each bar, with the bar and series it is of, and its colour and position.
+    let bars: Vec<(usize, usize, String, f64, f64, f64, f64)> = points
         .iter()
-        .flat_map(|point| {
+        .enumerate()
+        .flat_map(|(bar, point)| {
             let slot_width = x(point.end) - x(point.start);
             let gap = if slot_width > 3.0 * BAR_GAP { BAR_GAP } else { 0.0 };
             let bar_x = x(point.start) + gap / 2.0;
@@ -239,10 +291,15 @@ pub fn StackedBarGraph(
                 .iter()
                 .copied()
                 .zip(segment_names.iter())
-                .map(move |(value, (_, color))| {
-                    let value = value.max(0.0) * bar_scale;
+                .enumerate()
+                // Nothing is drawn for an empty segment, e.g. a series which is not in this bar.
+                .filter(|(_, (value, _))| *value > 0.0)
+                .map(move |(series, (value, (_, color)))| {
+                    let value = value * bar_scale;
                     let top = y(baseline + value);
                     let segment = (
+                        bar,
+                        series,
                         color.clone(),
                         bar_x,
                         top,
@@ -290,8 +347,23 @@ pub fn StackedBarGraph(
         })
         .map(|(tick_x, label_x, label)| (tick_x, label_x, label.clone()))
         .collect();
+    // The position and width of each band, and its longest label which fits, if any, within the graph.
+    let bands: Vec<(f64, f64, Option<String>)> = x_bands.iter()
+        .map(|band| {
+            let left = x(band.start).max(LEFT);
+            let right = x(band.end).min(width - RIGHT);
+            let band_width = (right - left).max(0.0);
+            let label = band.labels.iter()
+                .find(|label| label.chars().count() as f64 * LABEL_CHAR_WIDTH + 4.0 <= band_width)
+                .cloned();
+            (left, band_width, label)
+        })
+        .filter(|(_, band_width, _)| *band_width > 0.0)
+        .collect();
+
     let legend: Vec<(f64, String, String)> = segment_names
         .iter()
+        .filter(|_| legend)
         .enumerate()
         .map(|(index, (label, color))| {
             (LEFT + index as f64 * 145.0, label.clone(), color.clone())
@@ -321,17 +393,76 @@ pub fn StackedBarGraph(
                 bar_x + 10.0
             }
             .clamp(LEFT, (width - TOOLTIP_WIDTH - RIGHT).max(LEFT));
-            // The label, colour and value of each segment, leaving out those which are zero.
+            // The label, colour and value of each segment, leaving out those which are zero, or with segment_tooltip just
+            // the one the mouse is over, if it is over one.
             let rows: Vec<(String, String, String)> = point.values
                 .iter()
                 .copied()
                 .zip(&segment_names)
-                .filter(|(value, _)| *value != 0.0)
-                .map(|(value, (label, color))| (label.clone(), color.clone(), format_value(value)))
+                .enumerate()
+                .filter(|(series, (value, _))| *value != 0.0 && (!segment_tooltip || hovered_series() == Some(*series)))
+                .map(|(_, (value, (label, color)))| (label.clone(), color.clone(), format_value(value)))
                 .collect();
             (tooltip_x, point.period_label.clone(), rows, format_value(totals[index]))
         })
     });
+
+    // The mouse handlers of a bar, for its column, and with segment_tooltip for its segments too, which are over the
+    // column so that the mouse can be over them. series is the series of the segment, None for the column.
+    let on_enter = move |index: usize, series: Option<usize>| move |_: MouseEvent| {
+        hovered.set(Some(index));
+        hovered_series.set(series);
+        if let Some((from, _)) = dragged() {
+            dragged.set(Some((from, index)));
+        }
+    };
+    let on_down = move |index: usize| move |event: MouseEvent| {
+        // Only the left button drags, the right one opens the menu.
+        if event.trigger_button() == Some(MouseButton::Primary) {
+            dragged.set(Some((index, index)));
+        }
+    };
+    let on_context_menu = {
+        let periods = periods.clone();
+        let has_menu = !menu.is_empty();
+        move |index: usize| {
+            let periods = periods.clone();
+            move |event: MouseEvent| {
+                event.prevent_default();
+                if has_menu {
+                    let (start, end) = periods[index];
+                    let previous_start = if index > 0 { periods[index - 1].0 } else { start - (end - start) };
+                    let point = event.client_coordinates();
+                    menu_at.set(Some((BarClick { start, end, previous_start }, point.x, point.y)));
+                }
+            }
+        }
+    };
+    let on_up = {
+        let periods = periods.clone();
+        move || {
+            let periods = periods.clone();
+            move |_: MouseEvent| {
+                // A drag across more than one bar zooms to them, a click on one bar does nothing.
+                if let (Some((from, to)), Some(on_zoom)) = (dragged.take(), on_zoom) {
+                    if from != to {
+                        on_zoom.call((periods[from.min(to)].0, periods[from.max(to)].1));
+                    }
+                }
+            }
+        }
+    };
+    let on_double_click = {
+        let periods = periods.clone();
+        move |index: usize| {
+            let periods = periods.clone();
+            move |_: MouseEvent| {
+                if let Some(on_drill) = on_drill {
+                    on_drill.call(periods[index]);
+                }
+            }
+        }
+    };
 
     rsx! {
         svg {
@@ -353,6 +484,7 @@ pub fn StackedBarGraph(
             },
             onmouseleave: move |_| {
                 hovered.set(None);
+                hovered_series.set(None);
                 dragged.set(None);
             },
             for (ty, label) in y_ticks {
@@ -365,22 +497,30 @@ pub fn StackedBarGraph(
                 rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
                 text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
             }
-            for (tx, lx, label) in x_ticks {
-                line { class: "stacked-tick", x1: tx, x2: tx, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
-                text { class: "stacked-axis-label", x: lx, y: height - 10.0, text_anchor: label_anchor, "{label}" }
-            }
-            for (color, bx, by, bw, bh) in bars {
-                rect {
-                    class: "stacked-bar",
-                    fill: "{color}",
-                    x: bx,
-                    y: by,
-                    width: bw,
-                    height: bh,
+            if bands.is_empty() {
+                for (tx, lx, label) in x_ticks {
+                    line { class: "stacked-tick", x1: tx, x2: tx, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
+                    text { class: "stacked-axis-label", x: lx, y: height - 10.0, text_anchor: label_anchor, "{label}" }
                 }
             }
-            if let Some((selection_x, selection_width)) = selection {
-                rect { class: "stacked-selection", x: selection_x, y: TOP, width: selection_width, height: plot_height }
+            // A gap of a pixel each side shows where one band ends and the next starts.
+            for (band_x, band_width, label) in bands {
+                rect { class: "stacked-x-band", x: band_x + 1.0, y: TOP + plot_height + 4.0, width: (band_width - 2.0).max(0.0), height: BOTTOM - 6.0 }
+                if let Some(label) = label {
+                    text { class: "stacked-axis-label", x: band_x + band_width / 2.0, y: height - 10.0, text_anchor: "middle", "{label}" }
+                }
+            }
+            if !segment_tooltip {
+                for (_, _, color, bx, by, bw, bh) in bars.iter().cloned() {
+                    rect {
+                        class: "stacked-bar",
+                        fill: "{color}",
+                        x: bx,
+                        y: by,
+                        width: bw,
+                        height: bh,
+                    }
+                }
             }
             for (index, column_x, column_width) in columns {
                 rect {
@@ -389,51 +529,33 @@ pub fn StackedBarGraph(
                     y: TOP,
                     width: column_width,
                     height: plot_height,
-                    onmouseenter: move |_| {
-                        hovered.set(Some(index));
-                        if let Some((from, _)) = dragged() {
-                            dragged.set(Some((from, index)));
-                        }
-                    },
-                    onmousedown: move |event| {
-                        // Only the left button drags, the right one opens the menu.
-                        if event.trigger_button() == Some(MouseButton::Primary) {
-                            dragged.set(Some((index, index)));
-                        }
-                    },
-                    oncontextmenu: {
-                        let periods = periods.clone();
-                        let has_menu = !menu.is_empty();
-                        move |event: MouseEvent| {
-                            event.prevent_default();
-                            if has_menu {
-                                let (start, end) = periods[index];
-                                let previous_start = if index > 0 { periods[index - 1].0 } else { start - (end - start) };
-                                let point = event.client_coordinates();
-                                menu_at.set(Some((BarClick { start, end, previous_start }, point.x, point.y)));
-                            }
-                        }
-                    },
-                    onmouseup: {
-                        let periods = periods.clone();
-                        move |_| {
-                            // A drag across more than one bar zooms to them, a click on one bar does nothing.
-                            if let (Some((from, to)), Some(on_zoom)) = (dragged.take(), on_zoom) {
-                                if from != to {
-                                    on_zoom.call((periods[from.min(to)].0, periods[from.max(to)].1));
-                                }
-                            }
-                        }
-                    },
-                    ondoubleclick: {
-                        let periods = periods.clone();
-                        move |_| {
-                            if let Some(on_drill) = on_drill {
-                                on_drill.call(periods[index]);
-                            }
-                        }
-                    },
+                    onmouseenter: on_enter(index, None),
+                    onmousedown: on_down(index),
+                    oncontextmenu: on_context_menu(index),
+                    onmouseup: on_up(),
+                    ondoubleclick: on_double_click(index),
                 }
+            }
+            // Over the columns, so that the tooltip can be for the segment the mouse is over.
+            if segment_tooltip {
+                for (index, series, color, bx, by, bw, bh) in bars.iter().cloned() {
+                    rect {
+                        class: "stacked-bar",
+                        fill: "{color}",
+                        x: bx,
+                        y: by,
+                        width: bw,
+                        height: bh,
+                        onmouseenter: on_enter(index, Some(series)),
+                        onmousedown: on_down(index),
+                        oncontextmenu: on_context_menu(index),
+                        onmouseup: on_up(),
+                        ondoubleclick: on_double_click(index),
+                    }
+                }
+            }
+            if let Some((selection_x, selection_width)) = selection {
+                rect { class: "stacked-selection", x: selection_x, y: TOP, width: selection_width, height: plot_height }
             }
 
             if let Some((tx, period, rows, total)) = tooltip {
@@ -482,7 +604,23 @@ pub fn StackedBarGraph(
 mod tests {
     use sparko_graphql::types::Currency;
 
-    use super::{StackedBarMode, axis_label, axis_unit, format_money, nice_step};
+    use super::{StackedBarMode, axis_label, axis_unit, day_bands, format_money, nice_step};
+
+    fn time(text: &str) -> i64 {
+        time::OffsetDateTime::parse(text, &time::format_description::well_known::Rfc3339).unwrap().unix_timestamp()
+    }
+
+    #[test]
+    fn there_is_a_band_for_each_local_day_including_the_one_with_the_clock_change() {
+        let london = time_tz::timezones::db::europe::LONDON;
+        // From 20:00 BST on Saturday 24 October to 08:00 GMT on Monday 26 October, across the clocks going back.
+        let bands = day_bands(time("2026-10-24T19:00:00Z"), time("2026-10-26T08:00:00Z"), london);
+        let labels: Vec<&str> = bands.iter().map(|band| band.labels[0].as_str()).collect();
+        assert_eq!(labels, ["Sat 24 Oct", "Sun 25 Oct", "Mon 26 Oct"]);
+        assert_eq!(bands[1].labels, ["Sun 25 Oct", "25 Oct", "25"]);
+        // Sunday is 25 hours long.
+        assert_eq!(bands[1].end - bands[1].start, 25 * 3600);
+    }
 
     #[test]
     fn nice_step_rounds_up_to_readable_values() {

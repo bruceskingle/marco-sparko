@@ -233,7 +233,7 @@ query getCurrentDemand(
   $start: DateTime, 
   $end: DateTime, 
   $grouping: TelemetryGrouping
-) @ms_required_by_default {
+) {
   	smartMeterTelemetry(deviceId: $meterDeviceId
       start: $start
       end: $end
@@ -370,5 +370,92 @@ query homeAndEvConsumptionBreakdown(
       __typename
     }
     __typename
+  }
+}
+query smartDevices($accountNumber: String!) {
+  devices(accountNumber: $accountNumber) {
+    id
+    name
+    deviceType
+    provider
+    propertyId
+    __typename
+    ... on SmartFlexChargePoint {
+      make
+      model
+      vehicleBatterySize
+      chargePointPowerOutput
+    }
+    ... on SmartFlexVehicle {
+      make
+      model
+      vehicleBatterySize
+      chargePointPowerOutput
+    }
+  }
+}
+
+query chargingSessions($accountNumber: String!, $deviceId: String!, $after: DateTime, $before: DateTime, $first: Int) {
+  devices(accountNumber: $accountNumber, deviceId: $deviceId) {
+    id
+    __typename
+    # Charge points and vehicles, the devices which charge.
+    ... on ElectricDevice {
+      chargingSessions(after: $after, before: $before, first: $first) {
+        ...chargingSessionFields
+      }
+    }
+  }
+}
+
+fragment chargingSessionFields on DeviceChargingSessionConnection {
+  edges {
+    node {
+      start
+      end
+      __typename
+      ... on SmartFlexChargingSession {
+        stateOfChargeChange
+        stateOfChargeFinal
+        energyAdded {
+          value
+          unit
+        }
+        cost {
+          amount
+          currency
+        }
+        type
+        targetType
+        dispatches {
+          start
+          end
+          type
+          energyAddedKwh
+        }
+        problems {
+          __typename
+          ... on SmartFlexChargingTruncation {
+            truncationCause
+            originalAchievableStateOfCharge
+            achievableStateOfCharge
+          }
+          ... on SmartFlexChargingError {
+            cause
+          }
+        }
+      }
+      ... on PublicChargingSession {
+        energyAdded {
+          value
+          unit
+        }
+        cost {
+          amount
+          currency
+        }
+        location
+      }
+    }
   }
 }

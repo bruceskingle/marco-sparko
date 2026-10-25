@@ -186,7 +186,10 @@ impl CategoryFilter {
 /// For the trend graph each category has a line style picker in place of the colour picker, and there is a colour
 /// picker for each of the years.
 #[component]
-pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String>, years: Vec<i32>, trend: bool, disabled: bool) -> Element {
+/// With visibility_only, the categories only have a check box, and there is no total, e.g. for categories which filter
+/// what is shown rather than being drawn themselves.
+pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String>, years: Vec<i32>, trend: bool, disabled: bool,
+    #[props(default)] visibility_only: bool) -> Element {
     let mut menu_open = use_signal(|| false);
     let styles = filter.read().styles(&categories);
     let dashes = filter.read().dashes(&categories);
@@ -197,7 +200,12 @@ pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String
         span { class: "menu-anchor",
             button {
                 r#type: "button",
-                title: if trend { "Choose the categories shown, their line styles and the colours of the years" } else { "Choose the categories shown and their colours" },
+                title: match (visibility_only, trend) {
+                    (true, true) => "Choose the categories shown and the colours of the years",
+                    (true, false) => "Choose the categories shown",
+                    (false, true) => "Choose the categories shown, their line styles and the colours of the years",
+                    (false, false) => "Choose the categories shown and their colours",
+                },
                 disabled,
                 onclick: move |_| menu_open.set(!menu_open()),
                 Icon {
@@ -220,7 +228,8 @@ pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String
                 div { class: "dropdown-menu category-menu",
                     for ((label, style), dash) in categories.iter().cloned().zip(styles).zip(dashes) {
                         div { class: "category-row",
-                            if trend {
+                            if visibility_only {}
+                            else if trend {
                                 {line_style_picker(filter, label.clone(), dash)}
                             }
                             else {
@@ -236,19 +245,21 @@ pub fn CategoryFilterMenu(filter: Signal<CategoryFilter>, categories: Vec<String
                             {visibility_check_box(filter, label.clone(), style.clone(), None)}
                         }
                     }
-                    div { class: "menu-separator" }
-                    div { class: "category-row",
-                        // In the trend graph the total has the colour of each year, and a solid line.
-                        if !trend {
-                            {color_picker(TOTAL_LABEL, total.color.clone(), {
-                                let total = total.clone();
-                                move |color| {
-                                    let mut filter = filter;
-                                    filter.write().set_total(trend, CategoryStyle { color, ..total.clone() });
-                                }
-                            })}
+                    if !visibility_only {
+                        div { class: "menu-separator" }
+                        div { class: "category-row",
+                            // In the trend graph the total has the colour of each year, and a solid line.
+                            if !trend {
+                                {color_picker(TOTAL_LABEL, total.color.clone(), {
+                                    let total = total.clone();
+                                    move |color| {
+                                        let mut filter = filter;
+                                        filter.write().set_total(trend, CategoryStyle { color, ..total.clone() });
+                                    }
+                                })}
+                            }
+                            {visibility_check_box(filter, String::from(TOTAL_LABEL), total.clone(), Some(trend))}
                         }
-                        {visibility_check_box(filter, String::from(TOTAL_LABEL), total.clone(), Some(trend))}
                     }
                     if trend {
                         div { class: "menu-separator" }
