@@ -6,6 +6,17 @@ icon = ["icons/icon.ico"]
 identifier = "org.skingle"
 publisher = "BruceSkingle"
 
+[bundle.windows]
+icon_path = "icons/icon.ico"
+# WebView2 is part of Windows 11 and recent Windows 10, so the installer runs Microsoft's small bootstrapper, silently,
+# which only downloads and installs it if it is missing. The default embeds the whole offline installer (about 180 MB)
+# and runs it every time, with a dialog which says installation failed if WebView2 is already installed.
+webview_install_mode = { DownloadBootstrapper = { silent = true } }
+
+[bundle.windows.nsis]
+# The setup.exe's own icon, which is not taken from bundle.icon.
+installer_icon = "icons/icon.ico"
+
 # chat gpt imagined this...
 # [bundle.macos]
 # minimum_system_version = "11.0"
