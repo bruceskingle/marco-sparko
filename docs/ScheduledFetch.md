@@ -85,6 +85,18 @@ and needs no extra permissions.
     cat ~/Library/Logs/MarcoSparko/fetch.log
     ```
 
+To fetch every day instead, at 03:00, leave out the `Weekday` key and its value, so that `StartCalendarInterval` is:
+
+```xml
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+</dict>
+```
+
 To change the schedule, edit the file, then unload it and load it again. To stop the scheduled fetches altogether, unload
 it and delete the file:
 
@@ -110,6 +122,18 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatt
 Register-ScheduledTask -TaskName "Marco Sparko fetch" -Action $action -Trigger $trigger -Settings $settings
 ```
 
+To fetch every day instead, at 03:00, use this trigger in place of the weekly one when creating the task:
+
+```powershell
+$trigger = New-ScheduledTaskTrigger -Daily -At 3am
+```
+
+or change the trigger of a task which already exists:
+
+```powershell
+Set-ScheduledTask -TaskName "Marco Sparko fetch" -Trigger (New-ScheduledTaskTrigger -Daily -At 3am)
+```
+
 Try it now, then look at the log:
 
 ```powershell
@@ -132,6 +156,12 @@ A crontab entry works, e.g. with `crontab -e`, every Sunday at 03:00:
 
 ```
 0 3 * * 0 /path/to/marco-sparko --fetch >> ~/.marco-sparko-fetch.log 2>&1
+```
+
+or every day at 03:00:
+
+```
+0 3 * * * /path/to/marco-sparko --fetch >> ~/.marco-sparko-fetch.log 2>&1
 ```
 
 cron does not run a fetch which was missed while the computer was off. A systemd user timer with `Persistent=true`
