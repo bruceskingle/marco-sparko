@@ -23,109 +23,113 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in 'tests::test_handle_bill_total'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "octopus::tests::test_handle_bill_total",
-                    "--no-run",
-                    "--lib",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "lib"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'marco-sparko bill'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=marco-sparko",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--modules=octopus",
-                "bill"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'marco-sparko summary'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=marco-sparko",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--modules=octopus",
-                "summary"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'marco-sparko test'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=marco-sparko",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--modules=octopus",
-                "test"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug cli",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin",
-                    "cli"
-                ],
-                "filter": {
-                    "name": "cli",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--debug"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
+        // The test no longer exists.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug unit tests in 'tests::test_handle_bill_total'",
+        //     "cargo": {
+        //         "args": [
+        //             "test",
+        //             "octopus::tests::test_handle_bill_total",
+        //             "--no-run",
+        //             "--lib",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "lib"
+        //         }
+        //     },
+        //     "args": [],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // The bill, summary and test commands were from the command line version, the app no longer takes commands.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko bill'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--modules=octopus",
+        //         "bill"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko summary'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--modules=octopus",
+        //         "summary"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko test'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--modules=octopus",
+        //         "test"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // There is no longer a cli binary.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug cli",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin",
+        //             "cli"
+        //         ],
+        //         "filter": {
+        //             "name": "cli",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--debug"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // The last build, without building it again.
         {
             "name": "Debug Pre-built app",
             "type": "lldb",
@@ -166,15 +170,19 @@
                 "OS_ACTIVITY_MODE": "disable"
             }
         },
+        // Fetches the latest data without a window, as a scheduled fetch does, see docs/ScheduledFetch.md. It uses the
+        // profile the app last used, add "--profile", "<name>" to the args for another one. Its output is in the
+        // terminal.
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'marco-sparko'",
+            "name": "Debug Fetch Latest Data",
             "cargo": {
                 "args": [
                     "build",
                     "--bin=marco-sparko",
-                    "--package=marco-sparko"
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
                 ],
                 "filter": {
                     "name": "marco-sparko",
@@ -182,27 +190,55 @@
                 }
             },
             "args": [
+                "--fetch"
             ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'marco-sparko'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=marco-sparko",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
         }
+        // The same as Debug Dioxus Desktop App, without verbose output.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // The executable has no tests, they are all in the library.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug unit tests in executable 'marco-sparko'",
+        //     "cargo": {
+        //         "args": [
+        //             "test",
+        //             "--no-run",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [],
+        //     "cwd": "${workspaceFolder}"
+        // }
     ]
 }

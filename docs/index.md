@@ -3,6 +3,8 @@ This section contains various documents about Marco Sparko as well as the servic
 
 [Getting Started](gettingStarted/index.md) An introduction into how to install and use the application.
 
+[Fetching Data on a Schedule](ScheduledFetch.md) How to have the app fetch the latest data regularly without opening it, e.g. once a week, so that it is always up to date and data Octopus only keeps for a while, such as the Home Mini's readings, is never lost.
+
 ## Plugins
 The following plugins are currently supported as part of the core Marco Sparko development. The links go to pages with more specific details.
 

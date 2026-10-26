@@ -44,6 +44,10 @@
 - **Smart devices.** The Meters page also shows each property's **Smart Device Network**, the meters and in-home
   devices such as the Home Mini, described in plain words, and your **Smart Flex Devices**, e.g. EV chargers, which
   link to their charging sessions. The Properties page shows each property's meters and its Smart Device Network.
+- **Fetching data on a schedule.** Run the app with `--fetch` and it fetches the latest data for the last 30 days, as
+  if every page was opened, without opening its window, then exits. Scheduled to run e.g. once a week, the app is always
+  up to date when it is opened, and readings which Octopus only keeps for a while, such as the Home Mini's, are never
+  lost. See [Fetching Data on a Schedule](ScheduledFetch.md) for how to set it up on macOS, Windows and Linux.
 - **Electricity (first version).** A new Electricity page combines everything known about your electricity into one
   graph or table: import above zero, split into the rates it is billed at, e.g. Home Low Rate and EV Low Rate, and
   export below zero.

@@ -207,7 +207,9 @@ where
                     let update = if let Some((_attrs, current_value)) = data.get(&index) {
                         let v = serde_json::to_string(&value)?;
                         let c = serde_json::to_string(current_value)?;
-                        println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
+                        if config.verbose {
+                            println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
+                        }
                         v != c
                     }
                     else {

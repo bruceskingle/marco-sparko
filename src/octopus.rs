@@ -15,6 +15,7 @@ mod line_items;
 mod meter_agreement;
 mod measurements;
 mod electricity;
+mod fetch;
 mod stacked_bar_graph;
 mod trend_graph;
 mod category_filter;
@@ -206,8 +207,12 @@ impl OctopusModule {
 }
 
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Module for OctopusModule {
+    async fn fetch_latest_data(&self) -> anyhow::Result<()> {
+        fetch::fetch_latest_data(&self.context).await
+    }
+
     fn cli_debug(&self) -> Result<(), anyhow::Error> {
         println!("Args: {:?}", self.octopus_args);
         println!("Octopus Module: account_id={}", self.context.account_id);

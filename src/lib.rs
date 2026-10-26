@@ -56,6 +56,10 @@ pub struct MarcoSparkoArgs {
     /// The directory holding .marco-sparko and .marco-sparko-cache, instead of the home directory
     #[arg(long)]
     home: Option<PathBuf>,
+    /// Fetch the latest data of every module for the last 30 days, without opening a window, then exit, e.g. from a
+    /// scheduled task, see docs/ScheduledFetch.md
+    #[arg(long)]
+    fetch: bool,
 }
 
 pub struct Args {
@@ -129,6 +133,63 @@ impl Args {
     pub fn module_args(&self, module_name: &str) ->  Option<Vec<String>> {
         self.module_args.get(module_name).cloned()
     }
+
+    /// Whether --fetch was given, to fetch the latest data without a window, see fetch_latest_data.
+    pub fn fetch(&self) -> bool {
+        self.marco_sparko_args.fetch
+    }
+}
+
+/// Fetches the latest data of each module of the profile, see Module::fetch_latest_data, without a window, for --fetch.
+/// A module which is not logged in, or whose fetch fails, is reported and the others are still fetched. Returns whether
+/// they all succeeded, for the exit status.
+pub fn fetch_latest_data(args: Args) -> bool {
+    let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("Unable to start: {error}");
+            return false;
+        },
+    };
+    println!("Marco Sparko {} fetching the latest data at {} UTC", env!("CARGO_PKG_VERSION"), time::OffsetDateTime::now_utc());
+    let verbose = args.marco_sparko_args.verbose;
+    let result = runtime.block_on(async move {
+        let context = MarcoSparkoContext::new(args)?;
+        let registrations = ModuleRegistrations::new(verbose);
+        let module_ids: Vec<String> = context.profile.active_profile.modules.keys().cloned().collect();
+        if module_ids.is_empty() {
+            return Err(anyhow!("Profile {} has no modules set up, open the app and log in first", context.profile.active_profile.name));
+        }
+        let mut all_ok = true;
+        for module_id in module_ids {
+            println!("Module {module_id}");
+            let fetched = async {
+                let factory = registrations.module_factory(&module_id, &context).await?;
+                if !factory.is_ready().await? {
+                    return Err(anyhow!("Not logged in, open the app and log in first"));
+                }
+                factory.build().await?.fetch_latest_data().await
+            }.await;
+            match fetched {
+                Ok(()) => println!("Module {module_id}: done"),
+                Err(error) => {
+                    println!("Module {module_id}: FAILED: {error:#}");
+                    all_ok = false;
+                },
+            }
+        }
+        anyhow::Ok(all_ok)
+    });
+    match result {
+        Ok(all_ok) => {
+            println!("Finished{}", if all_ok { "" } else { " with errors" });
+            all_ok
+        },
+        Err(error) => {
+            println!("FAILED: {error:#}");
+            false
+        },
+    }
 }
 
 
@@ -139,12 +200,19 @@ pub struct PageInfo {
 }
 
 //  let x: fn(ModuleProps) -> std::result::Result<VNode, RenderError> = Module;
-#[async_trait]
+/// How many days back --fetch fetches, see Module::fetch_latest_data.
+pub const FETCH_DAYS: i64 = 30;
+
+// Not Send, as fetch_latest_data is run on one thread, see fetch_latest_data, and the data sets' futures are not Send.
+#[async_trait(?Send)]
 pub trait Module {
     fn get_page_list(&self) -> Vec<PageInfo>;
     fn module_id(&self) -> &'static str;
     fn get_component(&self, page_id: &str, path: Vec<String>) -> Element;
     fn cli_debug(&self) -> anyhow::Result<()>;
+    /// Fetches the latest data of every page, as if each was shown with the last FETCH_DAYS days, printing its progress,
+    /// for --fetch. Data which is already cached and up to date is not fetched again.
+    async fn fetch_latest_data(&self) -> anyhow::Result<()>;
 }
 
 #[async_trait]
