@@ -7,6 +7,8 @@ use time_tz::Tz;
 
 use crate::components::app::MAIN_CSS;
 use crate::components::child_windows;
+use crate::views::help_panel::HelpPanel;
+use dioxus_free_icons::{Icon, icons::ld_icons::LdCircleHelp};
 use crate::octopus::bill::{AbstractBill, BillDataSet, BillTransactionBreakDown};
 use crate::octopus::context::OctopusContext;
 
@@ -91,6 +93,7 @@ impl PartialEq for BillWindowProps {
 fn BillWindow(props: BillWindowProps) -> Element {
     use_context_provider(|| props.context.clone());
     child_windows::use_child_window();
+    let mut show_help = use_signal(|| true);
 
     use_future(|| async {
         let mut keys = document::eval("document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { dioxus.send(true); } });");
@@ -106,12 +109,26 @@ fn BillWindow(props: BillWindowProps) -> Element {
                 div { class: "error", "Failed to show the bill" }
                 pre { "{errors:?}" }
             },
-            div { class: "bill-window",
-                BillDetail {
-                    account_id: props.context.account_id.clone(),
-                    bill_id: props.bill_id.clone(),
-                    bills: props.bills.clone(),
-                    billing_timezone: props.context.billing_timezone,
+            div { class: "bill-window-layout",
+                div { class: "bill-window",
+                    if !show_help() {
+                        button {
+                            r#type: "button",
+                            class: "nav-icon-button help-reopen",
+                            title: "Show the help",
+                            onclick: move |_| show_help.set(true),
+                            Icon { icon: LdCircleHelp, width: 16, height: 16 }
+                        }
+                    }
+                    BillDetail {
+                        account_id: props.context.account_id.clone(),
+                        bill_id: props.bill_id.clone(),
+                        bills: props.bills.clone(),
+                        billing_timezone: props.context.billing_timezone,
+                    }
+                }
+                if show_help() {
+                    HelpPanel { topic: String::from("octopus/bill.md"), on_close: move |_| show_help.set(false) }
                 }
             }
         }

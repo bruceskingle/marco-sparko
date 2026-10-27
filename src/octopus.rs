@@ -258,6 +258,24 @@ impl Module for OctopusModule {
         )
     }
 
+    fn help_topic(&self, page_id: &str, path: &[String]) -> String {
+        let topic = match (page_id, path.first().map(String::as_str)) {
+            ("user", _) => "user",
+            ("account", _) => "account",
+            ("bills", _) => "bills",
+            ("properties", None) => "properties",
+            ("properties", Some(_)) => "property",
+            ("measurements", None) => "meters",
+            ("measurements", Some("telemetry")) => "home-mini",
+            ("measurements", Some(_)) => "meter",
+            ("electricity", _) => "electricity",
+            ("ev", None) => "ev-charging",
+            ("ev", Some(_)) => "charging-sessions",
+            _ => "index",
+        };
+        format!("{MODULE_ID}/{topic}.md")
+    }
+
     fn get_component(&self, page_id: &str, path: Vec<String>) -> Element {
         let page = match page_id {
             "user" => {

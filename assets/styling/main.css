@@ -934,9 +934,18 @@ button.danger:disabled {
     min-height: 0;
 }
 
+/* The page, and the help panel on its right. */
+.app-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+}
+
 .app-page {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     overflow: auto;
@@ -1073,9 +1082,127 @@ button.danger:disabled {
 }
 
 /* The root of a bill's own window, see octopus/pages/bills.rs, which scrolls as the body does not. */
-.bill-window {
+.bill-window-layout {
+    display: flex;
+    flex-direction: row;
     height: 100vh;
+}
+
+.bill-window {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: auto;
     padding: 0 20px 20px;
     box-sizing: border-box;
+}
+
+/* Shows the help again in a bill window, which has no navigation bar. Far enough from the right to clear the window's
+   scroll bar when there is one. */
+.help-reopen {
+    position: fixed;
+    top: 8px;
+    right: 24px;
+    z-index: 10;
+}
+
+/* The help panel on the right, see help_panel.rs. */
+.help-panel {
+    flex: 0 0 auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-left: 8px;
+    border-left: 1px solid #404045;
+    background-color: #15151a;
+}
+
+/* The left edge, which is dragged to resize the panel. */
+.help-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    width: 8px;
+    cursor: ew-resize;
+    z-index: 5;
+}
+
+.help-drag-overlay {
+    position: fixed;
+    inset: 0;
+    cursor: ew-resize;
+    z-index: 1000;
+}
+
+.help-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #9aa6b2;
+}
+
+.help-title {
+    flex: 1 1 auto;
+}
+
+.help-button {
+    display: inline-flex;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+}
+
+.help-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 14px 14px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #d4d4dc;
+}
+
+.help-content h1 {
+    font-size: 1.25rem;
+}
+
+.help-content h2 {
+    font-size: 1.05rem;
+    margin-top: 1.2em;
+}
+
+.help-content h3 {
+    font-size: 0.95rem;
+}
+
+.help-content a {
+    color: #06b6d4;
+}
+
+/* A button's icon in the help text, drawn like the button. */
+.help-icon {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    padding: 2px 4px;
+    border: 1px solid #505058;
+    border-radius: 4px;
+    background-color: #24242c;
+    color: #d0d0d0;
+}
+
+.help-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.help-content code {
+    font-size: 12px;
+}
+
+.help-content ul, .help-content ol {
+    padding-left: 1.4em;
 }

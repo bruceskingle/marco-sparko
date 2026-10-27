@@ -11,6 +11,7 @@ mod profile;
 mod private_file;
 pub mod data_home;
 pub mod logging;
+pub mod help;
 
 #[cfg(feature = "desktop")]
 pub mod window_state;
@@ -219,6 +220,8 @@ pub trait Module {
     fn get_page_list(&self) -> Vec<PageInfo>;
     fn module_id(&self) -> &'static str;
     fn get_component(&self, page_id: &str, path: Vec<String>) -> Element;
+    /// The help page of the page page_id showing path, relative to docs/help, see help.rs, e.g. octopus/meters.md
+    fn help_topic(&self, page_id: &str, path: &[String]) -> String;
     fn cli_debug(&self) -> anyhow::Result<()>;
     /// Fetches the latest data of every page, as if each was shown with the last FETCH_DAYS days, printing its progress,
     /// for --fetch. Data which is already cached and up to date is not fetched again.

@@ -374,6 +374,8 @@ pub struct Profile {
 pub struct Settings {
     #[serde(default)]
     pub log: crate::logging::LogSettings,
+    #[serde(default)]
+    pub help: crate::help::HelpSettings,
 }
 
 /// Saves the settings of the profile.

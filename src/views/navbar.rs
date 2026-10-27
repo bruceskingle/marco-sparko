@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use crate::{ MarcoSparkoContext, UpgradeRequested, components::{app::Route, delete_profile::DeleteProfileDialog}, profile::{Settings, profile_names_equal}};
+use crate::views::help_panel::HelpPanel;
 use crate::views::log_panel::LogPanel;
 use dioxus::prelude::*;
-use dioxus_free_icons::{Icon, icons::ld_icons::{LdScrollText, LdSettings, LdUser}};
+use dioxus_free_icons::{Icon, icons::ld_icons::{LdCircleHelp, LdScrollText, LdSettings, LdUser}};
 
 // use crate::PROFILE_MANAGER;
 
@@ -55,6 +56,22 @@ pub fn Navbar() -> Element {
         }
     };
 
+    let show_help = settings.read().help.show;
+    // Shows or hides the help panel, and saves it so that it stays that way.
+    let set_show_help = {
+        let profile_name = context.profile.active_profile.name.clone();
+        move |show: bool| {
+            let mut new_settings: Settings = settings.read().clone();
+            new_settings.help.show = show;
+            if let Err(error) = crate::profile::update_settings(&profile_name, &new_settings) {
+                crate::log_error!("Failed to save whether the help is shown: {error}");
+            }
+            settings.set(new_settings);
+        }
+    };
+    // The help of the module screen being shown, which the Module view sets.
+    let module_help_topic = use_context_provider(|| crate::help::ModuleHelpTopic(Signal::new(None)));
+
     let mut all = Vec::new();
     for name in &context.profile.all_profiles {
         all.push(name.clone());
@@ -63,6 +80,12 @@ pub fn Navbar() -> Element {
     // get the current route so we can mark the active nav item
     let current_route = use_route::<Route>();
     let navigator = use_navigator();
+    let help_topic = match &current_route {
+        Route::Home {} => String::from("home.md"),
+        Route::ProfileSize { .. } => String::from("profile-size.md"),
+        Route::Settings {} => String::from("settings.md"),
+        Route::Module { module_id } => module_help_topic.0().unwrap_or_else(|| format!("{module_id}/index.md")),
+    };
     
     rsx! {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
@@ -100,6 +123,16 @@ pub fn Navbar() -> Element {
             div { class: "spacer" }
 
             div { class: "nav-right",
+                button {
+                    r#type: "button",
+                    class: if show_help { "nav-icon-button active" } else { "nav-icon-button" },
+                    title: if show_help { "Hide the help" } else { "Show the help" },
+                    onclick: {
+                        let mut set_show_help = set_show_help.clone();
+                        move |_| set_show_help(!show_help)
+                    },
+                    Icon { icon: LdCircleHelp, width: 16, height: 16 }
+                }
                 button {
                     r#type: "button",
                     class: if show_log { "nav-icon-button active" } else { "nav-icon-button" },
@@ -302,8 +335,19 @@ pub fn Navbar() -> Element {
             DeleteProfileDialog { name, on_close: move |_| delete_profile.set(None) }
         }
 
-        div { class: "app-page",
-            Outlet::<Route> {}
+        div { class: "app-body",
+            div { class: "app-page",
+                Outlet::<Route> {}
+            }
+            if show_help {
+                HelpPanel {
+                    topic: help_topic,
+                    on_close: {
+                        let mut set_show_help = set_show_help.clone();
+                        move |_| set_show_help(false)
+                    },
+                }
+            }
         }
         if show_log {
             LogPanel {

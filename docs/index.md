@@ -3,6 +3,8 @@ This section contains various documents about Marco Sparko as well as the servic
 
 [Getting Started](gettingStarted/index.md) An introduction into how to install and use the application.
 
+[Help](help/index.md) The help shown in the app beside each screen, describing what is on it, and [Writing Help](WritingHelp.md) for how to change it.
+
 [Fetching Data on a Schedule](ScheduledFetch.md) How to have the app fetch the latest data regularly without opening it, e.g. once a week, so that it is always up to date and data Octopus only keeps for a while, such as the Home Mini's readings, is never lost.
 
 ## Plugins

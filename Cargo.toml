@@ -42,6 +42,8 @@ arboard = { version = "3", default-features = false }
 anyhow = "1.0.100"
 # Moves deleted profiles to the Trash (macOS), Recycle Bin (Windows) or freedesktop trash (Linux)
 trash = "5"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+webbrowser = "1.0.6"
 
 
 # Windows only, to create files which only their owner can access, see private_file.rs

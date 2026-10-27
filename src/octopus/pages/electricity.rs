@@ -432,10 +432,6 @@ fn ElectricityGraph(account_id: String, import_mpan: String, export_mpan: Option
 
     rsx! {
         h1 { "Electricity" }
-        p { class: "note",
-            "Import and export from the meters' half hourly readings, which are split into the rates they are billed at, and the Home Mini's readings every 10 seconds, which are used where there are all of a half hour's. "
-            "The meters' readings arrive a few days later, until then the rate is estimated from the tariff's cheap times and when the car was charging."
-        }
         if let Some(error) = home_mini_error {
             p { class: "invalid", "The Home Mini's readings could not be fetched, only the meters' are shown: {error}" }
         }
