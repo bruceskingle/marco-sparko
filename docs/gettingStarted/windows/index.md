@@ -1,5 +1,9 @@
-[< Getting Started](../index.md)
-# Download the Release Binary
+# Installing on Windows
+
+How to download Marco Sparko for your PC and install it. The app is not signed, so Windows warns about the download
+and the installer, and this shows how to keep and run them.
+
+## Download the Release Binary
 
 Navigate to [https://github.com/bruceskingle/marco-sparko/releases/](https://github.com/bruceskingle/marco-sparko/releases/) to find the
 latest release: 
@@ -9,7 +13,7 @@ latest release:
 Look for the one with the <img src="../latest.png" width="60"> label, and then select the correct version for your computer, either
 ```MarcoSparko_0.4.2_x64-setup.exe``` for Intel based computers or ```MarcoSparko_0.4.2_arm64-setup.exe``` for ARM64 based computers (the version number ```0.4.2``` may be different of course).
 
-The ```.msi``` files are just a different way of installing, these installation instructions show the ```setup.exe``` version so unless you have a preference for the ```.msi``` approach you should use that.
+Releases up to 0.4.3 also had ```.msi``` files, which were just a different way of installing. From 0.4.4 there is only the ```setup.exe```.
 
 When you download the file you will see this warning like this:
 
@@ -54,5 +58,3 @@ When the uninstall completes click ```Next```
 Finally click ```Finish```, the setup wizard will close and the application should start.
 
 <img src="Screenshot11.png" width="550">
-
-[Getting Started >](../index.md)

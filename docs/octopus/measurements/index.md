@@ -1,4 +1,3 @@
-[< Bills](../bills.md)
 # Measurements
 The measurements page shows the half hourly readings from your smart meters, broken down by the rate you were charged at, together with what each half hour cost. You can view the readings as a table, as a stacked bar graph, or as a trend graph which compares one year with another.
 
@@ -92,5 +91,3 @@ The smoothing options all work from the daily totals, so the ```Raw```, ```Rate`
 The example above uses the 7 day average. The cumulative graph below shows that by 20 April 2026 slightly less electricity had been used than by the same date in 2025, and the gap has widened over the summer:
 
 <img src="Screenshot8.png" width="1024">
-
-[Profiles>](profiles.md)

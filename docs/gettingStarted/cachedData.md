@@ -1,5 +1,3 @@
-[< Profiles](profiles.md)
-
 # Cached Data
 Marco Sparko will create a directory in your home directory (or the data directory, see [Profiles](profiles.md#moving-the-data-directory)) called ```.marco-sparko-cache``` which contains local copies of data retrieved from the various online data sources for which it is configured. Maintaining a local copy of data which has previously been fetched from a server makes the application significantly faster and reduces the load on the cloud services it accesses. Most services will place limits on the number of requests which can be made in any period of time, and some operations (such as generating session authentication tokens) may be sufficiently expensive that the imposed limit is quite small.
 
@@ -34,5 +32,3 @@ In this case the data set is expected to be reasonably small but may grow over t
 In this case the dataset is expected to grow regularly. This data is chunked into time buckets, currently 1 calendar month. Within the data folder you will see folders with the name of recent (or the current) years. Within that folder you will find files containing data for a single month. When data is required for such a data set, the application will fetch all data from the start of the bucket (month) in which the required data sits. This means that for historic data each file usually contains a whole buckets worth of data, the file for the current period will, of course, be incomplete until the end of the period.
 
 As with the Multi Record format, the data is stored in ascending date order, so as new data is retrieved it can be appended to the existing file.
-
-[< Documentation Home](../index.md)

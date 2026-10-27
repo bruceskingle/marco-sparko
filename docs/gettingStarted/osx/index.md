@@ -1,5 +1,9 @@
-[< Getting Started](../index.md)
-# Download the Release Binary
+# Installing on macOS
+
+How to download Marco Sparko for your Mac, install it in Applications, and allow it to run. The app is not signed by
+Apple, so there is one extra step after installing it, which removes the warning macOS would otherwise show.
+
+## Download the Release Binary
 
 Navigate to [https://github.com/bruceskingle/marco-sparko/releases/](https://github.com/bruceskingle/marco-sparko/releases/) to find the
 latest release: 
@@ -35,5 +39,3 @@ If you wish to execute the app from the command line directly or from a shell sc
 ```
 /Applications/MarcoSparko.app/Contents/MacOS/marco-sparko
 ```
-
-[Getting Started >](../index.md)

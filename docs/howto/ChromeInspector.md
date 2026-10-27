@@ -1,4 +1,4 @@
-[< Documentation Home](index.md)
+[< Documentation Home](../index.md)
 
 # Chrome Browser Inspector HowTo
 
@@ -22,4 +22,4 @@ In this example we will inspect the GraphQL queries made by the Octopus Energy A
 
 ![Inspector View](inspector.png)
 
-[The Octopus Energy Plugin >](octopus/index.md)
+[The Octopus Energy Plugin >](../octopus/index.md)

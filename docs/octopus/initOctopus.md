@@ -1,5 +1,3 @@
-[< Getting Started](../gettingStarted/index.md)
-
 # Initialize Octopus
 
 To set up access to your Octopus Energy account click on the ```octopus``` module in the list on the home page. You will then see a login page like this:
@@ -63,5 +61,3 @@ The ```token``` is the short lived bearer token which has to be sent with each A
 The ```token``` is a [JSON Web Token (JWT)](https://en.wikipedia.org/wiki/JSON_Web_Token) which is a standard credential type.
 
 It is important to understand that *all* of these credentials allow access to your account in the same way that your email address and password does so you should never share this key with anyone else, and you should not change the access permissions on any of these files.
-
-[View Bills >](bills.md)

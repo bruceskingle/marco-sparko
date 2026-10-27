@@ -29,8 +29,9 @@ A screen whose page does not exist says so in the panel, with the file it looked
 Write links as ordinary relative Markdown links, so that they work on GitHub too.
 
 - **Another help page**, e.g. `[using the graphs](../graphs.md)`, opens in the panel, with a back button to return.
-- **Any other document in the repository**, e.g. `[scheduled fetch](../ScheduledFetch.md)`, opens in the browser on
-  GitHub, from the `main` branch, so a document only there on another branch is not found.
+- **A document in the book**, i.e. listed in `docs/SUMMARY.md`, e.g. `[scheduled fetch](../ScheduledFetch.md)`, opens
+  in the browser on the published documentation, which is built from the `main` branch.
+- **Any other document in the repository** opens in the browser on GitHub, also from the `main` branch.
 - **A web site** opens in the browser.
 
 A test, `links_between_help_pages_are_not_broken` in `src/help.rs`, checks that every link goes to a file which exists.
@@ -45,6 +46,12 @@ image.
 The icons are in [help/icons](help/icons/README.md), copied from the Lucide icons the app's buttons use, and listed
 in `ICONS` in `src/help.rs`, which a new one must be added to. To add one, copy its elements from the `IconShape`
 implementation of the icon in the `dioxus-free-icons` crate, `src/icons/ld_icons.rs`, into an SVG like the others.
+
+## The Book
+
+The documentation is also published as a book, with mdBook, see `book.toml` and `.github/workflows/docs.yml`, and the
+help pages are part of it. A new help page should be added to `docs/SUMMARY.md` as well as to `PAGES`, so that it is in
+the book. Preview the book with `mdbook serve --open`, after installing mdBook with `cargo binstall mdbook`.
 
 ## What to Write
 

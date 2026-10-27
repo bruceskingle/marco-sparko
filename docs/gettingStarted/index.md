@@ -1,8 +1,7 @@
-[< Documentation Home](../index.md)
 # Installation
-There are separate pages containing step by step instructions to install the application on [MacOS](osx/index,md) and [Windows](windows/index.md).
+There are separate pages containing step by step instructions to install the application on [MacOS](osx/index.md) and [Windows](windows/index.md).
 
-<b>NOTE that the release binaries are NOT SIGNED and additional steps are required on both platforms to complete the installation, please take a look at the instructions even if you are familiar with installing applications.
+**NOTE that the release binaries are NOT SIGNED and additional steps are required on both platforms to complete the installation, please take a look at the instructions even if you are familiar with installing applications.**
 
 # Getting Started
 
@@ -16,6 +15,3 @@ This is the ```Home``` screen which lists all the available Modules (there is on
 Clickable links in the user interface will highlight if you hover the mouse over them. In this case the ```Home``` item on the menu bar at the top (which brings you back to this page) and the names of modules in the list (just ```octopus``` at the moment) are clickable.
 
 The first step is to rectify this.
-
-
-[Initialize Octopus>](../octopus/initOctopus.md)

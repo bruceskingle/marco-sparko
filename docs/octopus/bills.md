@@ -1,11 +1,12 @@
-[< Init Octopus](initOctopus.md)
-Open he Octopus module page by clicking on ```octopus``` in the top menu bar if necessary, and then click on ```bills``` on the left menu.
+# Viewing Bills
 
-If this is the first time you have done this there will be a slight delay while the data for all statements is downloaded. Once this is complete you will see a list of bills in ascending date order like this:
+Open the Octopus module page by clicking on ```octopus``` in the top menu bar if necessary, and then click on ```bills``` on the left menu.
+
+If this is the first time you have done this there will be a slight delay while the data for all statements is downloaded. Once this is complete you will see a list of bills, the newest first (this screenshot is from a version which showed the oldest first):
 
 <img src="Screenshot5.png" width="1024">
 
-Each line represents a single bill showing the total amounts and the account balance before and after the bill. The ```Ref``` column is the bill ID as shown on your official statement. This is a clickable link and when you click these links you will see the details for that bill.
+Each line represents a single bill showing the total amounts and the account balance before and after the bill. The ```Ref``` column is the bill ID as shown on your official statement. This is a clickable link and when you click it the bill opens in a window of its own, so the list stays where it was, and several bills can be compared side by side.
 
 <img src="Screenshot6.png" width="1024">
 
@@ -21,7 +22,7 @@ As you can see, in this case the rates for this tariff have been deleted, for un
 
 There then follows a detailed breakdown of each of those summary lines where the API provides more detail, in this case both the gas and electricity tariffs are standard tariffs with a single rate, there is only a single line item of detail, which doesn't add anything very useful.
 
-If you click on ```bills``` in the left menu you will see the list of bills again where you can select another to look at.
+Close the bill's window to go back to the list, where you can select another to look at.
 
 
 
@@ -40,5 +41,3 @@ the Tariff being applied and the individual 30 minute charge periods amalgamated
 Finally the consumption analysis section shows us the total amounts per charge rate, I have solar and batteries and July has been very sunny so as you can see I have managed to keep my consumption almost entirely at the cheap rate.
 
 <img src="../readMe/Screenshot5.png" width="1024">
-
-[Measurements >](measurements/index.md)

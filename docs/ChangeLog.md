@@ -1,10 +1,16 @@
-# Release 0.4.4
+# Change Log
+
+What has changed in each release of Marco Sparko, the newest first: the new features, the improvements to existing
+ones, and the problems which have been fixed. The releases themselves are on
+[GitHub](https://github.com/bruceskingle/marco-sparko/releases).
+
+## Release 0.4.4
 
 > **Windows:** Marco Sparko for Windows now comes only as a `setup.exe`, there is no longer a `.msi` installer. If you
 > installed an earlier version from the `.msi`, uninstall it first (Settings, Apps, Marco Sparko, Uninstall), so that
 > you do not end up with two copies. Your profiles and downloaded data are kept.
 
-## New
+### New
 - **Drill down by double clicking.** On the Graph view, double click a bar to see it in more detail: a month shows its
   weeks, a week its days, and a day its individual half hour readings.
 - **Zoom by dragging.** Click and drag across bars in the graph to show just those bars.
@@ -64,7 +70,7 @@
     approximation, e.g. a car whose charging tapers off at the end is shown at a constant power. We intend to revisit
     this, e.g. with the charger's own readings, probably in a later release.
 
-## Improved
+### Improved
 - The Measurements page is now called **Meters**, and opens on the Graph view.
 - The labels along the bottom of the graphs are shown on a shaded band, centred on what they label. As many are shown
   as fit, so a wide window labels every bar, and when they do not all fit the roundest times are kept, e.g. every
@@ -83,9 +89,9 @@
 - The browser style right click menu (with Reload and other options which could leave the app in a broken state) no
   longer appears.
 
-# Release 0.4.3
+## Release 0.4.3
 
-## New
+### New
 - **Measurements.** A new Measurements page shows the consumption and costs of each meter point:
   - As a **table** of readings, a **graph** of stacked bars, or a **trend** graph which compares years, with a line
     for each year.
@@ -103,17 +109,17 @@
     downloaded data uses, and **Delete…**, which deletes it. Its login tokens are deleted immediately and its
     downloaded data is moved to the Trash or Recycle Bin.
   - The profile and downloaded data can be kept in another directory, e.g. on another drive, instead of your home
-    directory. See [Profiles](profiles.md#moving-the-data-directory). The directory in use is shown on the Home page.
+    directory. See [Profiles](gettingStarted/profiles.md#moving-the-data-directory). The directory in use is shown on the Home page.
 - The window opens at the size and position it had when it was last closed.
 
-## Improved
+### Improved
 - Bills downloaded since the last time they were viewed are highlighted.
 - Graph axis labels show just the numbers, with the units (e.g. kwh/day) shown once above them.
 - When Octopus rejects a request, e.g. when logging in, the message shown includes the reason it gave.
 - If the saved login can no longer be used, the login page says why.
 - Network errors and rate limits while downloading are retried automatically.
 
-## Fixed
+### Fixed
 - Some Windows computers could not connect to Octopus at all, failing with "403 Forbidden". Marco Sparko now connects
   in the same way on every computer, whatever the version of Windows.
 - Login details saved on Windows are now reliably readable only by you.

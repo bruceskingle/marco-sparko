@@ -20,7 +20,7 @@ little has changed. It prints what it is doing, and exits with status 0 if every
 failed, e.g. a network problem or a login which has expired, in which case open the app and log in again.
 
 It uses the profile the app last used. To use another one, add `--profile <name>`, and if the data has been moved from
-your home directory (see [Profiles](profiles.md#moving-the-data-directory)), add `--home <directory>` or set the same
+your home directory (see [Profiles](gettingStarted/profiles.md#moving-the-data-directory)), add `--home <directory>` or set the same
 environment variable for the scheduled task as for the app.
 
 You must have opened the app and logged in at least once, as the scheduled fetch uses the saved login.

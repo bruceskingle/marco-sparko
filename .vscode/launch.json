@@ -199,6 +199,16 @@
                 "RUST_BACKTRACE": "1",
                 "OS_ACTIVITY_MODE": "disable"
             }
+        },
+        // Serves the documentation book, see book.toml, at http://localhost:3000 and opens it in the browser. It is
+        // rebuilt and the browser reloaded whenever a file in docs or book changes. Stop it to stop the server. Needs
+        // mdBook, install it with: cargo binstall mdbook
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Serve Documentation Book",
+            "command": "mdbook serve --open",
+            "cwd": "${workspaceFolder}"
         }
         // The same as Debug Dioxus Desktop App, without verbose output.
         // {

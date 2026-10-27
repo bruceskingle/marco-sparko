@@ -2,15 +2,21 @@
 //!
 //! The help is Markdown in docs/help, so that it is also part of the documentation, and is built into the app. Each
 //! screen has a page, see the Navbar and Module::help_topic, which can link to other pages for more detail. Links to
-//! other documents open on GitHub, and links to web sites in the browser. See docs/WritingHelp.md for how to add and
-//! change pages.
+//! other documents open in the browser, in the documentation on GitHub Pages if they are part of it, see book.toml,
+//! otherwise on GitHub. See docs/WritingHelp.md for how to add and change pages.
 
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// Where the documentation is on GitHub, for links to documents other than the help pages.
-const DOCS_URL: &str = "https://github.com/bruceskingle/marco-sparko/blob/main/";
-/// Where the help pages are, relative to the repository and to DOCS_URL.
+/// Where the documentation is published, for links to documents in it other than the help pages.
+const BOOK_URL: &str = "https://bruceskingle.github.io/marco-sparko/";
+/// The contents of the documentation, which says which documents are in it.
+const BOOK_SUMMARY: &str = include_str!("../docs/SUMMARY.md");
+/// Where the repository is on GitHub, for links to anything else in it.
+const REPO_URL: &str = "https://github.com/bruceskingle/marco-sparko/blob/main/";
+/// Where the documentation is, relative to the repository.
+const DOCS_DIR: &str = "docs/";
+/// Where the help pages are, relative to the repository.
 const HELP_DIR: &str = "docs/help/";
 
 pub struct HelpPage {
@@ -84,14 +90,20 @@ pub fn follow(from: &str, href: &str) -> HelpLink {
     if href.starts_with("http://") || href.starts_with("https://") || href.starts_with("mailto:") {
         return HelpLink::Web(href.to_string());
     }
-    let href = href.split('#').next().unwrap_or_default();
+    let (href, fragment) = href.split_once('#').map_or((href, String::new()), |(href, fragment)| (href, format!("#{fragment}")));
     if href.is_empty() {
         return HelpLink::None;
     }
     let path = resolve(from, href);
-    match path.strip_prefix(HELP_DIR) {
-        Some(help_path) if page(help_path).is_some() => HelpLink::Page(help_path.to_string()),
-        _ => HelpLink::Web(format!("{DOCS_URL}{path}")),
+    if let Some(help_path) = path.strip_prefix(HELP_DIR)
+        && page(help_path).is_some()
+    {
+        return HelpLink::Page(help_path.to_string());
+    }
+    // A document in the book is on its page there, e.g. docs/ScheduledFetch.md at ScheduledFetch.html
+    match path.strip_prefix(DOCS_DIR).filter(|doc| BOOK_SUMMARY.contains(&format!("]({doc})"))).and_then(|doc| doc.strip_suffix(".md")) {
+        Some(doc) => HelpLink::Web(format!("{BOOK_URL}{doc}.html{fragment}")),
+        None => HelpLink::Web(format!("{REPO_URL}{path}{fragment}")),
     }
 }
 
@@ -192,7 +204,12 @@ mod tests {
         assert_eq!(follow("octopus/meters.md", "../graphs.md#zooming"), HelpLink::Page(String::from("graphs.md")));
         assert_eq!(follow("home.md", "octopus/index.md"), HelpLink::Page(String::from("octopus/index.md")));
         assert_eq!(follow("home.md", "../ScheduledFetch.md"),
-            HelpLink::Web(String::from("https://github.com/bruceskingle/marco-sparko/blob/main/docs/ScheduledFetch.md")));
+            HelpLink::Web(String::from("https://bruceskingle.github.io/marco-sparko/ScheduledFetch.html")));
+        assert_eq!(follow("octopus/index.md", "../../gettingStarted/profiles.md#moving-the-data-directory"),
+            HelpLink::Web(String::from("https://bruceskingle.github.io/marco-sparko/gettingStarted/profiles.html#moving-the-data-directory")));
+        // Not in the book, so on GitHub.
+        assert_eq!(follow("home.md", "../Release.md"),
+            HelpLink::Web(String::from("https://github.com/bruceskingle/marco-sparko/blob/main/docs/Release.md")));
         assert_eq!(follow("home.md", "https://octopus.energy"), HelpLink::Web(String::from("https://octopus.energy")));
         assert_eq!(follow("home.md", "#top"), HelpLink::None);
     }
@@ -209,12 +226,23 @@ mod tests {
     fn links_between_help_pages_are_not_broken() {
         for page in PAGES {
             for href in markdown_links(page.markdown) {
-                if let HelpLink::Web(url) = follow(page.path, &href)
-                    && let Some(path) = url.strip_prefix("https://github.com/bruceskingle/marco-sparko/blob/main/")
-                {
-                    assert!(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path).exists(), "{} links to {href} which does not exist", page.path);
-                }
+                let HelpLink::Web(url) = follow(page.path, &href) else { continue };
+                let url = url.split('#').next().unwrap_or_default();
+                let path = match (url.strip_prefix(super::BOOK_URL), url.strip_prefix(super::REPO_URL)) {
+                    (Some(doc), _) => format!("docs/{}", doc.replace(".html", ".md")),
+                    (_, Some(path)) => path.to_string(),
+                    _ => continue,
+                };
+                assert!(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(&path).exists(), "{} links to {href} which does not exist", page.path);
             }
+        }
+    }
+
+    /// Every help page is in the book too, see docs/SUMMARY.md.
+    #[test]
+    fn help_pages_are_in_the_book() {
+        for page in PAGES {
+            assert!(super::BOOK_SUMMARY.contains(&format!("](help/{})", page.path)), "{} is not in docs/SUMMARY.md", page.path);
         }
     }
 

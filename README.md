@@ -3,6 +3,8 @@
 
 Marco Sparko is a desktop application for MacOS and Windows which provides a view of your Octopus Energy account.
 
+**[Read the documentation](https://bruceskingle.github.io/marco-sparko/)** for how to install and use it.
+
 The application is a platform with a module framework which is intended to support other services as well, but at the moment Octopus Energy is the only module.
 
 # What Does it Do?
