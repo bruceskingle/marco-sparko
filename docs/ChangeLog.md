@@ -69,9 +69,34 @@ ones, and the problems which have been fixed. The releases themselves are on
     charging. Octopus does not appear to measure how much the car took when, so within a half hour this is only an
     approximation, e.g. a car whose charging tapers off at the end is shown at a constant power. We intend to revisit
     this, e.g. with the charger's own readings, probably in a later release.
+- **Help.** Every screen has help beside it, on the right of the window, which describes what is on that screen, with
+  links to more detailed help and pictures of the buttons it mentions. It follows you as you move around the app, e.g.
+  from the list of meters to a meter's readings. The help button at the top right shows or hides it, everywhere at
+  once, and it can be made wider or narrower by dragging its left edge.
+- **Documentation.** The documentation is now an [online book](https://bruceskingle.github.io/marco-sparko/), to read
+  from start to finish or search, with the same help as in the app, and new pictures of the app throughout.
+- **Bills open in their own window.** Click a bill in the list and it opens in a window of its own, beside the list, so
+  the list stays where it was, and several bills can be compared side by side. Bill windows stay in front of the main
+  window, and close when it does.
+  - The **Window** menu lists the open windows, to bring any of them to the front, and can **Arrange Bill Windows**
+    side by side across the screen, or **Close** any of them, or all of them.
+- **The log.** The important things the app does, such as each request to Octopus, how much it returned and how long it
+  took, and anything which went wrong, are shown in a panel along the bottom of the window, with errors in red and
+  warnings in yellow. It includes what a scheduled fetch does, even while the app is open. It is also kept in a file,
+  and the log button at the top right shows or hides it.
+- **Settings.** The gear button at the top right opens the settings of the profile, at the moment how much of the log
+  is kept: the last 24 hours (the default), each time the app is opened, or up to a size.
+- **Price per kWh** of each EV charging session, in the Charging Sessions table.
+- **Open bills.** A bill which Octopus has not issued yet says so, as it is not shown in the Octopus app yet, and may
+  change before it is issued.
 
 ### Improved
 - The Measurements page is now called **Meters**, and opens on the Graph view.
+- The bills are listed newest first.
+- The Marco Sparko logo is at the left of the bar along the top of the window.
+- The window no longer flashes white, with a large logo, as the app starts.
+- On Windows the menus are in the usual order, File, Edit and Window.
+- Profile names may contain underscores as well as letters and digits.
 - The labels along the bottom of the graphs are shown on a shaded band, centred on what they label. As many are shown
   as fit, so a wide window labels every bar, and when they do not all fit the roundest times are kept, e.g. every
   hour rather than every half hour. Graphs of several days of readings have a band for each day.
@@ -88,6 +113,11 @@ ones, and the problems which have been fixed. The releases themselves are on
   at.
 - The browser style right click menu (with Reload and other options which could leave the app in a broken state) no
   longer appears.
+
+### Fixed
+- A bill which Octopus replaced before issuing it, e.g. when it closed the billing period early, stayed in the list
+  after it no longer existed. It is now removed.
+- Bills were sometimes downloaded again from the very first one each day, rather than only the latest ones.
 
 ## Release 0.4.3
 
