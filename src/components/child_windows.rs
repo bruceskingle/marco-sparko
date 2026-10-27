@@ -112,10 +112,10 @@ pub fn menu_bar() -> Menu {
         let _ = menu_bar.append_items(&[&app_menu, &edit_menu, &window_menu]);
     }
     else {
-        // As in Dioxus's default, it is uncommon to have an app menu on other platforms, so Quit is in the Window menu,
-        // which comes first.
-        let _ = window_menu.append_items(&[&PredefinedMenuItem::quit(None), &PredefinedMenuItem::separator()]);
-        let _ = menu_bar.append_items(&[&window_menu, &edit_menu]);
+        // The usual order on Windows and Linux, with Exit in the File menu.
+        let file_menu = Submenu::new("File", true);
+        let _ = file_menu.append(&PredefinedMenuItem::quit(Some("Exit")));
+        let _ = menu_bar.append_items(&[&file_menu, &edit_menu, &window_menu]);
     }
 
     if cfg!(debug_assertions) {
@@ -290,6 +290,8 @@ pub fn open(key: &str, title: String, size: LogicalSize<f64>, make_dom: impl FnO
         .with_window(window_builder)
         // On Windows each window has its own menu bar, on macOS this is the app's menu bar already.
         .with_menu(menu_bar)
+        .with_background_color(crate::components::app::BACKGROUND_COLOR)
+        .with_custom_head(crate::components::app::INITIAL_HEAD.to_string())
         .with_disable_context_menu(!cfg!(debug_assertions));
 
     let pending = main.new_window(make_dom(), config);
@@ -361,46 +363,72 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Windows positions a window by its frame including its invisible resize borders, so the borders are allowed for to
+/// leave no gaps between the windows.
+#[cfg(target_os = "windows")]
 mod platform {
     use dioxus::desktop::DesktopService;
-    use dioxus::desktop::tao::dpi::{PhysicalPosition, PhysicalSize};
-    use dioxus::desktop::tao::window::Window;
+    use dioxus::desktop::tao::platform::windows::WindowExtWindows;
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
+    use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow};
+    use windows::Win32::UI::WindowsAndMessaging::{GetWindowRect, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos};
 
-    /// The part of the screen the window is on which windows can use, in physical pixels.
-    #[cfg(target_os = "windows")]
-    fn work_area(window: &Window) -> Option<(PhysicalPosition<i32>, PhysicalSize<u32>)> {
-        use dioxus::desktop::tao::platform::windows::WindowExtWindows;
-        use windows::Win32::Foundation::HWND;
-        use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow};
-
+    /// The part of the screen the window is on which is not the task bar, in physical pixels.
+    fn work_area(hwnd: HWND) -> Option<RECT> {
         let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         // SAFETY: the window handle is valid while the window is, and info is the size it says it is.
-        let found = unsafe {
-            let monitor = MonitorFromWindow(HWND(window.hwnd()), MONITOR_DEFAULTTONEAREST);
-            GetMonitorInfoW(monitor, &mut info).as_bool()
-        };
-        if !found {
-            return None;
-        }
-        let area = info.rcWork;
-        Some((
-            PhysicalPosition::new(area.left, area.top),
-            PhysicalSize::new((area.right - area.left) as u32, (area.bottom - area.top) as u32),
-        ))
+        let found = unsafe { GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mut info).as_bool() };
+        found.then_some(info.rcWork)
     }
 
-    /// The whole screen the window is on, as tao does not know where panels are.
-    #[cfg(not(target_os = "windows"))]
-    fn work_area(window: &Window) -> Option<(PhysicalPosition<i32>, PhysicalSize<u32>)> {
-        let monitor = window.current_monitor()?;
-        Some((monitor.position(), monitor.size()))
+    /// How far the window's frame extends beyond what is visible of it, on each side, as left, top, right and bottom.
+    fn invisible_borders(hwnd: HWND) -> (i32, i32, i32, i32) {
+        let mut frame = RECT::default();
+        let mut visible = RECT::default();
+        // SAFETY: the window handle is valid while the window is, and visible is the size it says it is.
+        let found = unsafe {
+            GetWindowRect(hwnd, &mut frame).is_ok()
+                && DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &mut visible as *mut RECT as *mut _, std::mem::size_of::<RECT>() as u32).is_ok()
+        };
+        if !found {
+            return (0, 0, 0, 0);
+        }
+        (visible.left - frame.left, visible.top - frame.top, frame.right - visible.right, frame.bottom - visible.bottom)
     }
 
     pub fn arrange(main: &DesktopService, children: &[std::rc::Rc<DesktopService>]) {
-        let Some((position, size)) = work_area(&main.window) else {
+        let Some(area) = work_area(HWND(main.window.hwnd())) else {
             return;
         };
+        let count = children.len() as i32;
+        let width = (area.right - area.left) / count;
+        for (index, child) in children.iter().enumerate() {
+            let hwnd = HWND(child.window.hwnd());
+            let (left, top, right, bottom) = invisible_borders(hwnd);
+            let x = area.left + width * index as i32;
+            // The last one takes up what is left after rounding.
+            let visible_width = if index as i32 == count - 1 { area.right - x } else { width };
+            // SAFETY: the window handle is valid while the window is.
+            let _ = unsafe {
+                SetWindowPos(hwnd, HWND(0), x - left, area.top - top, visible_width + left + right,
+                    area.bottom - area.top + top + bottom, SWP_NOZORDER | SWP_NOACTIVATE)
+            };
+        }
+    }
+}
+
+/// tao does not know where panels are, so the whole screen is used.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+mod platform {
+    use dioxus::desktop::DesktopService;
+    use dioxus::desktop::tao::dpi::{PhysicalPosition, PhysicalSize};
+
+    pub fn arrange(main: &DesktopService, children: &[std::rc::Rc<DesktopService>]) {
+        let Some(monitor) = main.window.current_monitor() else {
+            return;
+        };
+        let (position, size) = (monitor.position(), monitor.size());
         let width = size.width / children.len() as u32;
         for (index, child) in children.iter().enumerate() {
             let window = &child.window;

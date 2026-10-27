@@ -42,6 +42,11 @@ const FAVICON: Asset = asset!("/icons/icon.ico");
 // The asset macro also minifies some assets like CSS and JS to make bundled smaller
 pub const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
+/// The background of the app, as in main.css, for a window's webview and the page before the stylesheet has loaded,
+/// so that a window does not flash white as it opens.
+pub const BACKGROUND_COLOR: (u8, u8, u8, u8) = (0x0f, 0x11, 0x16, 0xff);
+pub const INITIAL_HEAD: &str = "<style>html, body { background-color: #0f1116; color: #ffffff; }</style>";
+
 /// App is the main component of our app. Components are the building blocks of dioxus apps. Each component is a function
 /// that takes some props and returns an Element. In this case, App takes no props because it is the root of our app.
 ///

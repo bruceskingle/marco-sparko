@@ -20,6 +20,8 @@ fn main() {
                 dioxus::desktop::Config::new()
                     // The app's own menu bar, whose Window menu lists the windows.
                     .with_menu(marco_sparko::components::child_windows::menu_bar())
+                    .with_background_color(marco_sparko::components::app::BACKGROUND_COLOR)
+                    .with_custom_head(marco_sparko::components::app::INITIAL_HEAD.to_string())
                     // .with_menu(None)
                     // The webview's context menu (Reload, Inspect Element...) is only offered in debug builds, its
                     // Reload would restart the app in a broken state.
