@@ -16,6 +16,7 @@ mod meter_agreement;
 mod measurements;
 mod electricity;
 mod fetch;
+mod logging_caller;
 mod stacked_bar_graph;
 mod trend_graph;
 mod category_filter;
@@ -49,7 +50,8 @@ include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 compile_error!("graphql built with Errors");
 
 
-pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
+/// Makes the requests of the pages, logging each one, see logging_caller.rs.
+pub type RequestManager = logging_caller::LoggingCaller<sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>>;
 
 
 /*
@@ -466,7 +468,7 @@ fn describe_login_error(error: &sparko_graphql::Error) -> String {
 impl OctopusModuleFactory {
     pub async fn do_build(&self) -> anyhow::Result<OctopusModule> {
 
-        let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?);
+        let authenticated_request_manager = Arc::new(logging_caller::LoggingCaller(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?));
        
         let client = OctopusModule::new(self.octopus_args.clone(), self.cache_config.clone(), self.profile.clone(), 
             authenticated_request_manager, self.verbose
@@ -483,7 +485,7 @@ impl OctopusModuleFactory {
 
             match token_manager.get_authenticator(true).await {
                 Ok(_token) => {
-                    println!("Logged in OK");
+                    crate::log_info!("Logged in to Octopus");
                     Ok(())
                 },
                 Err(error) => {
@@ -504,6 +506,7 @@ impl OctopusModuleFactory {
                  
                     }
                     errors.push(format!("Login failed, {}", describe_login_error(&error)));
+                    crate::log_error!("Login to Octopus failed, {}", describe_login_error(&error));
                     return Err(anyhow!(error));
                 },
             }
@@ -593,6 +596,9 @@ impl ModuleFactory for OctopusModuleFactory {
             Err(sparko_graphql::Error::MissingRequiredValueError(_)) => (false, None),
             Err(error) => (false, Some(format!("Unable to log in with the saved login details, {}", describe_login_error(&error)))),
         };
+        if let Some(error) = &error {
+            crate::log_error!("{error}");
+        }
         *self.saved_login_error.lock().unwrap() = error;
         Ok(ready)
     }

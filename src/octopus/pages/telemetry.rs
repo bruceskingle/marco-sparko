@@ -422,7 +422,7 @@ fn export_bar(readings: &Option<Arc<Vec<TelemetryReading>>>, esme_id: &str, clic
     let name = export_file_name("telemetry", esme_id, &start, &end, "readings");
     spawn(async move {
         if let Err(error) = save_table(&table, &name, format).await {
-            eprintln!("Export of a bar failed: {error}");
+            crate::log_error!("Export of a bar failed: {error}");
         }
     });
 }

@@ -16,7 +16,7 @@ impl<C: GraphQLCaller> RateLimitReset for FieldRateLimit<'_, C> {
         let response = match self.request_manager.call3(&rate_limit::Query::new(), None, &NoProgress).await {
             Ok(response) => response,
             Err(error) => {
-                println!("Failed to find when the rate limit of {} ends: {error}", self.field);
+                crate::log_warning!("Failed to find when the rate limit of {} ends: {error}", self.field);
                 return None;
             },
         };

@@ -29,7 +29,7 @@ sparko_graphql = {version = "0.4.4", path = "../sparko_graphql" }
 #reedline-repl-rs = { version = "1.2.1", features = ["async"] }
 futures = "0.3.31"
 indexmap = "2.7.1"
-time-tz = "2.0.0"
+time-tz = { version = "2.0.0", features = ["system"] }
 #tzdb = "0.7.2"
 #tz-rs = "0.7.0"
 dioxus = { version = "0.7.10", features = ["router", "desktop"] }

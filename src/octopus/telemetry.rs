@@ -121,7 +121,7 @@ fn protect(path: &Path) {
         if !permissions.readonly() {
             permissions.set_readonly(true);
             if let Err(error) = fs::set_permissions(path, permissions) {
-                println!("Failed to make {} read only: {error}", path.display());
+                crate::log_warning!("Failed to make {} read only: {error}", path.display());
             }
         }
     }

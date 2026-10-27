@@ -31,6 +31,9 @@ pub enum Route {
         // The disk space used by a profile, part of the Home app.
         #[route("/profile/:name")]
         ProfileSize { name: String },
+        // The app's settings for the active profile.
+        #[route("/settings")]
+        Settings {},
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.

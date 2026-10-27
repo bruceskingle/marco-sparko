@@ -96,7 +96,7 @@ fn ensure_dir(path: &Path, source: &str) -> anyhow::Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
         if fs::metadata(path)?.permissions().mode() & 0o077 != 0 {
-            eprintln!("WARNING: the data directory {} can be accessed by other users, it should only be accessible by its owner (chmod 700)", path.display());
+            crate::log_warning!("The data directory {} can be accessed by other users, it should only be accessible by its owner (chmod 700)", path.display());
         }
     }
     Ok(())

@@ -52,6 +52,7 @@ pub async fn fetch_latest_data(context: &OctopusContext) -> anyhow::Result<()> {
     let mut failures = 0;
     let mut failed = |what: &str, error: anyhow::Error| {
         println!("  {what}: FAILED: {error:#}");
+        crate::log_error!("Fetching {what} failed: {error:#}");
         failures += 1;
     };
 

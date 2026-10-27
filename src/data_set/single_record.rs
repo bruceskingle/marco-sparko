@@ -50,7 +50,7 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
                     data = Some(value);
                 },
                 Err(e) => {
-                    println!("Failed to read DataSet from {}: {:?}", path.display(), e);
+                    crate::log_warning!("Failed to read the cached {}, fetching it again: {e:?}", path.display());
                     refresh = true;
                 },
             }

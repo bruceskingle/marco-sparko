@@ -116,10 +116,10 @@ impl WindowState {
         match serde_json::to_string(self) {
             Ok(json) => {
                 if let Err(error) = std::fs::write(&path, json) {
-                    eprintln!("Failed to save window state to {}: {error}", path.display());
+                    crate::log_error!("Failed to save the window's size and position to {}: {error}", path.display());
                 }
             },
-            Err(error) => eprintln!("Failed to serialize window state: {error}"),
+            Err(error) => crate::log_error!("Failed to save the window's size and position: {error}"),
         }
     }
 }

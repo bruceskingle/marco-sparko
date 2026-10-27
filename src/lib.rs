@@ -10,6 +10,7 @@ mod profile;
 
 mod private_file;
 pub mod data_home;
+pub mod logging;
 
 #[cfg(feature = "desktop")]
 pub mod window_state;
@@ -163,6 +164,7 @@ pub fn fetch_latest_data(args: Args) -> bool {
         let mut all_ok = true;
         for module_id in module_ids {
             println!("Module {module_id}");
+            log_info!("Fetching the latest data of {module_id}");
             let fetched = async {
                 let factory = registrations.module_factory(&module_id, &context).await?;
                 if !factory.is_ready().await? {
@@ -171,9 +173,13 @@ pub fn fetch_latest_data(args: Args) -> bool {
                 factory.build().await?.fetch_latest_data().await
             }.await;
             match fetched {
-                Ok(()) => println!("Module {module_id}: done"),
+                Ok(()) => {
+                    println!("Module {module_id}: done");
+                    log_info!("Fetched the latest data of {module_id}");
+                },
                 Err(error) => {
                     println!("Module {module_id}: FAILED: {error:#}");
+                    log_error!("Fetching the latest data of {module_id} failed: {error:#}");
                     all_ok = false;
                 },
             }
@@ -353,12 +359,17 @@ impl MarcoSparkoContext {
 
        
         let profile = crate::profile::fetch_active_profile(&args.marco_sparko_args.profile)?;
-        
+        Ok(Self::for_profile(args, profile))
+    }
 
-        Ok(Arc::new(MarcoSparkoContext {
+    /// The context with the given profile active, starting its log, see logging.rs.
+    pub fn for_profile(args: Args, profile: ActiveProfile) -> Arc<MarcoSparkoContext> {
+        let started = if args.fetch() { "Fetch started" } else { "Started" };
+        logging::start(&profile.active_profile.name, &profile.active_profile.settings.log, started);
+        Arc::new(MarcoSparkoContext {
             args,
             profile,
-       }))
+        })
     }
 
     // pub fn with_profile(&self, profile_name: &String) -> anyhow::Result<Arc<MarcoSparkoContext>> {

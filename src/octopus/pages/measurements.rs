@@ -688,7 +688,7 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
                 let name = export_file_name("measurements", &mpan, &start, &end, "readings");
                 spawn(async move {
                     if let Err(error) = save_table(&table, &name, format).await {
-                        eprintln!("Export of a bar failed: {error}");
+                        crate::log_error!("Export of a bar failed: {error}");
                     }
                 });
             }),

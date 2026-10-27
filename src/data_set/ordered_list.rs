@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs::{FileTimes, OpenOptions},
     io::{BufRead, BufReader, Seek, SeekFrom, Write},
     sync::Arc,
@@ -13,6 +14,11 @@ use super::DataSetAttributes;
 
 /// A DataSet which is a list of records where the records returned from the API are in ascending order and new records can be
 /// appended to the end of the list.
+///
+/// Each record is final or not, see the indexer, e.g. a closed bill or an open one, which may still change. A refresh
+/// fetches from the earliest record which is not final, or if they all are, from the latest, see fetch_from. With
+/// drop_missing_provisional, a record which is not final and is no longer returned is removed, e.g. an open bill which
+/// the server replaced with another, see missing_provisional.
 pub struct OrderedListDataSet<K, O, V>
 {
     pub data: OrderedMap<K, O, (DataSetAttributes, V)> ,
@@ -31,6 +37,7 @@ where
             continuation_query_provider: CQP,
             response_iterator: RI,
             indexer: IN,
+            drop_missing_provisional: bool,
             config: &Arc<CacheConfig>,
             request_manager: &impl GraphQLCaller
         ) -> anyhow::Result<Self>
@@ -89,8 +96,6 @@ where
             .unwrap_or(false); // If the file is modified in the future, do not refresh it.
         let mut rewrite = false;
 
-        let mut last_final_index = None;
-        let mut first_non_final_index = None;
         let lines = BufReader::new(&file).lines();
         for line in lines.map_while(Result::ok) {
             if config.verbose 
@@ -101,28 +106,7 @@ where
             match serde_json::from_str(&line) {
                 Ok(value) => {
                     
-                    let (index, order, is_final) = indexer(&value);
-
-                    if is_final {
-                        if let Some(current_final_index) = &last_final_index {
-                            if index > *current_final_index {
-                                last_final_index = Some(index.clone());
-                            }
-                        }
-                        else {
-                            last_final_index = Some(index.clone());
-                        }
-                    }
-                    else {
-                        if let Some(current) = &first_non_final_index {
-                            if index < *current {
-                                first_non_final_index = Some(index.clone());
-                            }
-                        }
-                        else {
-                            first_non_final_index = Some(index.clone());
-                        }
-                    }
+                    let (index, order, _is_final) = indexer(&value);
                     data.insert(index, order, (DataSetAttributes { cached: true, }, value));
 
                     // if is_final {
@@ -150,39 +134,12 @@ where
         
         if refresh  {
 
-            let last_index = if let Some(l) = &last_final_index {
-                if let Some(f) = &first_non_final_index {
-                    if f < l {
-                        first_non_final_index
-                    }
-                    else {
-                        last_final_index
-                    }
-                }
-                else {
-                    last_final_index
-                }
-            }
-            else {
-                None
-            };
-
-            let last_record = if let Some(index) = last_index {
-                if let Some((_k, r )) = data.get(&index) {
-                    Some(r)
-                }
-                else {
-                    None
-                }
-
-                // let x = Some(data.get(&index).unwrap().1);
-                // Some(data.get(&index).unwrap().1 .1)
-            }
-            else {
-                None
-            };
+            let from = fetch_from(data.iter().map(|(_, (_, value))| indexer(value)));
+            let last_record = from.as_ref().and_then(|(index, _)| data.get(index)).map(|(_, value)| value);
             let query = initial_query_provider(last_record)?;
             let mut response = request_manager.call(&query).await?;
+            // The records returned, for drop_missing_provisional.
+            let mut returned: HashSet<K> = HashSet::new();
 
             // Self::handle_records(response, response_iterator, indexer, &mut data, &mut file)?;
 
@@ -201,6 +158,7 @@ where
 
                 for value in response_iterator(response) {
                     let (index, order, _is_final) = indexer(&value);
+                    returned.insert(index.clone());
 
                     // if let Some((a,x)) = data.get(&index);
                     
@@ -236,6 +194,18 @@ where
             }
             
 
+            if drop_missing_provisional {
+                let from_order = from.as_ref().map(|(_, order)| order);
+                let missing = missing_provisional(data.iter().map(|(_, (_, value))| indexer(value)), from_order, &returned);
+                if !missing.is_empty() {
+                    crate::log_info!("Removed {} records which are no longer returned from {}", missing.len(), path.display());
+                    for index in &missing {
+                        data.remove(index);
+                    }
+                    rewrite = true;
+                }
+            }
+
             file.set_times(FileTimes::new().set_modified(SystemTime::now()))?;
         };
 
@@ -255,5 +225,77 @@ where
             data
         })
         
+    }
+}
+
+/// The record to fetch from, as its key and order, from each record's key, order and whether it is final: the earliest
+/// record which is not final, as it may have changed, if it is before the latest final one, otherwise the latest final
+/// one, as new records come after it. None, to fetch them all, if none are final.
+fn fetch_from<K, O: Ord>(records: impl Iterator<Item = (K, O, bool)>) -> Option<(K, O)> {
+    let mut latest_final: Option<(K, O)> = None;
+    let mut earliest_provisional: Option<(K, O)> = None;
+    for (key, order, is_final) in records {
+        if is_final {
+            if latest_final.as_ref().is_none_or(|(_, latest)| order > *latest) {
+                latest_final = Some((key, order));
+            }
+        }
+        else if earliest_provisional.as_ref().is_none_or(|(_, earliest)| order < *earliest) {
+            earliest_provisional = Some((key, order));
+        }
+    }
+    match (latest_final, earliest_provisional) {
+        (Some(latest), Some(earliest)) if earliest.1 < latest.1 => Some(earliest),
+        (latest, _) => latest,
+    }
+}
+
+/// The keys of the records, from each one's key, order and whether it is final, which are not final, from the order
+/// fetched from, or all of them if from is None, and were not returned.
+fn missing_provisional<K: Eq + std::hash::Hash, O: Ord>(records: impl Iterator<Item = (K, O, bool)>, from: Option<&O>,
+    returned: &HashSet<K>) -> Vec<K>
+{
+    records
+        .filter(|(key, order, is_final)| !is_final && from.is_none_or(|from| order >= from) && !returned.contains(key))
+        .map(|(key, _, _)| key)
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::{fetch_from, missing_provisional};
+
+    /// Bills as (id, from date, closed), as they were cached when an open statement was replaced, see BillDataSet.
+    fn bills() -> Vec<(&'static str, &'static str, bool)> {
+        vec![
+            ("64400356", "2021-05-04", true),
+            ("464800541", "2026-09-25", true),
+            ("465467620", "2026-09-28", false),
+            ("473394964", "2026-09-28", true),
+            ("474269026", "2026-10-25", false),
+        ]
+    }
+
+    #[test]
+    fn a_refresh_is_from_the_earliest_record_which_is_not_final_by_order_not_key() {
+        // The open statement from 28 Sep, rather than the 2021 bill, whose id is the largest as text.
+        let from = fetch_from(bills().into_iter());
+        assert_eq!(from.map(|(_, order)| order), Some("2026-09-28"));
+        // With them all final, from the latest.
+        let closed = bills().into_iter().map(|(id, date, _)| (id, date, true));
+        assert_eq!(fetch_from(closed), Some(("474269026", "2026-10-25")));
+        // With none final, all of them.
+        let open = bills().into_iter().map(|(id, date, _)| (id, date, false));
+        assert_eq!(fetch_from(open), None);
+    }
+
+    #[test]
+    fn records_which_are_not_final_and_are_no_longer_returned_are_missing() {
+        let returned: HashSet<&str> = ["473394964", "474269026"].into_iter().collect();
+        assert_eq!(missing_provisional(bills().into_iter(), Some(&"2026-09-28"), &returned), ["465467620"]);
+        // Final records, and those before the fetch, are never missing.
+        assert!(missing_provisional(bills().into_iter(), Some(&"2026-10-25"), &returned).is_empty());
     }
 }

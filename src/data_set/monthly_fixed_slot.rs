@@ -144,7 +144,7 @@ fn is_rate_limited(error: &sparko_graphql::Error) -> bool {
 
 /// Whether a request which failed with this error may succeed if it is made again, e.g. after a network error, a
 /// gateway timeout or too many requests.
-fn is_transient(error: &sparko_graphql::Error) -> bool {
+pub fn is_transient(error: &sparko_graphql::Error) -> bool {
     match error {
         sparko_graphql::Error::IOError(_) => true,
         sparko_graphql::Error::HttpError(status, _) => status.is_server_error() || is_rate_limited(error),
@@ -201,7 +201,7 @@ fn minutes_and_seconds(seconds: i64) -> String {
 
 /// A short description of a transient error, for progress messages, e.g. "Too many requests" rather than the whole
 /// GraphQL error.
-fn brief(error: &sparko_graphql::Error) -> String {
+pub fn brief(error: &sparko_graphql::Error) -> String {
     match error {
         sparko_graphql::Error::GraphQLError(errors) => {
             let messages: Vec<&str> = errors.iter()
@@ -246,6 +246,8 @@ pub async fn call_unless_cancelled<Q: GraphQLQuery<R>, R: GraphQLResponse>(
         if let Some(block) = block {
             rate_limit_waits += 1;
             let allowed = block.rate.as_deref().map(|rate| format!(", Octopus allows {}", rate_in_words(rate))).unwrap_or_default();
+            crate::log_warning!("{prefix}: {}{allowed}, waiting {} for it to continue", brief(&error),
+                minutes_and_seconds((block.until + RATE_LIMIT_MARGIN - SystemTime::now().duration_since(UNIX_EPOCH).map(|now| now.as_secs() as i64).unwrap_or_default()).max(0)));
             // Counts down to the end of the block, a second at a time.
             loop {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|now| now.as_secs() as i64).unwrap_or_default();

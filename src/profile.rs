@@ -292,8 +292,11 @@ pub fn delete_profile(profile_name: &str, active_profile: &str) -> anyhow::Resul
     for path in &usage.token_files {
         fs::remove_file(path)?;
     }
-    if !usage.data_dirs.is_empty() {
-        trash::delete_all(&usage.data_dirs)?;
+    // The log goes to the trash with the data.
+    let log = crate::logging::log_path(profile_name)?;
+    let trashed: Vec<PathBuf> = usage.data_dirs.iter().cloned().chain(log.exists().then_some(log)).collect();
+    if !trashed.is_empty() {
+        trash::delete_all(&trashed)?;
     }
 
     serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
@@ -359,7 +362,30 @@ pub struct Profile {
     pub name: String,
     #[serde(default = "default_profile_version")]
     pub version: String,
-    pub modules: ModuleProfiles
+    pub modules: ModuleProfiles,
+    /// The app's own settings for the profile, which profiles from before there were any do not have.
+    #[serde(default)]
+    pub settings: Settings,
+}
+
+/// The settings of a profile which are the app's rather than a module's, set on the Settings page.
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    #[serde(default)]
+    pub log: crate::logging::LogSettings,
+}
+
+/// Saves the settings of the profile.
+pub fn update_settings(profile_name: &str, settings: &Settings) -> anyhow::Result<()> {
+    let file = fs::File::open(&MarcoSparkoContext::get_file_path()?)?;
+    let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
+    let profile = profile_file.iter_mut()
+        .find(|profile| profile_names_equal(&profile.name, profile_name))
+        .ok_or_else(|| anyhow!("No such profile \"{}\"", profile_name))?;
+    profile.settings = settings.clone();
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
+    Ok(())
 }
 
 impl Profile {
@@ -368,6 +394,7 @@ impl Profile {
             name: DEFAULT_PROFILE.to_string(),
             version: CURRENT_VERSION.to_string(),
             modules: ModuleProfiles::new(),
+            settings: Settings::default(),
         }
     }
 }

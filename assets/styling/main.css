@@ -925,3 +925,142 @@ button.danger:disabled {
 .telemetry-table tr.total td {
     font-weight: bold;
 }
+
+/* The window: the nav bar, then the page, which takes the space left, then the log panel if it is shown. */
+.app-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.app-page {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+/* The log and settings buttons beside the profile menu. */
+.nav-icon-button {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 8px;
+}
+
+.nav-icon-button.active {
+    background-color: #353540;
+    color: #d0d0d0;
+}
+
+/* The log panel along the bottom, see log_panel.rs. */
+.log-panel {
+    flex: 0 0 auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 60px;
+    margin-top: 8px;
+    border-top: 1px solid #404045;
+    background-color: #15151a;
+}
+
+/* The top edge, which is dragged to resize the panel. */
+.log-resize {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: ns-resize;
+    z-index: 5;
+}
+
+.log-drag-overlay {
+    position: fixed;
+    inset: 0;
+    cursor: ns-resize;
+    z-index: 1000;
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #9aa6b2;
+}
+
+.log-close {
+    display: inline-flex;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+}
+
+.log-entries {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 8px 4px 8px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+
+.log-entry {
+    white-space: pre-wrap;
+}
+
+.log-time {
+    margin-right: 8px;
+    color: #808088;
+}
+
+.log-level {
+    display: inline-block;
+    width: 64px;
+}
+
+.log-info {
+    color: #c4c4ce;
+}
+
+.log-warning {
+    color: #f5d742;
+}
+
+.log-error {
+    color: #ff6b6b;
+}
+
+/* The Settings page. */
+.settings-page {
+    padding: 0 16px 16px 16px;
+}
+
+.settings-group label {
+    display: block;
+    margin: 6px 0;
+}
+
+.settings-number {
+    width: 5em;
+}
+
+.settings-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+/* The explanation on an open bill, which Octopus has not issued yet. */
+.open-bill-note {
+    max-width: 60em;
+    padding: 8px 12px;
+    border: 1px solid #f5d742;
+    border-radius: 4px;
+    color: #f5d742;
+}

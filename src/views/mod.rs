@@ -19,3 +19,8 @@ pub use navbar::Navbar;
 
 mod profile_size;
 pub use profile_size::ProfileSize;
+
+mod settings;
+pub use settings::Settings;
+
+pub mod log_panel;
