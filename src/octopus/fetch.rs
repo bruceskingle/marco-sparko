@@ -6,7 +6,6 @@
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
-use time_tz::OffsetDateTimeExt;
 
 use crate::FETCH_DAYS;
 use crate::components::date_range_picker::{LocalSlot, RangeSelection};
@@ -44,7 +43,7 @@ pub async fn fetch_latest_data(context: &OctopusContext) -> anyhow::Result<()> {
     let request_manager = &*context.request_manager;
     let cancel = CancelToken::new();
     // The 30 Days quick range of the date range picker.
-    let today = time::OffsetDateTime::now_utc().to_timezone(tz).date();
+    let today = crate::clock::today(tz);
     let range = RangeSelection { start: LocalSlot { date: today - time::Duration::days(FETCH_DAYS), slot: 0 }, end: None };
     let (start, end) = range.to_date_times(tz).map_err(|error| anyhow::anyhow!(error))?;
     println!("Fetching account {account} from {start} to {end}");

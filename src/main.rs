@@ -3,6 +3,21 @@ use marco_sparko::components::app::App;
 fn main() {
     // With --fetch the latest data is fetched without a window, e.g. from a scheduled task, then the app exits.
     let args = marco_sparko::Args::ms_parse();
+    // With --redact a profile's data is copied to a redacted, offline, profile, then the app exits.
+    if let Some((from, to)) = args.redact() {
+        if let Err(error) = marco_sparko::redact::redact_profile(from, to) {
+            eprintln!("{error:#}");
+            std::process::exit(1);
+        }
+        std::process::exit(0);
+    }
+    if args.redact_docs() {
+        if let Err(error) = marco_sparko::redact::redact_docs() {
+            eprintln!("{error:#}");
+            std::process::exit(1);
+        }
+        std::process::exit(0);
+    }
     if args.fetch() {
         std::process::exit(if marco_sparko::fetch_latest_data(args) { 0 } else { 1 });
     }

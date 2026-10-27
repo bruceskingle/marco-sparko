@@ -8,7 +8,6 @@ use dioxus_free_icons::{Icon, icons::ld_icons::{LdCircleHelp, LdScrollText, LdSe
 
 // use crate::PROFILE_MANAGER;
 
-const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
 const APP_ICON: Asset = asset!("/assets/MarcoSparko.png");
 
 /// The Navbar component that will be rendered on all pages of our app since every page is under the layout.
@@ -56,18 +55,12 @@ pub fn Navbar() -> Element {
         }
     };
 
-    let show_help = settings.read().help.show;
-    // Shows or hides the help panel, and saves it so that it stays that way.
-    let set_show_help = {
-        let profile_name = context.profile.active_profile.name.clone();
-        move |show: bool| {
-            let mut new_settings: Settings = settings.read().clone();
-            new_settings.help.show = show;
-            if let Err(error) = crate::profile::update_settings(&profile_name, &new_settings) {
-                crate::log_error!("Failed to save whether the help is shown: {error}");
-            }
-            settings.set(new_settings);
-        }
+    // Whether the help is shown, in every window, see help::use_help_shown.
+    let mut help_shown = crate::help::use_help_shown();
+    let show_help = help_shown();
+    let mut set_show_help = move |show: bool| {
+        crate::help::set_shown(show);
+        help_shown.set(show);
     };
     // The help of the module screen being shown, which the Module view sets.
     let module_help_topic = use_context_provider(|| crate::help::ModuleHelpTopic(Signal::new(None)));
@@ -88,7 +81,6 @@ pub fn Navbar() -> Element {
     };
     
     rsx! {
-        document::Link { rel: "stylesheet", href: NAVBAR_CSS }
         div { class: "app-layout",
         nav { class: "nav",
             // The app's icon, filling the height of the bar, which also goes to the home page.
@@ -127,10 +119,7 @@ pub fn Navbar() -> Element {
                     r#type: "button",
                     class: if show_help { "nav-icon-button active" } else { "nav-icon-button" },
                     title: if show_help { "Hide the help" } else { "Show the help" },
-                    onclick: {
-                        let mut set_show_help = set_show_help.clone();
-                        move |_| set_show_help(!show_help)
-                    },
+                    onclick: move |_| set_show_help(!show_help),
                     Icon { icon: LdCircleHelp, width: 16, height: 16 }
                 }
                 button {
@@ -342,10 +331,7 @@ pub fn Navbar() -> Element {
             if show_help {
                 HelpPanel {
                     topic: help_topic,
-                    on_close: {
-                        let mut set_show_help = set_show_help.clone();
-                        move |_| set_show_help(false)
-                    },
+                    on_close: move |_| set_show_help(false),
                 }
             }
         }

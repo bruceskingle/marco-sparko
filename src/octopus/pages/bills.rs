@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use dioxus::desktop::LogicalSize;
+use dioxus::desktop::LogicalPosition;
 use dioxus::prelude::*;
 use time_tz::Tz;
 
@@ -11,6 +11,16 @@ use crate::views::help_panel::HelpPanel;
 use dioxus_free_icons::{Icon, icons::ld_icons::LdCircleHelp};
 use crate::octopus::bill::{AbstractBill, BillDataSet, BillTransactionBreakDown};
 use crate::octopus::context::OctopusContext;
+
+/// Where the bills' windows open in the main window, just right of the column of bill references, so that the others
+/// can still be clicked, and below the navigation bar: the right of the column and the top of the page area.
+const ANCHOR: &str = "
+    const rights = [...document.querySelectorAll('.bill-ref')].map((cell) => cell.getBoundingClientRect().right);
+    const page = document.querySelector('.app-page');
+    return [rights.length ? Math.max(...rights) : 0, page ? page.getBoundingClientRect().top : 0];
+";
+/// The space between the column of bill references and a bill's window.
+const ANCHOR_GAP: f64 = 8.0;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct BillsPageProps {
@@ -45,11 +55,16 @@ pub fn BillsPage(props: BillsPageProps) -> Element {
                 },
                 None => format!("Bill {bill_id}"),
             };
-            child_windows::open(&bill_id, title, LogicalSize::new(1100.0, 800.0), || VirtualDom::new_with_props(BillWindow, BillWindowProps {
-                context: context.clone(),
-                bill_id: bill_id.clone(),
-                bills: bills.clone(),
-            }));
+            let (context, bills) = (context.clone(), bills.clone());
+            spawn(async move {
+                let anchor = document::eval(ANCHOR).join::<(f64, f64)>().await.ok()
+                    .map(|(x, y)| LogicalPosition::new(x + ANCHOR_GAP, y));
+                child_windows::open(&bill_id, title, anchor, || VirtualDom::new_with_props(BillWindow, BillWindowProps {
+                    context,
+                    bill_id: bill_id.clone(),
+                    bills,
+                }));
+            });
         }
     });
 
@@ -93,7 +108,8 @@ impl PartialEq for BillWindowProps {
 fn BillWindow(props: BillWindowProps) -> Element {
     use_context_provider(|| props.context.clone());
     child_windows::use_child_window();
-    let mut show_help = use_signal(|| true);
+    // The same in every window, see help::use_help_shown.
+    let mut show_help = crate::help::use_help_shown();
 
     use_future(|| async {
         let mut keys = document::eval("document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { dioxus.send(true); } });");
@@ -116,7 +132,10 @@ fn BillWindow(props: BillWindowProps) -> Element {
                             r#type: "button",
                             class: "nav-icon-button help-reopen",
                             title: "Show the help",
-                            onclick: move |_| show_help.set(true),
+                            onclick: move |_| {
+                                crate::help::set_shown(true);
+                                show_help.set(true);
+                            },
                             Icon { icon: LdCircleHelp, width: 16, height: 16 }
                         }
                     }
@@ -128,7 +147,13 @@ fn BillWindow(props: BillWindowProps) -> Element {
                     }
                 }
                 if show_help() {
-                    HelpPanel { topic: String::from("octopus/bill.md"), on_close: move |_| show_help.set(false) }
+                    HelpPanel {
+                        topic: String::from("octopus/bill.md"),
+                        on_close: move |_| {
+                            crate::help::set_shown(false);
+                            show_help.set(false);
+                        },
+                    }
                 }
             }
         }

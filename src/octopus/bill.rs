@@ -137,7 +137,8 @@ impl AbstractBill {
         rsx!{
             tr { class: row_class,
                 td { "{issued_date}" }
-                td {
+                // The bill's window opens to the right of this column, see BillsPage.
+                td { class: "bill-ref",
                     div {
                         class: "link",
                         onclick: move |_| on_open.call(id.clone()),

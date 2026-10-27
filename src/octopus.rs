@@ -608,6 +608,10 @@ impl OctopusModuleFactory {
 impl ModuleFactory for OctopusModuleFactory {
 
     async fn is_ready(&self) -> anyhow::Result<bool> {
+        // An offline profile has no login, it only shows its cached data, see Profile::offline.
+        if self.context.profile.active_profile.offline {
+            return Ok(true);
+        }
         let (ready, error) = match self.token_manager.get_authenticator(false).await {
             Ok(_token) => (true, None),
             // There is no saved login, so the login page is shown without an error.

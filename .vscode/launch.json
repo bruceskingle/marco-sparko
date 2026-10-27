@@ -170,6 +170,37 @@
                 "OS_ACTIVITY_MODE": "disable"
             }
         },
+        // The app with the demo profile, a redacted, offline, copy of a real profile's data, e.g. for screenshots, see
+        // docs/Redaction.md. Make or refresh it with: marco-sparko --redact <profile> demo
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Dioxus Desktop App (demo)",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "-v",
+                "--profile",
+                "demo"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stdio": [null, "${workspaceFolder}/target/verbose.log", null],
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
         // Fetches the latest data without a window, as a scheduled fetch does, see docs/ScheduledFetch.md. It uses the
         // profile the app last used, add "--profile", "<name>" to the args for another one. Its output is in the
         // terminal.
@@ -191,6 +222,67 @@
             },
             "args": [
                 "--fetch"
+            ],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
+        // Copies a profile's data to the demo profile with everything which identifies you replaced, without a window,
+        // see docs/Redaction.md. It asks which profile to copy. Its output is in the terminal.
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Redact Profile into Demo",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--redact",
+                "${input:redactProfile}",
+                "demo"
+            ],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
+        // Redacts the documents in unredacted_docs into docs, replacing those there, see docs/Redaction.md. Its output
+        // is in the terminal.
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Redact Docs",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--redact",
+                "docs"
             ],
             "cwd": "${workspaceFolder}",
             "terminal": "integrated",
@@ -250,5 +342,13 @@
         //     "args": [],
         //     "cwd": "${workspaceFolder}"
         // }
+    ],
+    "inputs": [
+        {
+            "id": "redactProfile",
+            "type": "promptString",
+            "description": "The profile to copy into the demo profile, redacted",
+            "default": "n2"
+        }
     ]
 }

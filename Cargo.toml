@@ -44,6 +44,9 @@ anyhow = "1.0.100"
 trash = "5"
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 webbrowser = "1.0.6"
+aho-corasick = "1.1"
+regex = "1.11"
+rand = "0.9"
 
 
 # Windows only, to create files which only their owner can access, see private_file.rs

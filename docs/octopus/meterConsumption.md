@@ -9,7 +9,7 @@ The Meters page fetches half hourly readings with the `meterConsumption` query i
 consumption(first: $first, grouping: $grouping, startAt: $startAt, timezone: $timezone, after: $after)
 ```
 
-These observations come from the verbose trace of a fetch of electricity meter `ElectricityMeterType:3657465` with
+These observations come from the verbose trace of a fetch of an electricity meter with
 `grouping: HALF_HOUR` and `startAt: 2025-01-01T00:00:00Z`, made in October 2026.
 
 ## There is no end time
@@ -111,7 +111,7 @@ is the better source of half hourly readings for an electricity import meter.
 
 ## Still to check
 
-- Whether `readingDirection: GENERATION` matches the export meter (`ElectricityMeterType:3839934`), whose readings are
+- Whether `readingDirection: GENERATION` matches the export meter, whose readings are
   zero overnight and positive during the day. Generation may be the total generated rather than what was exported.
 - Whether the gas filter returns the same readings as the consumption query for a gas meter.
 - Whether the measurements query's own pagination is stable, the months seen so far were complete but its cursors have

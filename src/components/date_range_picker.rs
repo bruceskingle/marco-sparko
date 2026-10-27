@@ -57,7 +57,7 @@ pub struct RangeSelection {
 impl RangeSelection {
     /// From the start of the current month in the given timezone, up to now.
     pub fn current_month(tz: &Tz) -> Self {
-        let today = time::OffsetDateTime::now_utc().to_timezone(tz).date();
+        let today = crate::clock::today(tz);
         RangeSelection {
             start: LocalSlot { date: today.replace_day(1).unwrap_or(today), slot: 0 },
             end: None,
@@ -88,7 +88,7 @@ impl RangeSelection {
         let start = self.start.to_date_time(tz).ok_or_else(|| not_exist(&self.start))?;
         let end = match &self.end {
             Some(end_slot) => end_slot.to_date_time(tz).ok_or_else(|| not_exist(end_slot))?,
-            None => Date::today(tz).next_day().at_midnight(tz),
+            None => crate::clock::today_date(tz).next_day().at_midnight(tz),
         };
         if end <= start {
             return Err(String::from("The to time must be after the from time"));
@@ -154,8 +154,8 @@ impl RangeSelection {
     /// The range of the same length immediately before this one and after it, now, None if there is no range after it
     /// because it reaches now.
     pub fn before_and_after(&self, tz: &'static Tz) -> (Option<RangeSelection>, Option<RangeSelection>) {
-        let now = DateTime::now(tz);
-        let today = time::OffsetDateTime::now_utc().to_timezone(tz).date();
+        let now = crate::clock::now(tz);
+        let today = crate::clock::today(tz);
         (self.previous(today, &now, tz), self.next(today, &now, tz))
     }
 
@@ -425,7 +425,7 @@ pub fn DateRangePicker(props: DateRangePickerProps) -> Element {
                                 button {
                                     r#type: "button",
                                     onclick: move |_| {
-                                        let today = time::OffsetDateTime::now_utc().to_timezone(tz).date();
+                                        let today = crate::clock::today(tz);
                                         range.set(quick.selection(today));
                                         draft.set(None);
                                     },

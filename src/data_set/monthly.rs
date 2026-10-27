@@ -171,7 +171,8 @@ where
             }
         }
 
-        if refresh  {
+        // An offline profile only has what is cached.
+        if refresh && !config.offline {
 
             // With force everything is fetched again, in case what was cached is wrong, and replaces what was cached,
             // so records the server no longer has are dropped. The file is only rewritten if the fetch succeeds.

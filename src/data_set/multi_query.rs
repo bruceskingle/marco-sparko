@@ -78,7 +78,8 @@ where
             refresh = true;
         }
         
-        if refresh  {
+        // An offline profile only has what is cached.
+        if refresh && !config.offline {
             file.seek(SeekFrom::Start(0))?;
             file.set_len(0)?;
             data.clear();

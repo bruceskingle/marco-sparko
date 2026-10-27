@@ -5,6 +5,9 @@
 //! other documents open in the browser, in the documentation on GitHub Pages if they are part of it, see book.toml,
 //! otherwise on GitHub. See docs/WritingHelp.md for how to add and change pages.
 
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -173,6 +176,46 @@ pub fn use_help_topic(topic: Option<String>) {
             help.0.set(topic);
         }
     }));
+}
+
+/// Whether the help is shown, in every window, see use_help_shown: the active profile's setting, see start.
+static SHOWN: AtomicBool = AtomicBool::new(true);
+/// The active profile, whose setting it is.
+static PROFILE: Mutex<String> = Mutex::new(String::new());
+/// How often a window checks whether another has shown or hidden the help.
+const POLL: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Starts showing or hiding the help as the profile's settings say. Called when the profile is chosen.
+pub fn start(profile_name: &str, settings: &HelpSettings) {
+    *PROFILE.lock().unwrap() = profile_name.to_string();
+    SHOWN.store(settings.show, Ordering::SeqCst);
+}
+
+pub fn is_shown() -> bool {
+    SHOWN.load(Ordering::SeqCst)
+}
+
+/// Shows or hides the help in every window, and saves it in the profile so that it stays that way.
+pub fn set_shown(show: bool) {
+    SHOWN.store(show, Ordering::SeqCst);
+    let profile_name = PROFILE.lock().unwrap().clone();
+    if let Err(error) = crate::profile::update_help_settings(&profile_name, &HelpSettings { show }) {
+        crate::log_error!("Failed to save whether the help is shown: {error}");
+    }
+}
+
+/// Whether the help is shown, for a window, which follows the help being shown or hidden in another, e.g. a bill's.
+pub fn use_help_shown() -> Signal<bool> {
+    let mut shown = use_signal(is_shown);
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(POLL).await;
+            if *shown.peek() != is_shown() {
+                shown.set(is_shown());
+            }
+        }
+    });
+    shown
 }
 
 /// The help settings of a profile, see Settings.

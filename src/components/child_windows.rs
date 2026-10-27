@@ -13,7 +13,7 @@ use std::rc::{Rc, Weak};
 use dioxus::desktop::muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use dioxus::desktop::tao::event::{Event, WindowEvent};
 use dioxus::desktop::tao::window::WindowId;
-use dioxus::desktop::{Config, DesktopService, LogicalSize, WindowBuilder, use_muda_event_handler, use_wry_event_handler, window};
+use dioxus::desktop::{Config, DesktopService, LogicalPosition, LogicalSize, WindowBuilder, use_muda_event_handler, use_wry_event_handler, window};
 use dioxus::prelude::*;
 
 const ARRANGE_ID: &str = "arrange-windows";
@@ -55,6 +55,8 @@ struct State {
     /// In the order they were opened, which is the order they are arranged in.
     children: Vec<Child>,
     next_number: u64,
+    /// How many title bars down and right of the main window the next window is opened, see cascade.
+    cascade: u32,
 }
 
 thread_local! {
@@ -236,6 +238,9 @@ pub fn use_child_window() {
     use_drop(move || {
         with_state(|state| {
             state.children.retain(|child| child.id != Some(id));
+            if state.children.is_empty() {
+                state.cascade = 0;
+            }
             refresh_menu(state);
         });
     });
@@ -247,9 +252,59 @@ fn bring_to_front(window: &DesktopService) {
     window.window.set_focus();
 }
 
+/// The height of a window's title bar, in logical pixels: on macOS its standard height, as tao reports the wrong inner
+/// size there, see window_state.rs, elsewhere what the frame adds to the height, which includes the menu bar.
+fn title_bar_height(window: &dioxus::desktop::tao::window::Window) -> f64 {
+    if cfg!(target_os = "macos") {
+        crate::window_state::MACOS_TITLE_BAR_HEIGHT as f64
+    }
+    else {
+        let scale = window.scale_factor();
+        (window.outer_size().to_logical::<f64>(scale).height - window.inner_size().to_logical::<f64>(scale).height).max(0.0)
+    }
+}
+
+/// Where the next window opens, and its size, in logical pixels. The first opens at anchor, a point in the main
+/// window's content, if there is one, otherwise a title bar down and right of the main window, and goes to a title bar
+/// short of the main window's bottom right corner. Each one after that is the same size, a title bar further down and
+/// right, so that they overlap with their title bars showing. They may go past the main window, and off the screen,
+/// which is allowed. The cascade starts again when the windows are arranged, or the last is closed.
+fn cascade(main: &DesktopService, anchor: Option<LogicalPosition<f64>>, state: &mut State) -> Option<(LogicalPosition<f64>, LogicalSize<f64>)> {
+    let window = &main.window;
+    let scale = window.scale_factor();
+    let step = title_bar_height(window);
+    let outer = window.outer_position().ok()?.to_logical::<f64>(scale);
+    let outer_size = window.outer_size().to_logical::<f64>(scale);
+    // Where the main window's content is on the screen, below its title bar, see title_bar_height.
+    let (content, content_size) = if cfg!(target_os = "macos") {
+        (LogicalPosition::new(outer.x, outer.y + step), LogicalSize::new(outer_size.width, outer_size.height - step))
+    }
+    else {
+        (window.inner_position().ok()?.to_logical::<f64>(scale), window.inner_size().to_logical::<f64>(scale))
+    };
+    let first = match anchor {
+        Some(anchor) => LogicalPosition::new(content.x + anchor.x, content.y + anchor.y),
+        None => LogicalPosition::new(outer.x + step, outer.y + step),
+    };
+    // The first window's outer bottom right is a title bar up and left of the main window's content's, and its content
+    // is a title bar less high than its outer size.
+    let size = LogicalSize::new(
+        (content.x + content_size.width - step - first.x).max(MIN_WIDTH),
+        (content.y + content_size.height - step - first.y - step).max(MIN_HEIGHT),
+    );
+    let offset = step * state.cascade as f64;
+    state.cascade += 1;
+    Some((LogicalPosition::new(first.x + offset, first.y + offset), size))
+}
+
+/// The smallest a window is opened, however small the main window.
+const MIN_WIDTH: f64 = 400.0;
+const MIN_HEIGHT: f64 = 300.0;
+
 /// Opens a window showing what key identifies, titled title, whose content is the VirtualDom from make_dom, whose root
-/// component must call use_child_window. If one with the same key is open, it is brought to the front instead.
-pub fn open(key: &str, title: String, size: LogicalSize<f64>, make_dom: impl FnOnce() -> VirtualDom) {
+/// component must call use_child_window. If one with the same key is open, it is brought to the front instead. It is
+/// placed and sized by cascade, from anchor, a point in the main window's content, if there is one.
+pub fn open(key: &str, title: String, anchor: Option<LogicalPosition<f64>>, make_dom: impl FnOnce() -> VirtualDom) {
     let Some((existing, main, menu_bar)) = with_state(|state| (
         state.children.iter().find(|child| child.key == key).map(|child| child.window.clone()),
         state.main.upgrade(),
@@ -269,11 +324,14 @@ pub fn open(key: &str, title: String, size: LogicalSize<f64>, make_dom: impl FnO
         return;
     };
 
+    let placement = with_state(|state| cascade(&main, anchor, state)).flatten();
     #[allow(unused_mut)]
     let mut window_builder = WindowBuilder::new()
         .with_title(&title)
-        .with_inner_size(size)
         .with_resizable(true);
+    if let Some((position, size)) = placement {
+        window_builder = window_builder.with_inner_size(size).with_position(position);
+    }
     // Kept above the main window. On macOS it is a child window, which also moves with the main window, on Windows an
     // owned window, which is also hidden when the main window is minimized.
     #[cfg(target_os = "macos")]
@@ -304,6 +362,10 @@ pub fn open(key: &str, title: String, size: LogicalSize<f64>, make_dom: impl FnO
     });
     spawn(async move {
         let window = pending.await;
+        // Again, as on macOS a new window's position is taken as that of its content, below the title bar.
+        if let Some((position, _)) = placement {
+            window.window.set_outer_position(position);
+        }
         with_state(|state| {
             if let Some(child) = state.children.iter_mut().find(|child| Some(child.number) == number) {
                 child.window = Rc::downgrade(&window);
@@ -316,7 +378,10 @@ pub fn open(key: &str, title: String, size: LogicalSize<f64>, make_dom: impl FnO
 /// Arranges the child windows side by side in a row, in the order they were opened, filling the screen the main window
 /// is on, apart from the menu bar, dock or task bar. The main window is left where it is.
 fn arrange() {
-    let Some(main) = with_state(|state| state.main.upgrade()).flatten() else {
+    let Some(main) = with_state(|state| {
+        state.cascade = 0;
+        state.main.upgrade()
+    }).flatten() else {
         return;
     };
     let children = child_windows(None);

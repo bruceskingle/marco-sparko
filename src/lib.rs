@@ -12,6 +12,8 @@ mod private_file;
 pub mod data_home;
 pub mod logging;
 pub mod help;
+pub mod clock;
+pub mod redact;
 
 #[cfg(feature = "desktop")]
 pub mod window_state;
@@ -62,6 +64,12 @@ pub struct MarcoSparkoArgs {
     /// scheduled task, see docs/ScheduledFetch.md
     #[arg(long)]
     fetch: bool,
+    /// With a profile and a new profile's name, copy the profile's data to the new, offline, profile with everything
+    /// which identifies you replaced. With docs, redact the documents in unredacted_docs into docs, run in the
+    /// repository's directory. Either way without opening a window, then exit, see docs/Redaction.md. Options of the
+    /// app itself have no hyphens, which would make them a module's, see Args::extract_module.
+    #[arg(long, num_args = 1..=2, value_names = ["PROFILE|docs", "NEW_PROFILE"])]
+    redact: Vec<String>,
 }
 
 pub struct Args {
@@ -139,6 +147,19 @@ impl Args {
     /// Whether --fetch was given, to fetch the latest data without a window, see fetch_latest_data.
     pub fn fetch(&self) -> bool {
         self.marco_sparko_args.fetch
+    }
+
+    /// Whether --redact docs was given, see redact::redact_docs.
+    pub fn redact_docs(&self) -> bool {
+        matches!(self.marco_sparko_args.redact.as_slice(), [docs] if docs == "docs")
+    }
+
+    /// The profile to redact and the name of the redacted copy, if --redact was given, see redact.rs.
+    pub fn redact(&self) -> Option<(&str, &str)> {
+        match self.marco_sparko_args.redact.as_slice() {
+            [from, to] => Some((from, to)),
+            _ => None,
+        }
     }
 }
 
@@ -371,6 +392,9 @@ impl MarcoSparkoContext {
 
     /// The context with the given profile active, starting its log, see logging.rs.
     pub fn for_profile(args: Args, profile: ActiveProfile) -> Arc<MarcoSparkoContext> {
+        // An offline profile is shown as it was when its data was last fetched.
+        clock::set_as_of(profile.active_profile.as_of.filter(|_| profile.active_profile.offline));
+        help::start(&profile.active_profile.name, &profile.active_profile.settings.help);
         let process = if args.fetch() { logging::Process::Fetch } else { logging::Process::App };
         logging::start(&profile.active_profile.name, &profile.active_profile.settings.log, process);
         Arc::new(MarcoSparkoContext {
@@ -400,7 +424,7 @@ impl MarcoSparkoContext {
         let dir_path = self.get_cache_data_dir_path(module_id)?;
         private_file::create_private_dir(&dir_path)?;
 
-        Ok(Arc::new(CacheConfig::new(dir_path,verbose)))
+        Ok(Arc::new(CacheConfig::new(dir_path, verbose, self.profile.active_profile.offline)))
     }
 
     pub fn read_cache<T>(&self, module_id: &str) -> Option<T>

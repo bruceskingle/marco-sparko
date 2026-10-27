@@ -229,7 +229,8 @@ pub async fn fetch(account_number: &str, device_id: &str, start: &DateTime, end:
             hours.dedup();
             missing = day.missing;
         }
-        let requests = requests(&hours);
+        // An offline profile only has what is cached.
+        let requests = if config.offline { Vec::new() } else { requests(&hours) };
         days.push(DayFetch { day_start, day_end, path, readings, hours, missing, requests });
         day = day.next_day();
     }

@@ -116,7 +116,7 @@ pub fn Telemetry(account_id: String, esme_id: String, cad_id: String, billing_ti
     let tz = billing_timezone;
     // Today, as there are a lot of readings and they are fetched an hour at a time.
     let mut range = use_signal(|| {
-        let today = time::OffsetDateTime::now_utc().to_timezone(tz).date();
+        let today = crate::clock::today(tz);
         RangeSelection { start: LocalSlot { date: today, slot: 0 }, end: None }
     });
     let mut view = use_signal(|| TelemetryView::Graph);

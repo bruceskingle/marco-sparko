@@ -245,7 +245,7 @@ fn ElectricityGraph(account_id: String, import_mpan: String, export_mpan: Option
     let tz = billing_timezone;
     // The last 7 days, so that both the meters' readings and the Home Mini's more recent ones are shown.
     let mut range = use_signal(|| {
-        let today = time::OffsetDateTime::now_utc().to_timezone(tz).date();
+        let today = crate::clock::today(tz);
         RangeSelection { start: LocalSlot { date: today - time::Duration::days(6), slot: 0 }, end: None }
     });
     let mut view = use_signal(|| ElectricityView::Graph);

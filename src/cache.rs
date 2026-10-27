@@ -7,6 +7,8 @@ use time::Month;
 pub struct CacheConfig {
     dir_path: PathBuf,
     pub verbose: bool,
+    /// Only what is cached is used, nothing is fetched, for a redacted profile, see Profile::offline.
+    pub offline: bool,
 }
 
 /// The configuration for a monthly bucket
@@ -67,10 +69,11 @@ impl CacheConfig {
         path.push(format!("{}#{}", date.month(), hash_key));
     }
     
-    pub fn new(dir_path: PathBuf, verbose: bool) -> Self {
+    pub fn new(dir_path: PathBuf, verbose: bool, offline: bool) -> Self {
         CacheConfig {
             dir_path,
             verbose,
+            offline,
         }
     }
 }

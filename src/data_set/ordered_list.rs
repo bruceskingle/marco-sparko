@@ -132,7 +132,8 @@ where
             refresh = true;
         }
         
-        if refresh  {
+        // An offline profile only has what is cached.
+        if refresh && !config.offline {
 
             let from = fetch_from(data.iter().map(|(_, (_, value))| indexer(value)));
             let last_record = from.as_ref().and_then(|(index, _)| data.get(index)).map(|(_, value)| value);

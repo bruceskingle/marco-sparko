@@ -59,7 +59,7 @@ fragment consumptionFields on ConsumptionConnection {
 ### Variables
 ```json
 {
-    "meterId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==",
+    "meterId":"KJleR6ErqFLghTkZIJGvhpR1qZJ8PiG5BuS4WW==",
     "grouping":"HALF_HOUR",
     "startAt":"2024-08-01T00:00:00+01:00",
     "first":100,
@@ -138,7 +138,7 @@ As above
 ### Variables
 ```json
 {
-    "meterId":"RWxlY3RyaWNpdHlNZXRlclR5cGU6MzY1NzQ2NQ==",
+    "meterId":"KJleR6ErqFLghTkZIJGvhpR1qZJ8PiG5BuS4WW==",
     "grouping":"HALF_HOUR",
     "startAt":"2024-08-01T00:00:00+01:00",
     "first":100,

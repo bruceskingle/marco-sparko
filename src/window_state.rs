@@ -24,7 +24,7 @@ const STATE_FILE_NAME: &str = "window-state.json";
 const MIN_SIZE: u32 = 200;
 
 /// The height of the macOS title bar, which is included in the outer size.
-const MACOS_TITLE_BAR_HEIGHT: u32 = 28;
+pub(crate) const MACOS_TITLE_BAR_HEIGHT: u32 = 28;
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 struct WindowState {

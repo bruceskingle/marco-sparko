@@ -6,7 +6,7 @@ This section describes the queries made by the Octopus Web UI [https://octopus.e
 The [Chrome Inspector](../howto/ChromeInspector.md) page describes how you can use the Inspector function of the Chrome browser to observe these queries for yourself.
 
  ## Redaction
- Some of the values in the examples below, such as account numbers and meter IDs have been redacted. In some cases there is documentary evidence of what the actual type of the returned values are (e.g. the GraphQL schema defines the `number` attribute of `AccountInterface` to be `String` (interestingly not `String!` although one imagines that this is not an optional attribute)), in other cases there is not. There *appears* to be further structure in some values, e.g. Account numbers appear to have a hyphen in the second character. In order to aid recognition when comparing examples here to actual returned values some of this apparent structure may be represented in the redaction, so a redacted account number may be shown as `A-B3D8B29D`. This apparent structure *cannot* be relied upon, when writing code you should code against the official schema so an account number should be stored as an unbounded optional (nullable) string value despite the fact that all observed values appear to be of fixed length with some internal structure.
+ Some of the values in the examples below, such as account numbers and meter IDs have been redacted. In some cases there is documentary evidence of what the actual type of the returned values are (e.g. the GraphQL schema defines the `number` attribute of `AccountInterface` to be `String` (interestingly not `String!` although one imagines that this is not an optional attribute)), in other cases there is not. There *appears* to be further structure in some values, e.g. Account numbers appear to have a hyphen in the second character. In order to aid recognition when comparing examples here to actual returned values some of this apparent structure may be represented in the redaction, so a redacted account number may be shown as `A-B1C2D34E`. This apparent structure *cannot* be relied upon, when writing code you should code against the official schema so an account number should be stored as an unbounded optional (nullable) string value despite the fact that all observed values appear to be of fixed length with some internal structure.
 
 ## Trying These Calls For Yourself
 For each call in the following section we show the `Query` and `Variables`, these values can be copied and pasted into https://api.octopus.energy/v1/graphql-playground to execute the query interactively. The official API documentation contains a link to https://api.octopus.energy/v1/graphql which is another very similar, but apparently older, version of the same thing.
@@ -52,7 +52,7 @@ Now click the big play button in the centre and on the right hand side you shoul
       "refreshToken": "redacted_refresh_token_pZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtp",
       "refreshExpiresIn": 1725024454,
       "payload": {
-        "sub": "kraken|account-user:3235447",
+        "sub": "kraken|account-user:2402938",
         "gty": "API-KEY",
         "email": "dan@archer.org",
         "tokenUse": "access",

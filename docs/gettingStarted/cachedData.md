@@ -16,7 +16,7 @@ This is a directory (folder) containing files which contain various sets of data
 
 It is envisaged that there will be an option to maintain this data in the cloud in future, and the data format is designed with the use of a NOSQL data store such as Amazon DynamoDb in mind. These data stores use a ```Hash Key``` and ```Sort Key``` structure. The name of each file in this directory is the ```Hash Key``` under which that data is stored. The contents of the files are lines which each represent one record, consisting of a ```Sort Key``` followed by a TAB character and then a JSON payload (without whitespace padding so there are no unescaped newlines).
 
-The ```Hash Key``` is usually made up of multiple parts concatenated together and separated by # (hash) characters. For technical reasons, (to avoid hot-spots in the data store) where a constant string is used as part of the overall key, it is placed at the end so we have ```A-B1C2B345#104910337#StatementTransactions``` rather than ```StatementTransactions#A-B1C2B345#104910337```
+The ```Hash Key``` is usually made up of multiple parts concatenated together and separated by # (hash) characters. For technical reasons, (to avoid hot-spots in the data store) where a constant string is used as part of the overall key, it is placed at the end so we have ```A-B1C2D34E#256056501#StatementTransactions``` rather than ```StatementTransactions#A-B1C2D34E#256056501```
 
 In most cases the ```Sort Key``` is the cursor value used by the server for paginated queries, which facilitates the fetching of updates to time series data. The JSON payload is the response as received from the server.
 

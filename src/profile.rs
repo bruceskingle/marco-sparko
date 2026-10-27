@@ -207,6 +207,32 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
     }
 }
 
+/// Saves the profile name, offline, as a redacted copy of source, see redact.rs, replacing any previous copy. Its
+/// modules are set up as the source's are, without their logins. as_of is when its data was last fetched.
+pub fn save_redacted_profile(source: &Profile, name: &str, as_of: Option<i64>) -> anyhow::Result<()> {
+    let mut profiles: ProfileFile = serde_json::from_reader(fs::File::open(&MarcoSparkoContext::get_file_path()?)?)?;
+    profiles.retain(|profile| !profile_names_equal(&profile.name, name));
+    let modules = source.modules.iter()
+        .map(|(module_id, module)| {
+            let mut module = module.clone();
+            if let Some(module) = module.as_object_mut() {
+                module.remove("apiKey");
+            }
+            (module_id.clone(), module)
+        })
+        .collect();
+    profiles.push(Profile {
+        name: name.to_string(),
+        version: source.version.clone(),
+        modules,
+        settings: source.settings.clone(),
+        offline: true,
+        as_of,
+    });
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
+    Ok(())
+}
+
 /// The cache files of a profile, for each plugin a <profile>-<plugin> directory of cached data and a
 /// <profile>-<plugin>.json file of tokens.
 #[derive(Debug, Default, PartialEq)]
@@ -366,6 +392,14 @@ pub struct Profile {
     /// The app's own settings for the profile, which profiles from before there were any do not have.
     #[serde(default)]
     pub settings: Settings,
+    /// A redacted copy of another profile's data, see redact.rs, which only shows what it has, without logging in or
+    /// fetching anything.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub offline: bool,
+    /// For an offline profile, when its data was last fetched, as a unix timestamp. The app behaves as if it is then,
+    /// see clock.rs, so that its pages show the latest data.
+    #[serde(default, rename = "asOf", skip_serializing_if = "Option::is_none")]
+    pub as_of: Option<i64>,
 }
 
 /// The settings of a profile which are the app's rather than a module's, set on the Settings page.
@@ -385,7 +419,22 @@ pub fn update_settings(profile_name: &str, settings: &Settings) -> anyhow::Resul
     let profile = profile_file.iter_mut()
         .find(|profile| profile_names_equal(&profile.name, profile_name))
         .ok_or_else(|| anyhow!("No such profile \"{}\"", profile_name))?;
+    // Whether the help is shown is saved by update_help_settings, from any window, so it is not overwritten here.
+    let help = profile.settings.help.clone();
     profile.settings = settings.clone();
+    profile.settings.help = help;
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
+    Ok(())
+}
+
+/// Saves the help settings of the profile, see help::set_shown.
+pub fn update_help_settings(profile_name: &str, help: &crate::help::HelpSettings) -> anyhow::Result<()> {
+    let file = fs::File::open(&MarcoSparkoContext::get_file_path()?)?;
+    let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
+    let profile = profile_file.iter_mut()
+        .find(|profile| profile_names_equal(&profile.name, profile_name))
+        .ok_or_else(|| anyhow!("No such profile \"{}\"", profile_name))?;
+    profile.settings.help = help.clone();
     serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
     Ok(())
 }
@@ -397,6 +446,8 @@ impl Profile {
             version: CURRENT_VERSION.to_string(),
             modules: ModuleProfiles::new(),
             settings: Settings::default(),
+            offline: false,
+            as_of: None,
         }
     }
 }
