@@ -1,8 +1,8 @@
-# Measurements
-The measurements page shows the half hourly readings from your smart meters, broken down by the rate you were charged at, together with what each half hour cost. You can view the readings as a table, as a stacked bar graph, or as a trend graph which compares one year with another.
+# Meters
+The Meters page shows the half hourly readings from your smart meters, broken down by the rate you were charged at, together with what each half hour cost. You can view the readings as a table, as a stacked bar graph, or as a trend graph which compares one year with another.
 
 ## Choosing a Meter Point
-Open the Octopus module page by clicking on ```octopus``` in the top menu bar if necessary, and then click on ```Measurements``` on the left menu. You will see a list of your electricity meter points:
+Open the Octopus module page by clicking on ```octopus``` in the top menu bar if necessary, and then click on ```Meters``` on the left menu. You will see a list of your electricity meter points:
 
 <img src="Screenshot1.png" width="1024">
 
@@ -11,7 +11,7 @@ Each line shows the MPAN (the meter point's ID, as shown on your bill), whether 
 The readings are downloaded from Octopus the first time you look at a period and are then kept in a local cache, so the first time you look at a long period there may be a delay while the data is downloaded. After that only new readings need to be fetched.
 
 ## The Table View
-The measurements page opens in the table view, showing the readings from the start of the current month until now:
+A meter's readings open in the graph view, from the start of the current month until now. Click ```Table``` to see them as a table:
 
 <img src="Screenshot2.png" width="1024">
 

@@ -73,7 +73,7 @@ set of readings.
 
 # An Alternative is the measurements query on PropertyType
 
-The Measurements page fetches readings with the `homeAndEvConsumptionBreakdown` query, also in
+The Meters page fetches readings with the `homeAndEvConsumptionBreakdown` query, also in
 [meter.graphql](../../graphql/octopus/meter.graphql), which reads the `measurements` field of a property, filtered by
 the meter point:
 

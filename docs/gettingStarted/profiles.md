@@ -4,6 +4,23 @@ Marco Sparko will create a file in your home directory called ```.marco-sparko``
 
 In the application there is a profile selector at the top right of the screen which you can use to switch profiles, create new ones or delete them. They can also be selected by passing the command line parameter ```--profile=test_profile``` where test_profile is the name of the profile to be used.
 
+## Creating a Profile
+
+Click the profile menu at the top right, which shows the name of the active profile, to see all the profiles, change
+to another one, or create a new one:
+
+<img src="profile-menu.png" width="1024">
+
+Click ```Create New Profile```, type a name for it, which may have letters, digits and underscores, and press
+```Enter```:
+
+<img src="profile-name.png" width="1024">
+
+The new profile becomes the active one. It has no logins yet, so its modules are ```[inactive]``` until you log in to
+them, see [Logging in to Octopus](../octopus/initOctopus.md):
+
+<img src="profile-created.png" width="1024">
+
 ## Moving the Data Directory
 The ```.marco-sparko``` file and the ```.marco-sparko-cache``` directory (see [Cached Data](cachedData.md)) are kept in your home directory unless you choose another data directory, for example on another drive to keep the credentials separate or to save space. The data directory is the first of these which is set:
 

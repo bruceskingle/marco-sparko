@@ -93,7 +93,9 @@ pub fn Home(
                 s
             };
             // Where the profile file and cache are, see data_home.
-            let data_directory = match (crate::data_home::data_home(), crate::data_home::data_home_source()) {
+            // Not where it was set in screenshots, which set it, see screenshots.rs, as someone running the app would not.
+            let source = crate::data_home::data_home_source().filter(|_| !crate::screenshots::running());
+            let data_directory = match (crate::data_home::data_home(), source) {
                 (Ok(path), Some(source)) => format!("{} (set by {})", path.display(), source),
                 (Ok(path), None) => path.display().to_string(),
                 (Err(error), _) => error.to_string(),

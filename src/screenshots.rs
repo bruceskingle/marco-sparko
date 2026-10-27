@@ -42,6 +42,16 @@ pub struct ShotFile {
     /// The size of the app's window, its content, in logical pixels.
     pub window: WindowSize,
     pub shots: Vec<Shot>,
+    /// Profiles the shots create, e.g. to show a new profile's first run, which are deleted before the shots, in case
+    /// an earlier run stopped part way, and afterwards, when the profile the app started with is made the active one
+    /// again. Any profile with one of these names is deleted, so they must not be ones in use.
+    #[serde(default)]
+    pub new_profiles: Vec<String>,
+    /// A data directory whose profiles and data are deleted before the shots, so that the first shots show what
+    /// someone sees the first time they run the app, e.g. /Users/yourname. It must be the data directory given with
+    /// --home, see prepare_data_directory, so that no other is ever cleared.
+    #[serde(default)]
+    pub fresh_data_directory: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -102,6 +112,22 @@ enum Step {
         index: usize,
         value: String,
     },
+    /// Scrolls the shot's window, e.g. a bill's, so that the innermost element whose text is this is at its top, or with
+    /// bottom at its bottom, e.g. {"scroll": "Consumption Analysis", "bottom": true}.
+    Scroll {
+        scroll: String,
+        #[serde(default)]
+        bottom: bool,
+    },
+    /// Presses a key in what has the focus, e.g. {"key": "Enter"} in a field which has been typed into.
+    Key { key: String },
+    /// Copies the profile of this name from the usual data directory, e.g. the redacted demo profile, see redact.rs,
+    /// into the active profile, offline and without logins, and starts the app again with it, e.g. after the shots of
+    /// the first run, {"loadProfile": "demo"}.
+    LoadProfile {
+        #[serde(rename = "loadProfile")]
+        load_profile: String,
+    },
     /// Waits for this many milliseconds.
     Wait { wait: u64 },
     /// Waits until this text is on the page, e.g. once some data has been loaded.
@@ -109,6 +135,88 @@ enum Step {
         #[serde(rename = "waitFor")]
         wait_for: String,
     },
+}
+
+/// Deletes the profiles and data in the data directory, for a shot list with fresh_data_directory, so that the app
+/// starts as it does the first time. Called before the window opens. The data directory must be the one the shot list
+/// gives, and not the usual one, so that the real profiles are never deleted.
+pub fn prepare_data_directory(fresh: &Path) -> anyhow::Result<()> {
+    let data_home = crate::data_home::data_home()?;
+    if data_home != std::path::absolute(fresh)? || data_home == crate::data_home::usual_data_home()? {
+        bail!("The shot list starts with a fresh data directory {}, which deletes its profiles and data, so give it with \
+            --home, it is not the data directory in use, {}", fresh.display(), data_home.display());
+    }
+    let profiles = crate::MarcoSparkoContext::get_file_path()?;
+    if profiles.exists() {
+        std::fs::remove_file(&profiles)?;
+    }
+    let cache = crate::MarcoSparkoContext::get_cache_dir_path()?;
+    if cache.exists() {
+        std::fs::remove_dir_all(&cache)?;
+    }
+    println!("Cleared the data directory {}", data_home.display());
+    Ok(())
+}
+
+/// Copies the profile from, in the usual data directory, into the active profile, see Step::LoadProfile: its cached
+/// data, replacing the active profile's, and its modules without their logins, settings and when its data is from.
+fn load_profile_data(from: &str) -> anyhow::Result<()> {
+    use crate::profile::{Profile, ProfileFile, profile_names_equal};
+
+    let usual = crate::data_home::usual_data_home()?;
+    let usual_profiles: ProfileFile = serde_json::from_reader(std::fs::File::open(usual.join(".marco-sparko"))?)?;
+    let source = usual_profiles.iter().find(|profile| profile_names_equal(&profile.name, from))
+        .ok_or_else(|| anyhow!("there is no profile {from} in {}", usual.display()))?;
+    let active = crate::profile::fetch_active_profile(&None)?.active_profile.name;
+
+    let usual_cache = usual.join(crate::CACHE_DIRECTORY_NAME);
+    let cache = crate::MarcoSparkoContext::get_cache_dir_path()?;
+    for module_id in source.modules.keys() {
+        let target = cache.join(format!("{active}-{module_id}"));
+        if target.exists() {
+            std::fs::remove_dir_all(&target)?;
+        }
+        copy_dir(&usual_cache.join(format!("{from}-{module_id}")), &target)?;
+    }
+
+    let path = crate::MarcoSparkoContext::get_file_path()?;
+    let mut profiles: ProfileFile = std::fs::File::open(&path).ok()
+        .and_then(|file| serde_json::from_reader(file).ok())
+        .unwrap_or_default();
+    profiles.retain(|profile| !profile_names_equal(&profile.name, &active));
+    let modules = source.modules.iter()
+        .map(|(module_id, module)| {
+            let mut module = module.clone();
+            if let Some(module) = module.as_object_mut() {
+                module.remove("apiKey");
+            }
+            (module_id.clone(), module)
+        })
+        .collect();
+    profiles.insert(0, Profile {
+        name: active,
+        version: source.version.clone(),
+        modules,
+        settings: source.settings.clone(),
+        offline: true,
+        as_of: source.as_of,
+    });
+    serde_json::to_writer_pretty(crate::private_file::create_private_file(&path)?, &profiles)?;
+    Ok(())
+}
+
+fn copy_dir(from: &Path, to: &Path) -> anyhow::Result<()> {
+    crate::private_file::create_private_dir(to)?;
+    for entry in std::fs::read_dir(from).map_err(|error| anyhow!("unable to read {}: {error}", from.display()))? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &to.join(entry.file_name()))?;
+        }
+        else {
+            std::fs::copy(entry.path(), to.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }
 
 /// Reads the shot list, for its window size, before the window opens.
@@ -146,29 +254,66 @@ pub fn use_screenshots(path: Option<PathBuf>) {
 async fn take_all(path: &Path) -> anyhow::Result<usize> {
     let shot_file = read_shot_file(path)?;
     check_permission()?;
+    keep_display_awake();
     let main = dioxus::desktop::window();
     main.window.set_inner_size(LogicalSize::new(shot_file.window.width, shot_file.window.height));
-    // The app is ready once it shows its navigation bar.
+    // The app is ready once it shows its navigation bar, and has had time to draw it in front.
     wait_for_selector(".nav", WAIT_FOR_LIMIT).await?;
+    to_front(&main.window);
+    tokio::time::sleep(Duration::from_secs(2)).await;
     let help_was_shown = crate::help::is_shown();
+    // The profile the app started with, to go back to after the shots which create profiles.
+    let started_with = crate::profile::fetch_active_profile(&None).map(|profile| profile.active_profile.name).ok();
+    remove_new_profiles(&shot_file.new_profiles, started_with.as_deref());
     let mut taken = 0;
     for (index, shot) in shot_file.shots.iter().enumerate() {
         println!("Shot {} of {}: {}", index + 1, shot_file.shots.len(), shot.file);
-        if let Err(error) = take(shot, &main).await {
-            eprintln!("  Not taken: {error:#}");
+        // Once more if it fails, as a click can be missed while a page is being drawn.
+        let mut result = take(shot, &main).await;
+        if result.is_err() {
+            crate::components::child_windows::close_all();
+            tokio::time::sleep(SETTLE).await;
+            result = take(shot, &main).await;
         }
-        else {
-            taken += 1;
+        match result {
+            Ok(()) => taken += 1,
+            Err(error) => eprintln!("  Not taken: {error:#}"),
         }
         crate::components::child_windows::close_all();
         tokio::time::sleep(SETTLE).await;
     }
     crate::help::show_for_now(help_was_shown);
+    remove_new_profiles(&shot_file.new_profiles, started_with.as_deref());
     Ok(taken)
+}
+
+/// Deletes the profiles the shots created, after making the profile the app started with the active one again, so that
+/// it is the one the app opens with next time.
+fn remove_new_profiles(new_profiles: &[String], started_with: Option<&str>) {
+    let Some(started_with) = started_with else {
+        return;
+    };
+    if new_profiles.is_empty() {
+        return;
+    }
+    if let Err(error) = crate::profile::set_active_profile(&started_with.to_string()) {
+        eprintln!("Unable to make {started_with} the active profile again: {error:#}");
+        return;
+    }
+    let existing = crate::profile::fetch_active_profile(&None).map(|profile| profile.all_profiles).unwrap_or_default();
+    for profile in new_profiles.iter().filter(|profile| existing.iter().any(|name| crate::profile::profile_names_equal(name, profile))) {
+        match crate::profile::delete_profile(profile, started_with) {
+            Ok(()) => println!("Deleted the profile {profile} the shots created"),
+            Err(error) => eprintln!("Unable to delete the profile {profile} the shots created: {error:#}"),
+        }
+    }
 }
 
 async fn take(shot: &Shot, main: &DesktopService) -> anyhow::Result<()> {
     crate::help::show_for_now(shot.help);
+    // Closes anything the last shot left open, e.g. the date picker or the new profile's name.
+    let _ = document::eval("const element = document.activeElement || document.body;
+        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));").await;
     click("Home").await?;
     tokio::time::sleep(SETTLE).await;
     for step in &shot.steps {
@@ -193,30 +338,122 @@ async fn take(shot: &Shot, main: &DesktopService) -> anyhow::Result<()> {
                  element.dispatchEvent(new Event('change', {{ bubbles: true }})); return true;",
                 json(input), json(value),
             ), &format!("nothing is selected by {input} at {index}")).await?,
+            Step::Scroll { scroll, bottom } => {
+                let script = format!(
+                    "const want = {};
+                     const matches = (element) => (element.innerText || '').trim() === want;
+                     const element = [...document.querySelectorAll('body *')].filter(matches).find((element) => ![...element.children].some(matches));
+                     if (element) {{ element.scrollIntoView({{ block: {} }}); }}",
+                    json(scroll), if *bottom { "'end'" } else { "'start'" },
+                );
+                match shot.window {
+                    ShotWindow::Main => { let _ = document::eval(&script).await; },
+                    ShotWindow::Newest => {
+                        let window = crate::components::child_windows::newest().ok_or_else(|| anyhow!("there is no window to scroll"))?;
+                        window.webview.evaluate_script(&script).map_err(|error| anyhow!("unable to scroll: {error}"))?;
+                    },
+                }
+            },
+            Step::Key { key } => run(&format!(
+                "const element = document.activeElement || document.body;
+                 for (const type of ['keydown', 'keyup']) {{
+                     element.dispatchEvent(new KeyboardEvent(type, {{ key: {}, bubbles: true }}));
+                 }}
+                 return true;",
+                json(key),
+            ), "unable to press the key").await?,
+            Step::LoadProfile { load_profile } => {
+                load_profile_data(load_profile)?;
+                let mut init = consume_context::<Signal<crate::InitRequested>>();
+                init.set(crate::InitRequested(true));
+                wait_for_selector(".nav", WAIT_FOR_LIMIT).await?;
+            },
             Step::Wait { wait } => tokio::time::sleep(Duration::from_millis(*wait)).await,
             Step::WaitFor { wait_for } => wait_for_text(wait_for, WAIT_FOR_LIMIT).await?,
         }
         tokio::time::sleep(SETTLE).await;
     }
-    // Only while the picture is taken, as the steps may have clicked on it.
-    if !shot.pages {
-        *PAGE_LIST_HIDDEN.write() = true;
-        tokio::time::sleep(SETTLE).await;
-    }
-    let result = picture(shot, main);
+    // Only while the picture is taken, as the steps may have clicked on the page list. The help again, as e.g.
+    // choosing a new profile shows or hides it as the profile's settings say.
+    *PAGE_LIST_HIDDEN.write() = !shot.pages;
+    crate::help::show_for_now(shot.help);
+    tokio::time::sleep(SETTLE).await;
+    let result = picture(shot, main).await;
     *PAGE_LIST_HIDDEN.write() = false;
     result
 }
 
-/// Takes the picture of the shot's window.
-fn picture(shot: &Shot, main: &DesktopService) -> anyhow::Result<()> {
-    let window = match shot.window {
-        ShotWindow::Main => main.window.clone(),
-        ShotWindow::Newest => crate::components::child_windows::newest()
-            .ok_or_else(|| anyhow!("there is no window opened from the main one"))?
-            .window.clone(),
-    };
-    capture(&window, Path::new(&shot.file))
+/// Takes the picture of the shot's window. A window opened from the main one is pictured on its own, the size of the
+/// main window, see Alone.
+async fn picture(shot: &Shot, main: &DesktopService) -> anyhow::Result<()> {
+    match shot.window {
+        ShotWindow::Main => {
+            to_front(&main.window);
+            tokio::time::sleep(SETTLE).await;
+            capture(&main.window, Path::new(&shot.file))
+        },
+        ShotWindow::Newest => {
+            let child = crate::components::child_windows::newest()
+                .ok_or_else(|| anyhow!("there is no window opened from the main one"))?;
+            let _alone = Alone::new(&child.window, &main.window);
+            to_front(&child.window);
+            tokio::time::sleep(SETTLE).await;
+            capture(&child.window, Path::new(&shot.file))
+        },
+    }
+}
+
+/// Brings the window in front of all the others, even when the app is not the active one, e.g. when it was started from
+/// VS Code, as WebKit does not draw a window which is covered by another, which would be pictured blank.
+#[cfg(target_os = "macos")]
+fn to_front(window: &dioxus::desktop::tao::window::Window) {
+    use dioxus::desktop::tao::platform::macos::WindowExtMacOS;
+    // SAFETY: tao's window is an NSWindow, which lives as long as the window.
+    unsafe { &*(window.ns_window() as *const objc2_app_kit::NSWindow) }.orderFrontRegardless();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn to_front(window: &dioxus::desktop::tao::window::Window) {
+    window.set_focus();
+}
+
+/// A window opened from the main one, detached from it, as macOS pictures a window with those attached to it, and
+/// given its frame, while it is pictured. It is attached again when this is dropped.
+struct Alone {
+    #[cfg(target_os = "macos")]
+    windows: (*mut std::ffi::c_void, *mut std::ffi::c_void),
+}
+
+impl Alone {
+    #[cfg(target_os = "macos")]
+    fn new(child: &dioxus::desktop::tao::window::Window, main: &dioxus::desktop::tao::window::Window) -> Self {
+        use dioxus::desktop::tao::platform::macos::WindowExtMacOS;
+        let windows = (child.ns_window(), main.ns_window());
+        let (child_window, main_window) = Self::ns_windows(windows);
+        main_window.removeChildWindow(child_window);
+        child_window.setFrame_display(main_window.frame(), true);
+        Alone { windows }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn new(_child: &dioxus::desktop::tao::window::Window, _main: &dioxus::desktop::tao::window::Window) -> Self {
+        Alone {}
+    }
+
+    #[cfg(target_os = "macos")]
+    fn ns_windows<'a>(windows: (*mut std::ffi::c_void, *mut std::ffi::c_void)) -> (&'a objc2_app_kit::NSWindow, &'a objc2_app_kit::NSWindow) {
+        // SAFETY: tao's windows are NSWindows, which live as long as the windows, longer than an Alone.
+        unsafe { (&*(windows.0 as *const objc2_app_kit::NSWindow), &*(windows.1 as *const objc2_app_kit::NSWindow)) }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for Alone {
+    fn drop(&mut self) {
+        let (child_window, main_window) = Self::ns_windows(self.windows);
+        // SAFETY: both are windows, and the child is not attached to another.
+        unsafe { main_window.addChildWindow_ordered(child_window, objc2_app_kit::NSWindowOrderingMode::Above) };
+    }
 }
 
 fn json(value: &str) -> String {
@@ -279,6 +516,21 @@ async fn wait_until(script: &str, limit: Duration, problem: &str) -> anyhow::Res
     }
     bail!("{problem} within {} seconds", limit.as_secs())
 }
+
+/// Keeps the display awake, and so the screen unlocked, until the app exits, as nothing is drawn while the display is
+/// asleep or the screen is locked, so the pictures would be blank. It does not stop the screen being locked by hand.
+#[cfg(target_os = "macos")]
+fn keep_display_awake() {
+    if let Err(error) = std::process::Command::new("caffeinate")
+        .args(["-d", "-i", "-w", &std::process::id().to_string()])
+        .spawn()
+    {
+        eprintln!("Unable to keep the display awake, the screen must not lock while the screenshots are taken: {error}");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keep_display_awake() {}
 
 /// Checks that the app may take pictures of its windows, asking macOS for the Screen Recording permission if not, which
 /// shows its prompt, or adds the app to the list in System Settings, Privacy & Security, Screen & System Audio Recording.

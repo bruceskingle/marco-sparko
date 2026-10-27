@@ -107,3 +107,17 @@ html {
 .content img.full-size-link {
     cursor: zoom-in;
 }
+
+/* mdBook puts each picture in a box which zooms it when clicked, laid out on a line of its own. The icons of the app's
+   buttons are in the text, so their boxes are too, and they are not zoomed. */
+.content .checkbox-label:has(img[src*="icons/"]) {
+    display: inline;
+}
+
+.content .checkbox-label:has(img[src*="icons/"]) img {
+    cursor: default;
+}
+
+.content .checkbox-label:has(img[src*="icons/"]) .img-wrapper {
+    display: none;
+}

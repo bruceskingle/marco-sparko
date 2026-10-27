@@ -139,13 +139,19 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
     }
 }
 
+/// Whether a profile may have the name, which is letters, digits and underscores, so that the hyphen in the name of a
+/// cache directory, e.g. n2-octopus, ends the profile's name, see cache_usage_in.
+pub fn is_valid_profile_name(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
 pub fn create_profile(profile_name: &str) -> anyhow::Result<ActiveProfile> {
     let profile_name = profile_name.trim();
     if profile_name.is_empty() {
         return Err(anyhow!("Profile name cannot be empty"));
     }
-    if !profile_name.chars().all(char::is_alphanumeric) {
-        return Err(anyhow!("Profile name must contain only alphanumeric characters"));
+    if !is_valid_profile_name(profile_name) {
+        return Err(anyhow!("Profile name must contain only letters, digits and underscores"));
     }
 
     let mut profiles: ProfileFile = if let Ok(file) = fs::File::open(&MarcoSparkoContext::get_file_path()?) {
@@ -257,7 +263,7 @@ pub fn profile_cache_usage(profile_name: &str) -> anyhow::Result<ProfileCacheUsa
 }
 
 fn cache_usage_in(cache_dir: &Path, profile_name: &str) -> anyhow::Result<ProfileCacheUsage> {
-    // Profile names are alphanumeric, so the hyphen ends the profile name.
+    // Profile names are letters, digits and underscores, so the hyphen ends the profile name.
     let prefix = format!("{}-", profile_name);
     let mut usage = ProfileCacheUsage::default();
     if let Ok(read_dir) = fs::read_dir(cache_dir) {

@@ -262,8 +262,9 @@
                 "OS_ACTIVITY_MODE": "disable"
             }
         },
-        // Takes the screenshots in docs/screenshots.json from the demo profile, then exits, see docs/Screenshots.md. The
-        // first time, macOS asks for the Screen Recording permission for VS Code.
+        // Takes the screenshots in docs/screenshots.json, then exits, see docs/Screenshots.md: in the data directory
+        // /Users/yourname, which it clears first, for the first run, then with a copy of the demo profile. The first
+        // time, macOS asks for the Screen Recording permission for VS Code.
         {
             "type": "lldb",
             "request": "launch",
@@ -281,8 +282,8 @@
                 }
             },
             "args": [
-                "--profile",
-                "demo",
+                "--home",
+                "/Users/yourname",
                 "--screenshots"
             ],
             "cwd": "${workspaceFolder}",

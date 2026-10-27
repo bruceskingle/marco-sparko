@@ -25,7 +25,15 @@ fn main() {
     // For screenshots the window is the size the shot list gives, see screenshots.rs.
     let screenshot_size = match args.screenshots() {
         Some(path) => match marco_sparko::screenshots::read_shot_file(&path) {
-            Ok(shot_file) => Some(shot_file.window),
+            Ok(shot_file) => {
+                if let Some(fresh) = &shot_file.fresh_data_directory
+                    && let Err(error) = marco_sparko::screenshots::prepare_data_directory(fresh)
+                {
+                    eprintln!("{error:#}");
+                    std::process::exit(1);
+                }
+                Some(shot_file.window)
+            },
             Err(error) => {
                 eprintln!("{error:#}");
                 std::process::exit(1);

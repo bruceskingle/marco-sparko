@@ -7,9 +7,10 @@
 - [Installation](gettingStarted/index.md)
     - [macOS](gettingStarted/osx/index.md)
     - [Windows](gettingStarted/windows/index.md)
+- [Running Marco Sparko](gettingStarted/firstRun.md)
 - [Logging in to Octopus](octopus/initOctopus.md)
 - [Viewing Bills](octopus/bills.md)
-- [Viewing Meter Readings](octopus/measurements/index.md)
+- [Viewing Meter Readings](octopus/meters/index.md)
 - [Profiles](gettingStarted/profiles.md)
 - [Cached Data](gettingStarted/cachedData.md)
 

@@ -43,6 +43,12 @@ pub fn data_home() -> anyhow::Result<PathBuf> {
     Ok(data_home.path)
 }
 
+/// The data directory there would be without the --home option, e.g. where the profiles normally are when another
+/// data directory is used for screenshots, see screenshots.rs.
+pub fn usual_data_home() -> anyhow::Result<PathBuf> {
+    Ok(resolve(None, std::env::var_os(HOME_ENV_VAR), dirs::home_dir())?.path)
+}
+
 /// Where the data directory was set, for display, e.g. "the MARCO_SPARKO_HOME environment variable", or None if it is
 /// the home directory.
 pub fn data_home_source() -> Option<String> {

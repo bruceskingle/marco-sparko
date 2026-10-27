@@ -504,8 +504,8 @@ fn mapping_path() -> anyhow::Result<PathBuf> {
 /// Copies the cached data of the profile from to a new, offline, profile to, redacted, see the module documentation.
 /// Prints what it does, for --redact.
 pub fn redact_profile(from: &str, to: &str) -> anyhow::Result<()> {
-    if !to.chars().all(char::is_alphanumeric) || to.is_empty() {
-        bail!("The new profile's name must contain only letters and digits");
+    if !crate::profile::is_valid_profile_name(to) {
+        bail!("The new profile's name must contain only letters, digits and underscores");
     }
     if profile_names_equal(from, to) {
         bail!("The new profile must have a different name to the one it is redacted from");
