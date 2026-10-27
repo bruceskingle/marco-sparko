@@ -1,5 +1,5 @@
-//! The settings of the active profile which are the app's rather than a module's, see profile::Settings: how much of the
-//! log is kept, and whether the log panel is shown.
+//! The settings of the active profile which are the app's rather than a module's, see profile::Settings: when the log
+//! is started again, and whether the log panel is shown.
 
 use std::sync::Arc;
 
@@ -10,7 +10,7 @@ use crate::logging::{self, LogRetention};
 use crate::profile::Settings as ProfileSettings;
 
 /// The defaults of each kind of retention, offered when it is chosen.
-const DEFAULT_DAYS: u32 = 7;
+const DEFAULT_HOURS: u32 = logging::DEFAULT_HOURS;
 const DEFAULT_MEGABYTES: u32 = 10;
 
 #[component]
@@ -21,12 +21,12 @@ pub fn Settings() -> Element {
 
     // The settings being edited, until they are saved.
     let mut retention = use_signal(|| settings.read().log.retention);
-    let mut days = use_signal(|| match settings.read().log.retention { LogRetention::Days { days } => days, _ => DEFAULT_DAYS });
+    let mut hours = use_signal(|| match settings.read().log.retention { LogRetention::Hours { hours } => hours, _ => DEFAULT_HOURS });
     let mut megabytes = use_signal(|| match settings.read().log.retention { LogRetention::Size { megabytes } => megabytes, _ => DEFAULT_MEGABYTES });
     let mut status = use_signal(|| None::<Result<String, String>>);
 
     let chosen = |kind: &str| match (kind, retention()) {
-        ("lastRun", LogRetention::LastRun) | ("days", LogRetention::Days { .. }) | ("size", LogRetention::Size { .. }) => true,
+        ("eachRun", LogRetention::EachRun) | ("hours", LogRetention::Hours { .. }) | ("size", LogRetention::Size { .. }) => true,
         _ => false,
     };
     let log_path = logging::log_path(&profile_name).map(|path| path.display().to_string()).unwrap_or_default();
@@ -36,8 +36,8 @@ pub fn Settings() -> Element {
         move |_| {
             let mut new_settings = settings.read().clone();
             new_settings.log.retention = match retention() {
-                LogRetention::LastRun => LogRetention::LastRun,
-                LogRetention::Days { .. } => LogRetention::Days { days: days().max(1) },
+                LogRetention::EachRun => LogRetention::EachRun,
+                LogRetention::Hours { .. } => LogRetention::Hours { hours: hours().max(1) },
                 LogRetention::Size { .. } => LogRetention::Size { megabytes: megabytes().max(1) },
             };
             match crate::profile::update_settings(&profile_name, &new_settings) {
@@ -61,34 +61,35 @@ pub fn Settings() -> Element {
             p { class: "note", "The settings of profile {profile_name}." }
 
             h2 { "Log" }
-            p { class: "note", "The log records the important things the app does, e.g. the data it fetched and anything which failed. It is kept in {log_path}." }
+            p { class: "note", "The log records the important things the app does, e.g. the data it fetched and anything which failed, including what a scheduled fetch does. It is kept in {log_path}." }
+            p { class: "note", "Rather than old entries being removed, the log is started again from time to time, and the previous log is kept in the same place with .old added to its name, replacing the one before." }
             div { class: "settings-group",
                 label {
                     input {
                         r#type: "radio",
                         name: "log-keep",
-                        checked: chosen("lastRun"),
-                        onchange: move |_| retention.set(LogRetention::LastRun),
+                        checked: chosen("hours"),
+                        onchange: move |_| retention.set(LogRetention::Hours { hours: hours() }),
                     }
-                    " Keep only the latest run of the app"
+                    " Keep at least the last "
+                    input {
+                        class: "settings-number",
+                        r#type: "number",
+                        min: "1",
+                        value: "{hours}",
+                        disabled: !chosen("hours"),
+                        oninput: move |event| if let Ok(value) = event.value().parse() { hours.set(value) },
+                    }
+                    " hours"
                 }
                 label {
                     input {
                         r#type: "radio",
                         name: "log-keep",
-                        checked: chosen("days"),
-                        onchange: move |_| retention.set(LogRetention::Days { days: days() }),
+                        checked: chosen("eachRun"),
+                        onchange: move |_| retention.set(LogRetention::EachRun),
                     }
-                    " Keep the last "
-                    input {
-                        class: "settings-number",
-                        r#type: "number",
-                        min: "1",
-                        value: "{days}",
-                        disabled: !chosen("days"),
-                        oninput: move |event| if let Ok(value) = event.value().parse() { days.set(value) },
-                    }
-                    " days"
+                    " Start the log again each time the app is opened"
                 }
                 label {
                     input {
@@ -106,10 +107,10 @@ pub fn Settings() -> Element {
                         disabled: !chosen("size"),
                         oninput: move |event| if let Ok(value) = event.value().parse() { megabytes.set(value) },
                     }
-                    " MB, removing the oldest entries"
+                    " MB in all"
                 }
             }
-            p { class: "note", "Keeping only the latest run, or a number of days, takes effect the next time the app starts, so that this run's entries are kept until then." }
+            p { class: "note", "Starting the log again each time the app is opened takes effect the next time it is opened." }
 
             div { class: "settings-buttons",
                 button { r#type: "button", onclick: save, "Save" }

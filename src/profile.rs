@@ -292,9 +292,9 @@ pub fn delete_profile(profile_name: &str, active_profile: &str) -> anyhow::Resul
     for path in &usage.token_files {
         fs::remove_file(path)?;
     }
-    // The log goes to the trash with the data.
-    let log = crate::logging::log_path(profile_name)?;
-    let trashed: Vec<PathBuf> = usage.data_dirs.iter().cloned().chain(log.exists().then_some(log)).collect();
+    // The log files go to the trash with the data.
+    let logs = crate::logging::log_files(profile_name)?;
+    let trashed: Vec<PathBuf> = usage.data_dirs.iter().cloned().chain(logs.into_iter().filter(|log| log.exists())).collect();
     if !trashed.is_empty() {
         trash::delete_all(&trashed)?;
     }

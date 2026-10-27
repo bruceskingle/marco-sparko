@@ -59,6 +59,20 @@ body{
   border:1px solid rgba(255,255,255,0.03);
 }
 
+/* A square the height of the bar, over its padding, with the bar's rounded corners on the left. Its size is fixed, as
+   WebKit does not size it from the bar's height, and sets the height of the bar, which is about what the items made it
+   before. */
+.nav-logo{
+  flex:0 0 auto;
+  width:3rem;
+  height:3rem;
+  margin:-0.5rem 0 -0.5rem -1rem;
+  border-radius:var(--radius) 0 0 var(--radius);
+  background-position:center;
+  background-size:contain;
+  background-repeat:no-repeat;
+}
+
 .nav-left{
   display:flex;
   gap:0.5rem;

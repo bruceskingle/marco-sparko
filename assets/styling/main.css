@@ -1023,6 +1023,13 @@ button.danger:disabled {
     width: 64px;
 }
 
+/* Where the entry came from, e.g. fetch, blank for the app. */
+.log-source {
+    display: inline-block;
+    width: 48px;
+    color: #808088;
+}
+
 .log-info {
     color: #c4c4ce;
 }

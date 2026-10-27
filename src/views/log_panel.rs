@@ -1,6 +1,7 @@
 //! The log panel along the bottom of the window, which shows the log's entries, see logging.rs, with errors in red and
-//! warnings in yellow, and scrolls to the latest as they are added. It can be resized by dragging its top edge, and
-//! hidden, see Navbar.
+//! warnings in yellow, and scrolls to the latest as they are added. The entries are read from the log file, so those
+//! of other processes, e.g. a scheduled fetch, are shown too. It can be resized by dragging its top edge, and hidden,
+//! see Navbar.
 
 use std::time::Duration;
 
@@ -9,12 +10,12 @@ use dioxus_free_icons::{Icon, icons::ld_icons::LdX};
 use time::macros::format_description;
 use time_tz::OffsetDateTimeExt;
 
-use crate::logging::{self, Level, LogEntry};
+use crate::logging::{self, Level, LogEntry, LogReader};
 
 /// The most entries shown, the rest are in the log file.
 const MAX_SHOWN: usize = 2000;
-/// How often the log is checked for new entries.
-const POLL: Duration = Duration::from_millis(500);
+/// How often the log file is checked for new entries. Checking is only looking at its size, which is cheap.
+const POLL: Duration = Duration::from_secs(1);
 const DEFAULT_HEIGHT: f64 = 180.0;
 const MIN_HEIGHT: f64 = 60.0;
 
@@ -25,15 +26,30 @@ pub fn LogPanel(on_close: EventHandler<()>) -> Element {
     // Where a drag of the top edge started, its y and the height then, while it is dragged.
     let mut dragging = use_signal(|| None::<(f64, f64)>);
 
-    // The log is written from anywhere, so it is checked for new entries rather than signalling them.
+    // The log is written by other processes too, so the file is checked for new entries rather than them being
+    // signalled.
     use_future(move || async move {
-        let mut seen = None;
+        let mut reader: Option<LogReader> = None;
+        let mut unwritten = 0;
         loop {
-            let generation = logging::generation();
-            if seen != Some(generation) {
-                seen = Some(generation);
-                let all = logging::entries();
-                entries.set(all[all.len().saturating_sub(MAX_SHOWN)..].to_vec());
+            let path = logging::current_path();
+            // Starting again when the profile, and so the log, changes.
+            if reader.as_ref().map(|reader| reader.path()) != path.as_deref() {
+                reader = path.map(LogReader::new);
+                unwritten = 0;
+                entries.write().clear();
+            }
+            let mut added = reader.as_mut().and_then(LogReader::read_new).unwrap_or_default();
+            // Any entries of this process which could not be written to the file.
+            let failed = logging::unwritten();
+            let newly_failed = failed.len().saturating_sub(unwritten);
+            added.extend(failed.into_iter().skip(unwritten));
+            unwritten += newly_failed;
+            if !added.is_empty() {
+                let mut shown = entries.write();
+                shown.extend(added);
+                let excess = shown.len().saturating_sub(MAX_SHOWN);
+                shown.drain(..excess);
             }
             tokio::time::sleep(POLL).await;
         }
@@ -88,6 +104,9 @@ pub fn LogPanel(on_close: EventHandler<()>) -> Element {
                                 Level::Warning => "WARNING",
                                 Level::Info => "INFO",
                             }
+                        }
+                        span { class: "log-source",
+                            {entry.source.clone().unwrap_or_default()}
                         }
                         span { class: "log-message", "{entry.message}" }
                     }

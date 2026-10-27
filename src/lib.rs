@@ -186,16 +186,20 @@ pub fn fetch_latest_data(args: Args) -> bool {
         }
         anyhow::Ok(all_ok)
     });
-    match result {
+    let all_ok = match result {
         Ok(all_ok) => {
             println!("Finished{}", if all_ok { "" } else { " with errors" });
             all_ok
         },
         Err(error) => {
             println!("FAILED: {error:#}");
+            log_error!("Fetching the latest data failed: {error:#}");
             false
         },
-    }
+    };
+    // Any errors have been logged already, this says the fetch ended rather than crashed.
+    log_info!("Terminating normally");
+    all_ok
 }
 
 
@@ -364,8 +368,8 @@ impl MarcoSparkoContext {
 
     /// The context with the given profile active, starting its log, see logging.rs.
     pub fn for_profile(args: Args, profile: ActiveProfile) -> Arc<MarcoSparkoContext> {
-        let started = if args.fetch() { "Fetch started" } else { "Started" };
-        logging::start(&profile.active_profile.name, &profile.active_profile.settings.log, started);
+        let process = if args.fetch() { logging::Process::Fetch } else { logging::Process::App };
+        logging::start(&profile.active_profile.name, &profile.active_profile.settings.log, process);
         Arc::new(MarcoSparkoContext {
             args,
             profile,

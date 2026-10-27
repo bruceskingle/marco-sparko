@@ -8,6 +8,7 @@ use dioxus_free_icons::{Icon, icons::ld_icons::{LdScrollText, LdSettings, LdUser
 // use crate::PROFILE_MANAGER;
 
 const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
+const APP_ICON: Asset = asset!("/assets/MarcoSparko.png");
 
 /// The Navbar component that will be rendered on all pages of our app since every page is under the layout.
 ///
@@ -67,6 +68,13 @@ pub fn Navbar() -> Element {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
         div { class: "app-layout",
         nav { class: "nav",
+            // The app's icon, filling the height of the bar, which also goes to the home page.
+            Link {
+                class: "nav-logo",
+                to: Route::Home {},
+                title: "Marco Sparko",
+                style: "background-image: url({APP_ICON});",
+            }
             div { class: "nav-left",
 
                 Link {

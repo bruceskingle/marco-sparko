@@ -57,6 +57,12 @@ pub fn App() -> Element {
     // let args = (&*context.read()).clone();
 
     crate::components::child_windows::use_main_window();
+    // The app only ends when the user quits it, by closing the main window or with Quit.
+    dioxus::desktop::use_wry_event_handler(|event, _| {
+        if let dioxus::desktop::tao::event::Event::LoopDestroyed = event {
+            crate::log_info!("Quit by user");
+        }
+    });
 
     let args = Args::ms_parse();
     let verbose = args.marco_sparko_args.verbose;
