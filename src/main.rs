@@ -18,6 +18,8 @@ fn main() {
         dioxus::LaunchBuilder::new()
             .with_cfg(marco_sparko::window_state::remember_window_state(
                 dioxus::desktop::Config::new()
+                    // The app's own menu bar, whose Window menu lists the windows.
+                    .with_menu(marco_sparko::components::child_windows::menu_bar())
                     // .with_menu(None)
                     // The webview's context menu (Reload, Inspect Element...) is only offered in debug builds, its
                     // Reload would restart the app in a broken state.

@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use dioxus::desktop::LogicalSize;
 use dioxus::prelude::*;
 use time_tz::Tz;
 
+use crate::components::app::MAIN_CSS;
+use crate::components::child_windows;
 use crate::octopus::bill::{AbstractBill, BillDataSet, BillTransactionBreakDown};
 use crate::octopus::context::OctopusContext;
 
@@ -12,17 +15,39 @@ pub struct BillsPageProps {
     path: Vec<String>,
 }
 
+/// The list of bills. Each bill opens in a window of its own, see child_windows, so that the list stays where it was
+/// behind it, and bills can be compared side by side.
 #[component]
 pub fn BillsPage(props: BillsPageProps) -> Element {
+    let _ = props;
     let context = use_context::<Arc<OctopusContext>>();
 
     // Fetch the list of all bills, this runs once when the component is mounted.
-    // The bills are shared with BillDetail, so they are held in an Arc.
+    // The bills are shared with the bill windows, so they are held in an Arc.
     let bills_resource = use_resource({
         let context = context.clone();
         move || {
             let context = context.clone();
             async move { BillDataSet::new(&context.account_id, &context.cache_config, &*context.request_manager).await.map(Arc::new) }
+        }
+    });
+
+    let open_bill = use_callback({
+        let context = context.clone();
+        move |bill_id: String| {
+            let Some(Ok(bills)) = &*bills_resource.peek() else { return };
+            let title = match find_bill(&bill_id, bills) {
+                Some(bill) => {
+                    let bill = bill.as_bill_interface();
+                    format!("Bill {} ({} to {})", bill.id_, bill.from_date_, bill.to_date_)
+                },
+                None => format!("Bill {bill_id}"),
+            };
+            child_windows::open(&bill_id, title, LogicalSize::new(1100.0, 800.0), || VirtualDom::new_with_props(BillWindow, BillWindowProps {
+                context: context.clone(),
+                bill_id: bill_id.clone(),
+                bills: bills.clone(),
+            }));
         }
     });
 
@@ -32,31 +57,64 @@ pub fn BillsPage(props: BillsPageProps) -> Element {
         },
         Some(Err(error)) => Err(anyhow!("Failed to load bills: {error:?}"))?,
         Some(Ok(bills)) => {
-            // Are we looking at one bill?
-            if let Some(bill_id) = props.path.first() {
-                // The key causes BillDetail to be re-mounted when the bill changes, which drops
-                // (and so cancels) any fetch in progress for the previous bill.
-                rsx! {
-                    BillDetail {
-                        key: "{bill_id}",
-                        account_id: context.account_id.clone(),
-                        bill_id: bill_id.clone(),
-                        bills: bills.clone(),
-                        billing_timezone: context.billing_timezone,
-                    }
-                }
-            }
-            else {
-                rsx! {
-                    table {
-                        {AbstractBill::gui_summary_header()?}
-                        for (_id , (attributes , bill)) in &bills.data_set.data {
-                            {bill.gui_summary_line(attributes)?}
-                        }
+            rsx! {
+                table {
+                    {AbstractBill::gui_summary_header()?}
+                    // The most recent first.
+                    for (_id , (attributes , bill)) in bills.data_set.data.iter().rev() {
+                        {bill.gui_summary_line(attributes, open_bill)?}
                     }
                 }
             }
         },
+    }
+}
+
+#[derive(Props, Clone)]
+struct BillWindowProps {
+    context: Arc<OctopusContext>,
+    bill_id: String,
+    bills: Arc<BillDataSet>,
+}
+
+impl PartialEq for BillWindowProps {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.context, &other.context)
+            && self.bill_id == other.bill_id
+            && Arc::ptr_eq(&self.bills, &other.bills)
+    }
+}
+
+/// The root of a bill's window, which has its own VirtualDom, so it provides the OctopusContext and the stylesheet
+/// itself. Escape closes it.
+#[component]
+fn BillWindow(props: BillWindowProps) -> Element {
+    use_context_provider(|| props.context.clone());
+    child_windows::use_child_window();
+
+    use_future(|| async {
+        let mut keys = document::eval("document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { dioxus.send(true); } });");
+        while keys.recv::<bool>().await.is_ok() {
+            dioxus::desktop::window().close();
+        }
+    });
+
+    rsx! {
+        document::Link { rel: "stylesheet", href: MAIN_CSS }
+        ErrorBoundary {
+            handle_error: |errors: ErrorContext| rsx! {
+                div { class: "error", "Failed to show the bill" }
+                pre { "{errors:?}" }
+            },
+            div { class: "bill-window",
+                BillDetail {
+                    account_id: props.context.account_id.clone(),
+                    bill_id: props.bill_id.clone(),
+                    bills: props.bills.clone(),
+                    billing_timezone: props.context.billing_timezone,
+                }
+            }
+        }
     }
 }
 
@@ -111,11 +169,5 @@ fn BillDetail(props: BillDetailProps) -> Element {
 }
 
 fn find_bill<'a>(bill_id: &String, bills: &'a BillDataSet) -> Option<&'a AbstractBill> {
-    // bills.data_set.data.get(bill_id)
-    if let Some((_attributes, bill)) = bills.data_set.data.get(bill_id) {
-        Some(bill)
-    }
-    else {
-        None
-    }
+    bills.data_set.data.get(bill_id).map(|(_attributes, bill)| bill)
 }

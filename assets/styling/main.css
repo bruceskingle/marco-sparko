@@ -1064,3 +1064,11 @@ button.danger:disabled {
     border-radius: 4px;
     color: #f5d742;
 }
+
+/* The root of a bill's own window, see octopus/pages/bills.rs, which scrolls as the body does not. */
+.bill-window {
+    height: 100vh;
+    overflow: auto;
+    padding: 0 20px 20px;
+    box-sizing: border-box;
+}

@@ -40,7 +40,7 @@ pub enum Route {
 // The macro returns an `Asset` type that will display as the path to the asset in the browser or a local path in desktop bundles.
 const FAVICON: Asset = asset!("/icons/icon.ico");
 // The asset macro also minifies some assets like CSS and JS to make bundled smaller
-const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
+pub const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 /// App is the main component of our app. Components are the building blocks of dioxus apps. Each component is a function
 /// that takes some props and returns an Element. In this case, App takes no props because it is the root of our app.
@@ -50,6 +50,8 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 pub fn App() -> Element {
     // let context = use_context::<Signal<Args>>();
     // let args = (&*context.read()).clone();
+
+    crate::components::child_windows::use_main_window();
 
     let args = Args::ms_parse();
     let verbose = args.marco_sparko_args.verbose;

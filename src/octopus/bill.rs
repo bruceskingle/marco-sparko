@@ -70,7 +70,8 @@ impl AbstractBill {
         }
     }
 
-    pub fn gui_summary_line(&self, attributes: &DataSetAttributes) -> Element {
+    /// A row of the bill list, whose id calls on_open with the bill's id when clicked.
+    pub fn gui_summary_line(&self, attributes: &DataSetAttributes, on_open: EventHandler<String>) -> Element {
         let abstract_bill = self.as_bill_interface();
         let row_class = if attributes.cached { "cached"} else {"fetched"};
 
@@ -139,15 +140,7 @@ impl AbstractBill {
                 td {
                     div {
                         class: "link",
-                        // onclick: |_| {path_signal.set(vec!(String::from("bills"), abstract_bill.id_.clone()))},
-                        onclick: move |_| {
-                            // println!("Id={}", id);
-                            // let id = abstract_bill.id_.clone();
-                            // nav_callback(id);
-                            let mut path_signal = use_context::<Signal<Vec<String>>>();
-                            let new_path = vec![String::from("bills"), id.clone()];
-                            path_signal.set(new_path);
-                        },
+                        onclick: move |_| on_open.call(id.clone()),
                         "{abstract_bill.id_}"
                     }
                 }
