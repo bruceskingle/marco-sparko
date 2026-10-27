@@ -13,6 +13,7 @@ pub mod data_home;
 pub mod logging;
 pub mod help;
 pub mod clock;
+pub mod screenshots;
 pub mod redact;
 
 #[cfg(feature = "desktop")]
@@ -70,6 +71,10 @@ pub struct MarcoSparkoArgs {
     /// app itself have no hyphens, which would make them a module's, see Args::extract_module.
     #[arg(long, num_args = 1..=2, value_names = ["PROFILE|docs", "NEW_PROFILE"])]
     redact: Vec<String>,
+    /// Take the screenshots for the documentation listed in the file, docs/screenshots.json if it is not given, then
+    /// exit. Use with --profile demo, see docs/Screenshots.md
+    #[arg(long, num_args = 0..=1, value_name = "SHOT_LIST", default_missing_value = screenshots::DEFAULT_FILE)]
+    screenshots: Option<PathBuf>,
 }
 
 pub struct Args {
@@ -147,6 +152,11 @@ impl Args {
     /// Whether --fetch was given, to fetch the latest data without a window, see fetch_latest_data.
     pub fn fetch(&self) -> bool {
         self.marco_sparko_args.fetch
+    }
+
+    /// The shot list, if --screenshots was given, see screenshots.rs.
+    pub fn screenshots(&self) -> Option<PathBuf> {
+        self.marco_sparko_args.screenshots.clone()
     }
 
     /// Whether --redact docs was given, see redact::redact_docs.

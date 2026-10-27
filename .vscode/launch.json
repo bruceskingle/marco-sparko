@@ -262,6 +262,37 @@
                 "OS_ACTIVITY_MODE": "disable"
             }
         },
+        // Takes the screenshots in docs/screenshots.json from the demo profile, then exits, see docs/Screenshots.md. The
+        // first time, macOS asks for the Screen Recording permission for VS Code.
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Take Screenshots",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--profile",
+                "demo",
+                "--screenshots"
+            ],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
         // Redacts the documents in unredacted_docs into docs, replacing those there, see docs/Redaction.md. Its output
         // is in the terminal.
         {

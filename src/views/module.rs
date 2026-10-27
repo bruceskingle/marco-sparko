@@ -76,6 +76,8 @@ pub fn Module(module_id: String) -> Element {
 
     // Signal for sidebar visibility
     let mut sidebar_open = use_signal(|| true);
+    // Hidden while a screenshot is taken, unless the shot is about it, see screenshots.rs.
+    let sidebar_shown = *sidebar_open.read() && !crate::screenshots::PAGE_LIST_HIDDEN();
 
     let mut call_construct_module_signal = use_signal::<bool>(|| true);
     let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { module_registrations.module_factory(&module_id, &marco_sparko_context).await});
@@ -132,7 +134,7 @@ pub fn Module(module_id: String) -> Element {
 
                     // Toggle sidebar
                     let toggle_sidebar = {
-                        let b = !*sidebar_open.read();
+                        let b = !sidebar_shown;
                         move |_| {
                             sidebar_open.set(b);
                         }
@@ -157,15 +159,15 @@ pub fn Module(module_id: String) -> Element {
                         div { class: "container",
                             // Sidebar, which when hidden is a narrow strip with just the button to show it again.
                             nav {
-                                class: format_args!("sidebar {}", if *sidebar_open.read() { "open" } else { "closed" }),
+                                class: format_args!("sidebar {}", if sidebar_shown { "open" } else { "closed" }),
                                 aria_label: "secondary navigation",
 
                                 button {
                                     class: "sidebar-toggle",
                                     r#type: "button",
-                                    title: if *sidebar_open.read() { "Hide the page list" } else { "Show the page list" },
+                                    title: if sidebar_shown { "Hide the page list" } else { "Show the page list" },
                                     onclick: toggle_sidebar,
-                                    if *sidebar_open.read() {
+                                    if sidebar_shown {
                                         Icon { icon: LdPanelLeftClose, width: 18, height: 18 }
                                     }
                                     else {

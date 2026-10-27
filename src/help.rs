@@ -204,6 +204,11 @@ pub fn set_shown(show: bool) {
     }
 }
 
+/// Shows or hides the help in every window, without saving it, e.g. for a screenshot.
+pub fn show_for_now(show: bool) {
+    SHOWN.store(show, Ordering::SeqCst);
+}
+
 /// Whether the help is shown, for a window, which follows the help being shown or hidden in another, e.g. a bill's.
 pub fn use_help_shown() -> Signal<bool> {
     let mut shown = use_signal(is_shown);

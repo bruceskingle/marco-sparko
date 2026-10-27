@@ -1,0 +1,35 @@
+{
+    "window": { "width": 1700, "height": 1024 },
+    "shots": [
+        {
+            "file": "docs/octopus/measurements/Screenshot1.png",
+            "steps": [ { "click": "octopus" }, { "click": "Meters" }, { "waitFor": "Meter Points" } ]
+        },
+        {
+            "file": "docs/octopus/measurements/Screenshot2.png",
+            "steps": [ { "click": "octopus" }, { "click": "Meters" }, { "row": "import", "select": ".link" }, { "waitFor": "Categories" }, { "click": "Table" } ]
+        },
+        {
+            "file": "docs/octopus/measurements/Screenshot4.png",
+            "steps": [ { "click": "octopus" }, { "click": "Meters" }, { "row": "import", "select": ".link" }, { "waitFor": "Categories" }, { "click": "Graph" } ]
+        },
+        {
+            "file": "docs/readMe/Screenshot6.png",
+            "steps": [ { "click": "octopus" }, { "click": "Meters" }, { "row": "import", "select": ".link" }, { "waitFor": "Categories" }, { "click": "Graph" }, { "click": "Day" } ]
+        },
+        {
+            "file": "docs/octopus/Screenshot5.png",
+            "steps": [ { "click": "octopus" }, { "click": "Bills" }, { "waitFor": "Balance" } ]
+        },
+        {
+            "file": "docs/octopus/Screenshot6.png",
+            "window": "newest",
+            "steps": [ { "click": "octopus" }, { "click": "Bills" }, { "select": ".bill-ref .link", "index": 1 }, { "wait": 3000 } ]
+        },
+        {
+            "file": "docs/images/help.png",
+            "help": true,
+            "steps": [ { "click": "octopus" }, { "click": "Electricity" }, { "waitFor": "Export" } ]
+        }
+    ]
+}

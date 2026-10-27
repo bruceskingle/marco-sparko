@@ -57,6 +57,7 @@ pub fn App() -> Element {
     // let args = (&*context.read()).clone();
 
     crate::components::child_windows::use_main_window();
+    crate::screenshots::use_screenshots(Args::ms_parse().screenshots());
     // The app only ends when the user quits it, by closing the main window or with Quit.
     dioxus::desktop::use_wry_event_handler(|event, _| {
         if let dioxus::desktop::tao::event::Event::LoopDestroyed = event {

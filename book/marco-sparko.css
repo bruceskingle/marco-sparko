@@ -102,3 +102,8 @@ html {
     border-color: #afafa7;
     background-color: #dbdbd3;
 }
+
+/* A picture which opens full size when clicked, see marco-sparko.js. */
+.content img.full-size-link {
+    cursor: zoom-in;
+}

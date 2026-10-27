@@ -246,6 +246,18 @@ pub fn use_child_window() {
     });
 }
 
+/// The child window opened last which is still open, e.g. for a screenshot of it.
+pub fn newest() -> Option<Rc<DesktopService>> {
+    child_windows(None).pop()
+}
+
+/// Closes all the child windows.
+pub fn close_all() {
+    for child in child_windows(None) {
+        child.close();
+    }
+}
+
 fn bring_to_front(window: &DesktopService) {
     window.window.set_visible(true);
     window.window.set_minimized(false);

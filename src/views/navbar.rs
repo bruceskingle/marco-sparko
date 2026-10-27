@@ -41,7 +41,8 @@ pub fn Navbar() -> Element {
             settings.set(context.profile.active_profile.settings.clone());
         }
     });
-    let show_log = settings.read().log.show;
+    // Not in screenshots, see screenshots.rs.
+    let show_log = settings.read().log.show && !crate::screenshots::running();
     // Shows or hides the log panel, and saves it so that it stays that way.
     let set_show_log = {
         let profile_name = context.profile.active_profile.name.clone();
