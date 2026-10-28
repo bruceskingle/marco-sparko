@@ -248,11 +248,9 @@ pub fn TrendGraph(
     });
 
     rsx! {
-        svg {
-            class: if dimensions().is_some() { "stacked-consumption-graph ready" } else { "stacked-consumption-graph" },
-            view_box: "0 0 {width} {height}",
-            role: "img",
-            onmouseleave: move |_| hovered.set(None),
+        // The frame is measured, not the svg, because some versions of WebKit, e.g. on an Intel Mac, give the size of
+        // what is drawn in an svg as its size, which is a little smaller than the svg, so each resize shrank the graph.
+        div { class: "graph-frame",
             onresize: move |event| {
                 match event.data().get_content_box_size() {
                     Ok(size) if size.width > 0.0 && size.height > 0.0 => {
@@ -263,80 +261,86 @@ pub fn TrendGraph(
                     Err(error) => eprintln!("Failed to read trend graph size: {error:?}"),
                 }
             },
-            // Keyed groups, see StackedBarGraph.
-            for (index, (ty, label)) in y_ticks.into_iter().enumerate() {
-                g { key: "{index}",
-                    line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
-                    text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
-                }
-            }
-            // The units of the y axis labels, above them in the row of the legend.
-            text { class: "stacked-axis-label", x: LEFT - 8.0, y: 24.0, text_anchor: "end", "{y_unit}" }
-            for (legend_x, item) in legend {
-                line {
-                    class: "trend-line",
-                    stroke: "{item.color}",
-                    stroke_dasharray: "{item.dash}",
-                    x1: legend_x,
-                    x2: legend_x + LEGEND_SAMPLE_LENGTH,
-                    y1: 20.0,
-                    y2: 20.0,
-                }
-                text { class: "stacked-axis-label", x: legend_x + LEGEND_SAMPLE_LENGTH + 6.0, y: 24.0, "{item.label}" }
-            }
-            for (index, (tick_x, label_x, name)) in month_ticks.into_iter().enumerate() {
-                g { key: "{index}",
-                    line { class: "stacked-tick", x1: tick_x, x2: tick_x, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
-                    text { class: "stacked-axis-label", x: label_x, y: height - 10.0, text_anchor: "middle", "{name}" }
-                }
-            }
-            for (points, color, dash) in paths {
-                polyline {
-                    class: "trend-line",
-                    points: "{points}",
-                    stroke: "{color}",
-                    stroke_dasharray: "{dash}",
-                }
-            }
-            if let Some((line_x, _, _, _)) = &tooltip {
-                line { class: "trend-crosshair", x1: *line_x, x2: *line_x, y1: TOP, y2: TOP + plot_height }
-            }
-            for day in 0..DAYS {
-                rect {
-                    class: "trend-hit",
-                    x: LEFT + day as f64 * column_width,
-                    y: TOP,
-                    width: column_width,
-                    height: plot_height,
-                    onmouseenter: move |_| hovered.set(Some(day)),
-                }
-            }
-            if let Some((_, tooltip_x, day, rows)) = tooltip {
-                g { class: "stacked-tooltip",
-                    rect {
-                        class: "stacked-tooltip-background",
-                        x: tooltip_x,
-                        y: TOP,
-                        width: TOOLTIP_WIDTH,
-                        height: 30.0 + rows.len() as f64 * TOOLTIP_ROW_HEIGHT,
-                        rx: 4,
+            svg {
+                class: if dimensions().is_some() { "stacked-consumption-graph ready" } else { "stacked-consumption-graph" },
+                view_box: "0 0 {width} {height}",
+                role: "img",
+                onmouseleave: move |_| hovered.set(None),
+                // Keyed groups, see StackedBarGraph.
+                for (index, (ty, label)) in y_ticks.into_iter().enumerate() {
+                    g { key: "{index}",
+                        line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
+                        text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
                     }
-                    text { class: "stacked-tooltip-period", x: tooltip_x + 8.0, y: TOP + 16.0, "{day}" }
-                    for (index, (label, color, dash, value)) in rows.iter().enumerate() {
-                        line {
-                            class: "trend-line",
-                            stroke: "{color}",
-                            stroke_dasharray: "{dash}",
-                            x1: tooltip_x + 8.0,
-                            x2: tooltip_x + TOOLTIP_TEXT_X - 6.0,
-                            y1: TOP + 30.0 + index as f64 * TOOLTIP_ROW_HEIGHT,
-                            y2: TOP + 30.0 + index as f64 * TOOLTIP_ROW_HEIGHT,
+                }
+                // The units of the y axis labels, above them in the row of the legend.
+                text { class: "stacked-axis-label", x: LEFT - 8.0, y: 24.0, text_anchor: "end", "{y_unit}" }
+                for (legend_x, item) in legend {
+                    line {
+                        class: "trend-line",
+                        stroke: "{item.color}",
+                        stroke_dasharray: "{item.dash}",
+                        x1: legend_x,
+                        x2: legend_x + LEGEND_SAMPLE_LENGTH,
+                        y1: 20.0,
+                        y2: 20.0,
+                    }
+                    text { class: "stacked-axis-label", x: legend_x + LEGEND_SAMPLE_LENGTH + 6.0, y: 24.0, "{item.label}" }
+                }
+                for (index, (tick_x, label_x, name)) in month_ticks.into_iter().enumerate() {
+                    g { key: "{index}",
+                        line { class: "stacked-tick", x1: tick_x, x2: tick_x, y1: TOP + plot_height, y2: TOP + plot_height + 4.0 }
+                        text { class: "stacked-axis-label", x: label_x, y: height - 10.0, text_anchor: "middle", "{name}" }
+                    }
+                }
+                for (points, color, dash) in paths {
+                    polyline {
+                        class: "trend-line",
+                        points: "{points}",
+                        stroke: "{color}",
+                        stroke_dasharray: "{dash}",
+                    }
+                }
+                if let Some((line_x, _, _, _)) = &tooltip {
+                    line { class: "trend-crosshair", x1: *line_x, x2: *line_x, y1: TOP, y2: TOP + plot_height }
+                }
+                for day in 0..DAYS {
+                    rect {
+                        class: "trend-hit",
+                        x: LEFT + day as f64 * column_width,
+                        y: TOP,
+                        width: column_width,
+                        height: plot_height,
+                        onmouseenter: move |_| hovered.set(Some(day)),
+                    }
+                }
+                if let Some((_, tooltip_x, day, rows)) = tooltip {
+                    g { class: "stacked-tooltip",
+                        rect {
+                            class: "stacked-tooltip-background",
+                            x: tooltip_x,
+                            y: TOP,
+                            width: TOOLTIP_WIDTH,
+                            height: 30.0 + rows.len() as f64 * TOOLTIP_ROW_HEIGHT,
+                            rx: 4,
                         }
-                        text {
-                            class: "stacked-tooltip-value",
-                            x: tooltip_x + TOOLTIP_TEXT_X,
-                            y: TOP + 34.0 + index as f64 * TOOLTIP_ROW_HEIGHT,
-                            "{label}: {value}"
+                        text { class: "stacked-tooltip-period", x: tooltip_x + 8.0, y: TOP + 16.0, "{day}" }
+                        for (index, (label, color, dash, value)) in rows.iter().enumerate() {
+                            line {
+                                class: "trend-line",
+                                stroke: "{color}",
+                                stroke_dasharray: "{dash}",
+                                x1: tooltip_x + 8.0,
+                                x2: tooltip_x + TOOLTIP_TEXT_X - 6.0,
+                                y1: TOP + 30.0 + index as f64 * TOOLTIP_ROW_HEIGHT,
+                                y2: TOP + 30.0 + index as f64 * TOOLTIP_ROW_HEIGHT,
+                            }
+                            text {
+                                class: "stacked-tooltip-value",
+                                x: tooltip_x + TOOLTIP_TEXT_X,
+                                y: TOP + 34.0 + index as f64 * TOOLTIP_ROW_HEIGHT,
+                                "{label}: {value}"
+                            }
                         }
                     }
                 }

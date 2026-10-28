@@ -538,14 +538,9 @@ pub fn StackedBarGraph(
     };
 
     rsx! {
-        svg {
-            class: format_args!(
-                "stacked-consumption-graph{}{}",
-                if dimensions().is_some() { " ready" } else { "" },
-                if dragged().is_some_and(|(from, to)| from != to) { " zooming" } else { "" },
-            ),
-            view_box: "0 0 {width} {height}",
-            role: "img",
+        // The frame is measured, not the svg, because some versions of WebKit, e.g. on an Intel Mac, give the size of
+        // what is drawn in an svg as its size, which is a little smaller than the svg, so each resize shrank the graph.
+        div { class: "graph-frame",
             onresize: move |event| {
                 match event.data().get_content_box_size() {
                     Ok(size) if size.width > 0.0 && size.height > 0.0 => {
@@ -556,94 +551,103 @@ pub fn StackedBarGraph(
                     Err(error) => eprintln!("Failed to read stacked consumption graph size: {error:?}"),
                 }
             },
-            onmouseleave: move |_| {
-                hovered.set(None);
-                hovered_series.set(None);
-                dragged.set(None);
-            },
-            // Each tick is a keyed group, as unkeyed items of more than one element can leave old labels behind when the
-            // number of ticks changes.
-            for (index, (ty, label)) in y_ticks.into_iter().enumerate() {
-                g { key: "{index}",
-                    line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
-                    text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
-                }
-            }
-            // The units of the y axis labels, above them in the row of the legend.
-            // From the left edge, as with a period, e.g. kWh/10s, it can be wider than the labels under it.
-            text { class: "stacked-axis-label", x: 4.0, y: 24.0, text_anchor: "start", "{y_unit}" }
-            for (legend_x, label, color) in legend {
-                rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
-                text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
-            }
-            // A gap of a pixel each side shows where one band ends and the next starts.
-            for (index, (band_x, band_width, label)) in bands.into_iter().enumerate() {
-                g { key: "{index}",
-                    rect { class: "stacked-x-band", x: band_x + 1.0, y: TOP + plot_height + 4.0, width: (band_width - 2.0).max(0.0), height: BOTTOM - 6.0 }
-                    if let Some(label) = label {
-                        text { class: "stacked-axis-label", x: band_x + band_width / 2.0, y: height - 10.0, text_anchor: "middle", "{label}" }
+            svg {
+                class: format_args!(
+                    "stacked-consumption-graph{}{}",
+                    if dimensions().is_some() { " ready" } else { "" },
+                    if dragged().is_some_and(|(from, to)| from != to) { " zooming" } else { "" },
+                ),
+                view_box: "0 0 {width} {height}",
+                role: "img",
+                onmouseleave: move |_| {
+                    hovered.set(None);
+                    hovered_series.set(None);
+                    dragged.set(None);
+                },
+                // Each tick is a keyed group, as unkeyed items of more than one element can leave old labels behind when the
+                // number of ticks changes.
+                for (index, (ty, label)) in y_ticks.into_iter().enumerate() {
+                    g { key: "{index}",
+                        line { class: "stacked-grid", x1: LEFT, x2: width - RIGHT, y1: ty, y2: ty }
+                        text { class: "stacked-axis-label", x: LEFT - 8.0, y: ty, text_anchor: "end", dominant_baseline: "middle", "{label}" }
                     }
                 }
-            }
-            if !segment_tooltip {
-                for (_, _, color, bx, by, bw, bh) in bars.iter().cloned() {
-                    rect {
-                        class: "stacked-bar",
-                        fill: "{color}",
-                        x: bx,
-                        y: by,
-                        width: bw,
-                        height: bh,
+                // The units of the y axis labels, above them in the row of the legend.
+                // From the left edge, as with a period, e.g. kWh/10s, it can be wider than the labels under it.
+                text { class: "stacked-axis-label", x: 4.0, y: 24.0, text_anchor: "start", "{y_unit}" }
+                for (legend_x, label, color) in legend {
+                    rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
+                    text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
+                }
+                // A gap of a pixel each side shows where one band ends and the next starts.
+                for (index, (band_x, band_width, label)) in bands.into_iter().enumerate() {
+                    g { key: "{index}",
+                        rect { class: "stacked-x-band", x: band_x + 1.0, y: TOP + plot_height + 4.0, width: (band_width - 2.0).max(0.0), height: BOTTOM - 6.0 }
+                        if let Some(label) = label {
+                            text { class: "stacked-axis-label", x: band_x + band_width / 2.0, y: height - 10.0, text_anchor: "middle", "{label}" }
+                        }
                     }
                 }
-            }
-            for (index, column_x, column_width) in columns {
-                rect {
-                    class: "stacked-hit",
-                    x: column_x,
-                    y: TOP,
-                    width: column_width,
-                    height: plot_height,
-                    onmouseenter: on_enter(index, None),
-                    onmousedown: on_down(index),
-                    oncontextmenu: on_context_menu(index),
-                    onmouseup: on_up(),
-                    ondoubleclick: on_double_click(index),
+                if !segment_tooltip {
+                    for (_, _, color, bx, by, bw, bh) in bars.iter().cloned() {
+                        rect {
+                            class: "stacked-bar",
+                            fill: "{color}",
+                            x: bx,
+                            y: by,
+                            width: bw,
+                            height: bh,
+                        }
+                    }
                 }
-            }
-            // Over the columns, so that the tooltip can be for the segment the mouse is over.
-            if segment_tooltip {
-                for (index, series, color, bx, by, bw, bh) in bars.iter().cloned() {
+                for (index, column_x, column_width) in columns {
                     rect {
-                        class: "stacked-bar",
-                        fill: "{color}",
-                        x: bx,
-                        y: by,
-                        width: bw,
-                        height: bh,
-                        onmouseenter: on_enter(index, Some(series)),
+                        class: "stacked-hit",
+                        x: column_x,
+                        y: TOP,
+                        width: column_width,
+                        height: plot_height,
+                        onmouseenter: on_enter(index, None),
                         onmousedown: on_down(index),
                         oncontextmenu: on_context_menu(index),
                         onmouseup: on_up(),
                         ondoubleclick: on_double_click(index),
                     }
                 }
-            }
-            if let Some((selection_x, selection_width)) = selection {
-                rect { class: "stacked-selection", x: selection_x, y: TOP, width: selection_width, height: plot_height }
-            }
-
-            if let Some((tx, period, rows, total)) = tooltip {
-                g { class: "stacked-tooltip",
-                    rect { class: "stacked-tooltip-background", x: tx, y: TOP, width: TOOLTIP_WIDTH, height: 42.0 + rows.len() as f64 * 14.0, rx: 4 }
-                    text { class: "stacked-tooltip-period", x: tx + TOOLTIP_TEXT_X, y: TOP + 16.0, "{period}" }
-                    text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 34.0, "Total: {total}" }
-                    for (index, (label, color, value)) in rows.iter().enumerate() {
-                        rect { class: "stacked-legend-swatch", fill: "{color}", x: tx + 8.0, y: TOP + 43.0 + index as f64 * 14.0, width: 10.0, height: 10.0 }
-                        text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {value}" }
+                // Over the columns, so that the tooltip can be for the segment the mouse is over.
+                if segment_tooltip {
+                    for (index, series, color, bx, by, bw, bh) in bars.iter().cloned() {
+                        rect {
+                            class: "stacked-bar",
+                            fill: "{color}",
+                            x: bx,
+                            y: by,
+                            width: bw,
+                            height: bh,
+                            onmouseenter: on_enter(index, Some(series)),
+                            onmousedown: on_down(index),
+                            oncontextmenu: on_context_menu(index),
+                            onmouseup: on_up(),
+                            ondoubleclick: on_double_click(index),
+                        }
                     }
                 }
+                if let Some((selection_x, selection_width)) = selection {
+                    rect { class: "stacked-selection", x: selection_x, y: TOP, width: selection_width, height: plot_height }
+                }
 
+                if let Some((tx, period, rows, total)) = tooltip {
+                    g { class: "stacked-tooltip",
+                        rect { class: "stacked-tooltip-background", x: tx, y: TOP, width: TOOLTIP_WIDTH, height: 42.0 + rows.len() as f64 * 14.0, rx: 4 }
+                        text { class: "stacked-tooltip-period", x: tx + TOOLTIP_TEXT_X, y: TOP + 16.0, "{period}" }
+                        text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 34.0, "Total: {total}" }
+                        for (index, (label, color, value)) in rows.iter().enumerate() {
+                            rect { class: "stacked-legend-swatch", fill: "{color}", x: tx + 8.0, y: TOP + 43.0 + index as f64 * 14.0, width: 10.0, height: 10.0 }
+                            text { class: "stacked-tooltip-value", x: tx + TOOLTIP_TEXT_X, y: TOP + 52.0 + index as f64 * 14.0, "{label}: {value}" }
+                        }
+                    }
+
+                }
             }
         }
         if let Some((click, menu_x, menu_y)) = menu_at() {
