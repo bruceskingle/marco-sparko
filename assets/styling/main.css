@@ -969,6 +969,13 @@ button.danger:disabled {
     overflow: auto;
 }
 
+/* A graph fills the page and sizes itself to it, so the page never scrolls. Otherwise, with scroll bars which take up
+   space (System Settings, Appearance, Show scroll bars: Always, or with a mouse), the scroll bar coming and going
+   resizes the graph, which brings it back or takes it away again, and the graph shrinks and then shakes. */
+.app-page:has(.stacked-consumption-graph) {
+    overflow: hidden;
+}
+
 /* The log and settings buttons beside the profile menu. */
 .nav-icon-button {
     display: inline-flex;
