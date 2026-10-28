@@ -118,6 +118,8 @@ body {
 /* Main content fills remaining space */
 .content {
     flex: 1 1 auto;         /* fill remaining width */
+    /* Not wider than the space left, whatever the width of what is in it. */
+    min-width: 0;
     /* padding: 20px; */
     overflow: auto;
 
@@ -832,6 +834,11 @@ button.danger:disabled {
     width: 100%;
     height: 100%;
     min-height: 0;
+    min-width: 0;
+    /* The graph's size comes only from the space it is given, never from its viewBox, which is set from its size. Some
+       versions of WebKit, e.g. on an Intel Mac, size it from its viewBox otherwise, so each resize changes its size
+       again, and it shrinks and then shakes between two sizes. */
+    contain: size;
     font-size: 12px;
     visibility: hidden;
 }
@@ -967,13 +974,6 @@ button.danger:disabled {
     display: flex;
     flex-direction: column;
     overflow: auto;
-}
-
-/* A graph fills the page and sizes itself to it, so the page never scrolls. Otherwise, with scroll bars which take up
-   space (System Settings, Appearance, Show scroll bars: Always, or with a mouse), the scroll bar coming and going
-   resizes the graph, which brings it back or takes it away again, and the graph shrinks and then shakes. */
-.app-page:has(.stacked-consumption-graph) {
-    overflow: hidden;
 }
 
 /* The log and settings buttons beside the profile menu. */
