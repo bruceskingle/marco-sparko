@@ -350,12 +350,31 @@ or choose **Publish release** on the draft's edit page on GitHub.
 ./scripts/release.sh start
 ```
 
-Creates the `vX.X.X` branches for the next patch version (e.g. 0.4.4 after 0.4.3) in both repos from `main`, sets
+Creates the `vX.X.X` branches for the next minor version (e.g. 0.5.0 after 0.4.4) in both repos from `main`, sets
 the version in both Cargo.toml files and the version of sparko_graphql which marco-sparko uses, builds to update the
-Cargo.lock files, commits and pushes. For a different version, give it, e.g. `./scripts/release.sh start 0.5.0`. If
+Cargo.lock files, commits and pushes. For a different version, give it, e.g. `./scripts/release.sh start 0.4.5`. If
 the branches already exist it switches to them.
 
 Then commit to the `vX.X.X` branches and push as usual. When it is ready to release, go back to step 1.
+
+### Patch Releases
+
+Patch versions are kept for fixes to the last release, so that a fix can be released without the new features being
+developed for the next one. Until the next minor version is merged, `main` is the last release, so start the patch
+release from it, e.g. while 0.5.0 is being developed:
+
+```
+./scripts/release.sh start 0.4.5
+```
+
+Make the fix and release it as usual. Then merge `main` into the release branch for the next minor version, so that it
+has the fix too, keeping its own version where the Cargo.toml files conflict:
+
+```
+./scripts/release.sh sync v0.5.0
+git -C ~/git/marco-sparko merge origin/main
+git -C ~/git/sparko_graphql merge origin/main
+```
 
 If a change needs its own branch, e.g. because someone else is working on it, branch from the release branch and
 merge it back into it, or merge their pull request on GitHub with the release branch as the base:

@@ -36,7 +36,8 @@ Usage: $(basename "$0") <command>
 
   status           Show the state of both repos, the tags and the GitHub release
   start [version]  Start the next release: create the vX.X.X branches from main and set the version
-                   (default: the next patch version after the one on main)
+                   (default: the next minor version after the one on main, e.g. 0.5.0 after 0.4.4; give a patch
+                   version, e.g. 0.4.5, for a fix to the last release)
   try              Build the installers from the release branches, without merging, and download them
   merge            Squash merge the release branches to main, tag them releaseX.X.X, and merge main back
   check            Clean build and run the tagged source, then go back to the release branches
@@ -362,8 +363,8 @@ cmd_start() {
         git -C "$(repo_dir "$repo")" fetch -q origin
     done
     main_version=$(git -C "$(repo_dir marco-sparko)" show origin/main:Cargo.toml | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)
-    # The next patch version, e.g. 0.4.3 to 0.4.4
-    new_version=${1:-$(echo "$main_version" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }')}
+    # The next minor version, e.g. 0.4.4 to 0.5.0, so that patch versions are left for fixes to the last release.
+    new_version=${1:-$(echo "$main_version" | awk -F. '{ printf "%d.%d.0", $1, $2 + 1 }')}
     [[ "$new_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "$new_version is not a version like 0.4.4"
     info "Starting release $new_version (main is $main_version)"
 
