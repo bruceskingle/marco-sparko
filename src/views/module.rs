@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
+use dioxus_free_icons::{Icon, icons::ld_icons::{LdPanelLeftClose, LdPanelLeftOpen}};
 
 use crate::{MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
 
@@ -13,6 +14,14 @@ fn escape_html(input: &str) -> String {
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
         .replace("'", "&#x27;")
+}
+
+/// The id of the page path is for, the first page if it does not say, and the rest of the path.
+fn page_for(path: &[String], page_list: &[PageInfo]) -> Option<(&'static str, Vec<String>)> {
+    let page_id = path.first().map(String::as_str).unwrap_or_default();
+    page_list.iter()
+        .find(|page_info| page_id.is_empty() || page_id == page_info.path)
+        .map(|page_info| (page_info.path, path.iter().skip(1).cloned().collect()))
 }
 
 fn get_page(module: &Box<dyn crate::Module + Send>, path: &Vec<String>, page_list: &Vec<PageInfo>) -> (&'static str, Element) {
@@ -67,6 +76,8 @@ pub fn Module(module_id: String) -> Element {
 
     // Signal for sidebar visibility
     let mut sidebar_open = use_signal(|| true);
+    // Hidden while a screenshot is taken, unless the shot is about it, see screenshots.rs.
+    let sidebar_shown = *sidebar_open.read() && !crate::screenshots::PAGE_LIST_HIDDEN();
 
     let mut call_construct_module_signal = use_signal::<bool>(|| true);
     let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { module_registrations.module_factory(&module_id, &marco_sparko_context).await});
@@ -77,6 +88,17 @@ pub fn Module(module_id: String) -> Element {
 
     let mut call_build_module_signal = use_signal::<bool>(|| true);
     let mut build_module_action: Action<(Arc<dyn ModuleFactory>, bool), Box<dyn crate::Module + Send>> = use_action( move |builder: Arc<dyn ModuleFactory>, _dummy: bool|  async move { builder.build().await});
+
+    // The help of what is being shown, the login page until the module is ready.
+    let help_topic = match (check_ready_module_action.value(), build_module_action.value()) {
+        (_, Some(Ok(module))) => {
+            let module = module.read();
+            page_for(&path, &module.get_page_list()).map(|(page_id, rest)| module.help_topic(page_id, &rest))
+        },
+        (Some(Ok(ready)), _) if !*ready.read() => Some(format!("{module_id}/login.md")),
+        _ => None,
+    };
+    crate::help::use_help_topic(help_topic);
 
     if *call_construct_module_signal.read() {
         call_construct_module_signal.set(false);
@@ -112,7 +134,7 @@ pub fn Module(module_id: String) -> Element {
 
                     // Toggle sidebar
                     let toggle_sidebar = {
-                        let b = !*sidebar_open.read();
+                        let b = !sidebar_shown;
                         move |_| {
                             sidebar_open.set(b);
                         }
@@ -135,20 +157,24 @@ pub fn Module(module_id: String) -> Element {
                     rsx! {
                         // Main container
                         div { class: "container",
-                            // Sidebar
+                            // Sidebar, which when hidden is a narrow strip with just the button to show it again.
                             nav {
-                                class: format_args!("sidebar {}", if *sidebar_open.read() { "open" } else { "closed" }),
-                                style: "width: 240px;", // fixed width
+                                class: format_args!("sidebar {}", if sidebar_shown { "open" } else { "closed" }),
                                 aria_label: "secondary navigation",
 
-                                div { class: "sidebar-inner",
-                                    if *sidebar_open.read() {
-                                        button {
-                                            class: "hamburger",
-                                            onclick: toggle_sidebar,
-                                            "<<"
-                                        }
+                                button {
+                                    class: "sidebar-toggle",
+                                    r#type: "button",
+                                    title: if sidebar_shown { "Hide the page list" } else { "Show the page list" },
+                                    onclick: toggle_sidebar,
+                                    if sidebar_shown {
+                                        Icon { icon: LdPanelLeftClose, width: 18, height: 18 }
                                     }
+                                    else {
+                                        Icon { icon: LdPanelLeftOpen, width: 18, height: 18 }
+                                    }
+                                }
+                                div { class: "sidebar-inner",
                                     for page_info in page_list.clone() {
                                         div {
                                             class: format_args!(
@@ -164,13 +190,6 @@ pub fn Module(module_id: String) -> Element {
 
                             // Main content
                             main { class: "content",
-                                if !*sidebar_open.read() {
-                                    button {
-                                        class: "hamburger",
-                                        onclick: toggle_sidebar,
-                                        ">>"
-                                    }
-                                }
                                 {body}
                             }
                         }

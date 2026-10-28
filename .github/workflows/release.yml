@@ -1,25 +1,27 @@
-# Builds the macOS and Windows installers for a release, tests them, and attaches them to the GitHub release.
+# Builds the macOS and Windows installers for a tag, tests them, and keeps them on the run's page under Artifacts.
+# The tag (e.g. release0.4.4) must exist in both marco-sparko and sparko_graphql.
 #
-# It runs when a release is published on GitHub. The release's tag (e.g. release0.4.3) must also exist in
-# sparko_graphql, so create the sparko_graphql release first.
+# With attach, the installers are also attached to the draft GitHub release for the tag, ready to be tried before the
+# release is published. A published release is never changed.
 #
-# It can also be run by hand from the Actions tab (Release > Run workflow) with a tag, to try a build without
-# changing any release. The installers are then kept on the run's page under Artifacts.
+# scripts/release.sh runs it, see docs/Release.md. It can also be run from the Actions tab (Release > Run workflow).
 name: Release
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "The tag to build, e.g. release0.4.3"
+        description: "The tag to build, e.g. release0.4.4"
         required: true
+      attach:
+        description: "Attach the installers to the draft release for the tag"
+        type: boolean
+        default: false
 
 env:
-  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  TAG: ${{ inputs.tag }}
   # Must match the dioxus version in Cargo.lock.
-  DX_VERSION: "0.7.3"
+  DX_VERSION: "0.7.10"
   CARGO_TERM_COLOR: always
 
 # Read only, except for the publish job.
@@ -65,7 +67,8 @@ jobs:
       - name: Check out sparko_graphql
         uses: actions/checkout@v7
         with:
-          repository: bruceskingle/sparko_graphql
+          # From the same account as this repo, so that forks build their own sparko_graphql.
+          repository: ${{ github.repository_owner }}/sparko_graphql
           ref: ${{ env.TAG }}
           path: sparko_graphql
 
@@ -112,48 +115,63 @@ jobs:
       - name: Run the tests
         run: cargo test --locked
 
+      # The defaults: a .dmg on macOS and an NSIS setup.exe on Windows.
       - name: Build the installers
         run: dx bundle --release
 
       - name: Collect the installers
+        id: collect
         run: |
           mkdir -p dist
-          find target/dx -path '*/bundle/*' -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \) -exec cp {} dist/ \;
+          find target/dx -path '*/bundle/*' -type f \( -name '*.dmg' -o -name '*-setup.exe' \) -exec cp {} dist/ \;
           ls -l dist
           if [ -z "$(ls dist)" ]; then
             echo "No installers were built"
             exit 1
           fi
 
-      # Installs the MSI as a user would and checks that the app starts and is still running 30 seconds later.
+      # Installs the app as a user would, silently, and checks that it starts and is still running 30 seconds later.
       - name: Check the installed app starts
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $msi = Get-ChildItem dist -Filter *.msi | Select-Object -First 1
-          $install = Start-Process msiexec -ArgumentList "/i `"$($msi.FullName)`" /qn /l*v msi.log" -Wait -PassThru
+          $setup = Get-ChildItem dist -Filter *-setup.exe | Select-Object -First 1
+          if (-not $setup) {
+            throw "No setup.exe was built, see Build the installers"
+          }
+          $install = Start-Process $setup.FullName -ArgumentList "/S" -Wait -PassThru
           if ($install.ExitCode -ne 0) {
-            Get-Content msi.log -Tail 50
-            throw "The MSI failed to install, exit code $($install.ExitCode)"
+            throw "The installer failed, exit code $($install.ExitCode)"
           }
 
-          $exe = Get-ChildItem "$env:ProgramFiles", "$env:LOCALAPPDATA\Programs" -Recurse -Depth 2 -Filter *.exe -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like '*marco*' } |
+          # Installed for the current user in LOCALAPPDATA, or for everyone in Program Files. The uninstaller is in the
+          # same directory, so is left out.
+          $exe = Get-ChildItem "$env:LOCALAPPDATA", "$env:LOCALAPPDATA\Programs", "$env:ProgramFiles" -Recurse -Depth 1 -Filter *.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like '*marco*' -and $_.Name -notlike '*uninstall*' } |
             Select-Object -First 1
           if (-not $exe) {
             throw "The installed app was not found"
           }
           Write-Host "Starting $($exe.FullName)"
 
-          $app = Start-Process $exe.FullName -PassThru
+          # Its output is kept, and a panic shows where it happened, to see why if it does not start.
+          $env:RUST_BACKTRACE = "1"
+          $app = Start-Process $exe.FullName -PassThru -RedirectStandardOutput app-stdout.log -RedirectStandardError app-stderr.log
           Start-Sleep -Seconds 30
           if ($app.HasExited) {
+            Write-Host "=== stdout"
+            Get-Content app-stdout.log -Tail 100
+            Write-Host "=== stderr"
+            Get-Content app-stderr.log -Tail 100
             throw "The app exited with code $($app.ExitCode)"
           }
           Stop-Process -Id $app.Id
           Write-Host "The app started"
 
+      # Also when the app start check fails, so that the installers can be tried by hand to see why. They are only
+      # attached to a release if every build succeeded, see publish.
       - name: Keep the installers
+        if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
@@ -162,8 +180,8 @@ jobs:
 
   # Only runs if every build succeeded, so a release never gets some of the installers but not others.
   publish:
-    name: Attach to the release
-    if: github.event_name == 'release'
+    name: Attach to the draft release
+    if: inputs.attach
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -174,6 +192,15 @@ jobs:
       attestations: write
 
     steps:
+      - name: Check the release is a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" != "true" ]; then
+            echo "$TAG is not a draft release, published releases are not changed"
+            exit 1
+          fi
+
       - name: Fetch the installers
         uses: actions/download-artifact@v8
         with:
@@ -185,7 +212,7 @@ jobs:
         with:
           subject-path: dist/*
 
-      - name: Attach them to the release
+      - name: Attach them to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

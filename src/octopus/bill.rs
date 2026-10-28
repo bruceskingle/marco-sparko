@@ -70,7 +70,8 @@ impl AbstractBill {
         }
     }
 
-    pub fn gui_summary_line(&self, attributes: &DataSetAttributes) -> Element {
+    /// A row of the bill list, whose id calls on_open with the bill's id when clicked.
+    pub fn gui_summary_line(&self, attributes: &DataSetAttributes, on_open: EventHandler<String>) -> Element {
         let abstract_bill = self.as_bill_interface();
         let row_class = if attributes.cached { "cached"} else {"fetched"};
 
@@ -136,18 +137,11 @@ impl AbstractBill {
         rsx!{
             tr { class: row_class,
                 td { "{issued_date}" }
-                td {
+                // The bill's window opens to the right of this column, see BillsPage.
+                td { class: "bill-ref",
                     div {
                         class: "link",
-                        // onclick: |_| {path_signal.set(vec!(String::from("bills"), abstract_bill.id_.clone()))},
-                        onclick: move |_| {
-                            // println!("Id={}", id);
-                            // let id = abstract_bill.id_.clone();
-                            // nav_callback(id);
-                            let mut path_signal = use_context::<Signal<Vec<String>>>();
-                            let new_path = vec![String::from("bills"), id.clone()];
-                            path_signal.set(new_path);
-                        },
+                        onclick: move |_| on_open.call(id.clone()),
                         "{abstract_bill.id_}"
                     }
                 }
@@ -209,8 +203,15 @@ impl AbstractBill {
         } else {
             "N/A".to_string()
         };
+        // A statement which Octopus has not issued yet, which it does not show in its own app.
+        let open = matches!(self, AbstractBill::StatementType(statement) if statement.status_ != AccountStatementStatus::Closed);
         parts.push(rsx!{
             h1 { "Energy Account Statement" }
+            if open {
+                p { class: "open-bill-note",
+                    "This bill is still open. Octopus has not issued it yet, so it is not shown in the Octopus app, and its charges, dates and reference may change until it is issued. It may also be replaced by a different bill, e.g. if its period is closed early."
+                }
+            }
             table { class: "display",
                 tr {
                     th { class: "row-header", "Date:" }
@@ -958,7 +959,11 @@ impl BillDataSet {
             initial_query_provider,
             continuation_query_provider,
             response_iterator,
-            indexer, config, request_manager).await?;
+            indexer,
+            // An open statement can be replaced by another, e.g. when its period is closed early, and the first is then
+            // no longer returned.
+            true,
+            config, request_manager).await?;
 
         Ok(Self { data_set })
     }

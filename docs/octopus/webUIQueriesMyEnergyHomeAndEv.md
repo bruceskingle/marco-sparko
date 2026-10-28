@@ -294,7 +294,7 @@ query getDeviceConsumptionBreakdown(
         "account": {
             "properties": [
                 {
-                    "id": "2930512",
+                    "id": "2267073",
                     "electricityMeterPoints": [
                         {
                             "agreements": [

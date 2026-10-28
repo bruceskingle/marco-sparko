@@ -6,6 +6,8 @@ use dioxus::prelude::*;
 
 include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 
+const APP_ICON: Asset = asset!("/assets/MarcoSparko.png");
+
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]
 pub fn Home(
@@ -91,7 +93,9 @@ pub fn Home(
                 s
             };
             // Where the profile file and cache are, see data_home.
-            let data_directory = match (crate::data_home::data_home(), crate::data_home::data_home_source()) {
+            // Not where it was set in screenshots, which set it, see screenshots.rs, as someone running the app would not.
+            let source = crate::data_home::data_home_source().filter(|_| !crate::screenshots::running());
+            let data_directory = match (crate::data_home::data_home(), source) {
                 (Ok(path), Some(source)) => format!("{} (set by {})", path.display(), source),
                 (Ok(path), None) => path.display().to_string(),
                 (Err(error), _) => error.to_string(),
@@ -136,6 +140,8 @@ pub fn Home(
             rsx! {
                 div {
                     // h1 { "This is Home #{xid}!" }
+                    // Sized here too, so that it is not shown at the image's full size until the stylesheet has loaded.
+                    img { class: "home-icon", src: APP_ICON, alt: "Marco Sparko", width: "128", height: "128" }
                     h1 { "Modules" }
                     for (module_id , active) in modules {
                         Link {

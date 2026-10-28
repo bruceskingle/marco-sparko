@@ -6,13 +6,13 @@ This section describes the initial sequence of HTTP requests which I have observ
 In the examples here I had previously logged in, if you are not authenticated you will be redirected to the login page and there will be more calls not shown here before the sequence below will follow.
 
 ## GET https://octopus.energy/dashboard/
-This is a simple HTTP GET request which the results in a `302 Found` response. This is a simple HTTP redirect to `/dashboard/accounts/A-B3D8B29D/` (where the last element is your actual account number) which you can see in the `Location` response header.
+This is a simple HTTP GET request which the results in a `302 Found` response. This is a simple HTTP redirect to `/dashboard/accounts/A-B1C2D34E/` (where the last element is your actual account number) which you can see in the `Location` response header.
 
 The actual web dashboard application obviously knows the user's account number by this point, our GraphQL application will not.
 
 There are then several other redirects eventually getting to
 
-## GET https://octopus.energy/dashboard/new/accounts/A-B3D8B29D/
+## GET https://octopus.energy/dashboard/new/accounts/A-B1C2D34E/
 This is the actual HTML for the web UI.
 
 # Observed API calls - My Account Page GraphQL Queries
@@ -343,13 +343,13 @@ query getPropertiesMeterPoints($accountNumber: String!, $propertiesActiveFrom: D
         "account": {
             "properties": [
                 {
-                    "id": "2930512",
+                    "id": "2267073",
                     "electricityMeterPoints": [
                         {
-                            "id": "2875805",
+                            "id": "7773674",
                             "meters": [
                                 {
-                                    "id": "3657465",
+                                    "id": "8753312",
                                     "smartDevices": [
                                         {
                                             "deviceId": "01-01-01-01-01-01-01-01",
@@ -362,10 +362,10 @@ query getPropertiesMeterPoints($accountNumber: String!, $propertiesActiveFrom: D
                             "__typename": "ElectricityMeterPointType"
                         },
                         {
-                            "id": "3347939",
+                            "id": "9253703",
                             "meters": [
                                 {
-                                    "id": "3839934",
+                                    "id": "7290965",
                                     "smartDevices": [
                                         {
                                             "deviceId": "01-01-01-01-01-01-01-01",
@@ -380,10 +380,10 @@ query getPropertiesMeterPoints($accountNumber: String!, $propertiesActiveFrom: D
                     ],
                     "gasMeterPoints": [
                         {
-                            "id": "2383770",
+                            "id": "8936882",
                             "meters": [
                                 {
-                                    "id": "3274816",
+                                    "id": "3512626",
                                     "smartDevices": [
                                         {
                                             "deviceId": "02-02-02-02-02-02-02-02",
@@ -598,7 +598,7 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                 "edges": [
                     {
                         "node": {
-                            "id": "7991077",
+                            "id": "4659150",
                             "__typename": "DirectDebitInstructionType"
                         },
                         "__typename": "DirectDebitInstructionConnectionTypeEdge"
@@ -626,7 +626,7 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
             ],
             "properties": [
                 {
-                    "id": "2930512",
+                    "id": "2267073",
                     "occupancyPeriods": [
                         {
                             "effectiveTo": null,
@@ -636,7 +636,7 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                     "electricityMeterPoints": [
                         {
                             "__typename": "ElectricityMeterPointType",
-                            "id": "2875805",
+                            "id": "7773674",
                             "mpan": "1111111111111",
                             "smartStartDate": "2021-08-26",
                             "profileClass": 1,
@@ -659,7 +659,7 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                         },
                         {
                             "__typename": "ElectricityMeterPointType",
-                            "id": "3347939",
+                            "id": "9253703",
                             "mpan": "2222222222222",
                             "smartStartDate": "2021-08-26",
                             "profileClass": 8,
@@ -684,7 +684,7 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                     "gasMeterPoints": [
                         {
                             "__typename": "GasMeterPointType",
-                            "id": "2383770",
+                            "id": "8936882",
                             "mprn": "3333333333",
                             "smartStartDate": "2021-08-25",
                             "meters": [
@@ -725,13 +725,13 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                 "edges": [
                     {
                         "node": {
-                            "id": "-1896251302",
+                            "id": "-9627766092",
                             "amount": 502,
                             "postedDate": "2024-08-14",
                             "isHeld": false,
                             "isIssued": false,
                             "title": "Powerups Reward",
-                            "statementId": "236646425",
+                            "statementId": "392720235",
                             "__typename": "Credit"
                         },
                         "__typename": "TransactionConnectionTypeEdge"
@@ -953,8 +953,8 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
             "cotReadingWindowDays": 2,
             "properties": [
                 {
-                    "id": "2930512",
-                    "address": "Brookfield Farm, Ambridge, Bortchester, Borsetshire, BB12 3AM",
+                    "id": "2267073",
+                    "address": "Address 96",
                     "occupancyPeriods": [
                         {
                             "effectiveTo": null,
@@ -964,10 +964,10 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                     "electricityMeterPoints": [
                         {
                             "__typename": "ElectricityMeterPointType",
-                            "id": "2875805",
+                            "id": "7773674",
                             "meters": [
                                 {
-                                    "id": "3657465",
+                                    "id": "8753312",
                                     "serialNumber": "21E1111111",
                                     "requiresCotFinalReading": false,
                                     "__typename": "ElectricityMeterType"
@@ -978,10 +978,10 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                         },
                         {
                             "__typename": "ElectricityMeterPointType",
-                            "id": "3347939",
+                            "id": "9253703",
                             "meters": [
                                 {
-                                    "id": "3839934",
+                                    "id": "7290965",
                                     "serialNumber": "21E1111111",
                                     "requiresCotFinalReading": false,
                                     "__typename": "ElectricityMeterType"
@@ -994,10 +994,10 @@ query getAccount($accountNumber: String!, $propertiesActiveFrom: DateTime) {
                     "gasMeterPoints": [
                         {
                             "__typename": "GasMeterPointType",
-                            "id": "2383770",
+                            "id": "8936882",
                             "meters": [
                                 {
-                                    "id": "3274816",
+                                    "id": "3512626",
                                     "serialNumber": "E6S22222222222",
                                     "requiresCotFinalReading": false,
                                     "__typename": "GasMeterType"
@@ -1074,7 +1074,7 @@ query paymentSchedules($accountNumber: String!, $statuses: [DirectDebitInstructi
                     {
                         "node": {
                             "supplementaryLedger": null,
-                            "id": "99999999",
+                            "id": "97300026",
                             "paymentAmount": 10221,
                             "paymentDay": 28,
                             "validTo": null,
@@ -1093,7 +1093,7 @@ query paymentSchedules($accountNumber: String!, $statuses: [DirectDebitInstructi
                             "supplementaryLedger": {
                                 "ledgerType": "GOODS"
                             },
-                            "id": "99999999",
+                            "id": "97300026",
                             "paymentAmount": 0,
                             "paymentDay": 1,
                             "validTo": null,
@@ -1112,7 +1112,7 @@ query paymentSchedules($accountNumber: String!, $statuses: [DirectDebitInstructi
                             "supplementaryLedger": {
                                 "ledgerType": "ELECTRIC_JUICE"
                             },
-                            "id": "99999999",
+                            "id": "97300026",
                             "paymentAmount": 0,
                             "paymentDay": 1,
                             "validTo": null,

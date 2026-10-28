@@ -31,13 +31,21 @@ pub enum Route {
         // The disk space used by a profile, part of the Home app.
         #[route("/profile/:name")]
         ProfileSize { name: String },
+        // The app's settings for the active profile.
+        #[route("/settings")]
+        Settings {},
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.
 // The macro returns an `Asset` type that will display as the path to the asset in the browser or a local path in desktop bundles.
 const FAVICON: Asset = asset!("/icons/icon.ico");
 // The asset macro also minifies some assets like CSS and JS to make bundled smaller
-const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
+pub const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
+
+/// The background of the app, as in main.css, for a window's webview and the page before the stylesheet has loaded,
+/// so that a window does not flash white as it opens.
+pub const BACKGROUND_COLOR: (u8, u8, u8, u8) = (0x0f, 0x11, 0x16, 0xff);
+pub const INITIAL_HEAD: &str = "<style>html, body { background-color: #0f1116; color: #ffffff; }</style>";
 
 /// App is the main component of our app. Components are the building blocks of dioxus apps. Each component is a function
 /// that takes some props and returns an Element. In this case, App takes no props because it is the root of our app.
@@ -47,6 +55,15 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 pub fn App() -> Element {
     // let context = use_context::<Signal<Args>>();
     // let args = (&*context.read()).clone();
+
+    crate::components::child_windows::use_main_window();
+    crate::screenshots::use_screenshots(Args::ms_parse().screenshots());
+    // The app only ends when the user quits it, by closing the main window or with Quit.
+    dioxus::desktop::use_wry_event_handler(|event, _| {
+        if let dioxus::desktop::tao::event::Event::LoopDestroyed = event {
+            crate::log_info!("Quit by user");
+        }
+    });
 
     let args = Args::ms_parse();
     let verbose = args.marco_sparko_args.verbose;

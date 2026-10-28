@@ -1,3 +1,21 @@
+/* The colours and fonts of every window, the main one and e.g. a bill's. */
+:root{
+  --bg:#0f1724;
+  --panel:#0b1220;
+  --accent:#06b6d4;
+  --header:#dfc289;
+  --header_span_bg:#7b6c4f;
+  --derived:#f499f8;
+  --invalid:#ad4646;
+  --ok:#4caf6a;
+  --muted:#9aa6b2;
+  --fetched:#ecb91047;
+  --glass: rgba(255,255,255,0.03);
+  --radius:12px;
+  --gap:1rem;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
 *, *::before, *::after {
     box-sizing: border-box;
 }
@@ -67,6 +85,14 @@ body {
     min-height: 0;
     /* background: #f7f9fc; */
     /* color: #0f172a; */
+}
+
+/* The app icon in the top right corner of the home page. */
+.home-icon {
+    float: right;
+    width: 128px;
+    height: 128px;
+    margin: 16px 16px 16px 16px;
 }
 
 #main {
@@ -179,12 +205,6 @@ body {
 } */
 
 
-button.hamburger {
-  /* color: red;
-  background-color: yellow; */
-  color:var(--muted);
-}
-
 table.display, table.display th, table.display td {
     border-collapse: collapse;
     border: rgb(61, 61, 61) 1px solid;
@@ -214,6 +234,12 @@ th {
 
 .invalid {
     color: var(--invalid);
+    font-weight: bold;
+}
+
+/* A good outcome, the opposite of invalid. */
+.ok {
+    color: var(--ok);
     font-weight: bold;
 }
 
@@ -359,40 +385,55 @@ h6 {
     border-bottom: 1px solid var(--border);
 }
 
-.hamburger {
-
-    background: var(--sidebar-bg);
-    color: var(--accent);
-    /* color: var(--sidebar-bg); */
-    /* background: transparent; */
-    border: 1px;
-    border-color: #f8fafc;
-    font-size: 18px;
-    cursor: pointer;
-}
-
-/* Sidebar */
+/* Sidebar, a fixed width, or when closed a narrow strip with the button to open it. */
 .sidebar {
     box-sizing: border-box;
-    /* background: var(--sidebar-bg); */
-    /* background-color: magenta ; */
-    border-right: 1px solid var(--border);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     flex-direction: column;
-    width: 240px;           /* fixed width */
-    min-width: 240px;
-    max-width: 240px;
+    flex: 0 0 auto;
+    width: 240px;
+    overflow: hidden;
     transition: width 200ms ease;
 }
 
-.sidebar-inner {
-    padding: 16px;
-    /* background-color: blue ; */
+.sidebar.closed {
+    width: 44px;
 }
 
-/* Hide sidebar when closed */
-.sidebar.closed {
-    display: none;
+.sidebar-inner {
+    padding: 0 16px 16px 16px;
+    width: 240px;
+    box-sizing: border-box;
+}
+
+.sidebar.closed .sidebar-inner {
+    visibility: hidden;
+}
+
+/* The button which hides or shows the sidebar, at its top right, or in the middle of the strip when it is closed. */
+.sidebar-toggle {
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin: 8px 6px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+}
+
+.sidebar.closed .sidebar-toggle {
+    align-self: center;
+}
+
+.sidebar-toggle:hover {
+    background: var(--glass);
+    color: #e6f6fb;
 }
 
 .sidebar-item{
@@ -429,6 +470,27 @@ h6 {
     border: 2px solid yellow;
     padding: 20px;
 }
+/* The data, with a dialog over it while part of it is reloaded. It fills the space like the graph inside it. */
+.reloadable {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    /* Tables are their own width, not stretched to the window's. The graphs fill it as they are 100% wide. */
+    align-items: flex-start;
+    min-height: 0;
+}
+
+.reload-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+}
+
 /* Modal dialog, e.g. the meter consumption date range */
 .modal-backdrop {
     position: fixed;
@@ -454,6 +516,36 @@ h6 {
 
 .modal h3 {
     margin: 0 0 4px 0;
+}
+
+/* The buttons for the period before and after the date range, either side of it. */
+.range-pager {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.range-pager button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* The quick range buttons on the left and Cancel and Apply on the right, at the bottom of the date range dialog. */
+.modal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+}
+
+/* Buttons which set the date range at once, the current periods (e.g. This Week) above the previous ones. */
+.quick-ranges {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    gap: 8px;
+}
+
+.quick-ranges button {
+    padding: 4px 10px;
 }
 
 .modal-row {
@@ -605,6 +697,23 @@ button.danger:disabled {
     background-color: #353540;
 }
 
+/* The menu shown where a bar in a graph was right clicked. */
+.dropdown-menu.bar-menu {
+    position: fixed;
+    top: auto;
+    right: auto;
+    min-width: 0;
+}
+
+.dropdown-menu > button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.dropdown-menu > button:disabled:hover {
+    background-color: transparent;
+}
+
 .menu-separator {
     margin: 4px 0;
     border-top: 1px solid #404045;
@@ -668,31 +777,48 @@ button.danger:disabled {
     margin-left: 12px;
 }
 
+/* Of type rather than child, as a toggle hint can follow a button. */
 .view-toggle button {
     border-radius: 0;
 }
 
-.view-toggle button:first-child {
+.view-toggle button:first-of-type {
     border-radius: 4px 0 0 4px;
 }
 
-.view-toggle button:last-child {
+.view-toggle button:last-of-type {
     border-radius: 0 4px 4px 0;
 }
 
-.view-toggle button + button {
-    border-left: none;
+/* The buttons overlap by their borders rather than one dropping its left border, so that the hovered one, raised above
+   its neighbours, shows its whole border. */
+.view-toggle button ~ button {
+    margin-left: -1px;
 }
 
-.view-toggle button:disabled {
+.view-toggle button:hover {
+    position: relative;
+    z-index: 1;
+}
+
+.view-toggle button:disabled,
+.view-toggle button.unavailable {
     opacity: 0.4;
     cursor: default;
 }
 
-.view-toggle button:disabled:hover {
-    background-color: #2a2a2f;
-    color: var(--accent);
-    border-color: #404045;
+/* Why an unavailable toggle button can not be chosen, shown under where it was clicked. */
+.view-toggle .toggle-hint {
+    position: fixed;
+    transform: translate(-50%, 18px);
+    z-index: 20;
+    padding: 4px 8px;
+    border: 1px solid #707080;
+    border-radius: 4px;
+    background-color: #1a1a1f;
+    color: #ffffff;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 .view-toggle button.active {
@@ -700,12 +826,23 @@ button.danger:disabled {
     color: #d0d0d0;
 }
 
+/* The space for a graph, which is measured to size the graph's svg to fill it, see StackedBarGraph. */
+.graph-frame {
+    position: relative;
+    flex: 1 1 0;
+    align-self: stretch;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Over the whole frame, so that it never changes the frame's size. */
 .stacked-consumption-graph {
     display: block;
-    flex: 1 1 0;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    min-height: 0;
     font-size: 12px;
     visibility: hidden;
 }
@@ -730,6 +867,36 @@ button.danger:disabled {
     stroke-width: 0.5;
 }
 
+/* Columns over the bars, which catch the mouse for the tooltip, double clicking and dragging. */
+.stacked-consumption-graph .stacked-hit {
+    fill: transparent;
+}
+
+/* A period along the x axis, e.g. a day, behind its label. */
+.stacked-consumption-graph .stacked-x-band {
+    fill: rgba(255, 255, 255, 0.12);
+}
+
+/* The bars being dragged across to zoom to them. */
+.stacked-consumption-graph .stacked-selection {
+    fill: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+}
+
+.stacked-consumption-graph {
+    user-select: none;
+}
+
+.stacked-consumption-graph.zooming,
+.stacked-consumption-graph.zooming * {
+    cursor: zoom-in;
+}
+
+/* The tooltip does not get in the way of the columns under it. */
+.stacked-consumption-graph .stacked-tooltip {
+    pointer-events: none;
+}
+
 .stacked-consumption-graph .stacked-tooltip-background {
     fill: #1a1a1f;
     stroke: #707080;
@@ -744,3 +911,549 @@ button.danger:disabled {
     fill: #ffffff;
 }
 
+/* The Measured and Modelled links of a smart device. */
+.device-link + .device-link {
+    margin-left: 16px;
+}
+
+/* A charging session in which the car was plugged in but did not charge. */
+.charging-sessions tr.plugged-in td {
+    color: #808088;
+}
+
+/* The charging sessions, high enough for the loading dialog over them when there are none yet. */
+.charging-sessions-content {
+    min-height: 240px;
+}
+
+/* The energy, power and battery percentage columns, all the same width. */
+.charging-sessions th.quantity {
+    width: 6em;
+    min-width: 6em;
+}
+
+.charging-sessions tr.total td {
+    font-weight: bold;
+}
+
+.note {
+    color: #a0a0a8;
+    font-size: 0.9em;
+}
+
+/* The meter's readings every 10 seconds, high enough for the loading dialog over them when there are none yet. */
+.telemetry-content {
+    min-height: 240px;
+}
+
+.telemetry-table th.quantity {
+    width: 6em;
+    min-width: 6em;
+}
+
+.telemetry-table tr.total td {
+    font-weight: bold;
+}
+
+/* The window: the nav bar, then the page, which takes the space left, then the log panel if it is shown. */
+.app-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+/* The page, and the help panel on its right. */
+.app-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+}
+
+.app-page {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+/* The log and settings buttons beside the profile menu. */
+.nav-icon-button {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 8px;
+}
+
+.nav-icon-button.active {
+    background-color: #353540;
+    color: #d0d0d0;
+}
+
+/* The log panel along the bottom, see log_panel.rs. */
+.log-panel {
+    flex: 0 0 auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 60px;
+    margin-top: 8px;
+    border-top: 1px solid #404045;
+    background-color: #15151a;
+}
+
+/* The top edge, which is dragged to resize the panel. */
+.log-resize {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: ns-resize;
+    z-index: 5;
+}
+
+.log-drag-overlay {
+    position: fixed;
+    inset: 0;
+    cursor: ns-resize;
+    z-index: 1000;
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #9aa6b2;
+}
+
+.log-close {
+    display: inline-flex;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+}
+
+.log-entries {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 8px 4px 8px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+
+.log-entry {
+    white-space: pre-wrap;
+}
+
+.log-time {
+    margin-right: 8px;
+    color: #808088;
+}
+
+.log-level {
+    display: inline-block;
+    width: 64px;
+}
+
+/* Where the entry came from, e.g. fetch, blank for the app. */
+.log-source {
+    display: inline-block;
+    width: 48px;
+    color: #808088;
+}
+
+.log-info {
+    color: #c4c4ce;
+}
+
+.log-warning {
+    color: #f5d742;
+}
+
+.log-error {
+    color: #ff6b6b;
+}
+
+/* The Settings page. */
+.settings-page {
+    padding: 0 16px 16px 16px;
+}
+
+.settings-group label {
+    display: block;
+    margin: 6px 0;
+}
+
+.settings-number {
+    width: 5em;
+}
+
+.settings-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+/* The explanation on an open bill, which Octopus has not issued yet. */
+.open-bill-note {
+    max-width: 60em;
+    padding: 8px 12px;
+    border: 1px solid #f5d742;
+    border-radius: 4px;
+    color: #f5d742;
+}
+
+/* The root of a bill's own window, see octopus/pages/bills.rs, which scrolls as the body does not. */
+.bill-window-layout {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+}
+
+.bill-window {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: auto;
+    padding: 0 20px 20px;
+    box-sizing: border-box;
+}
+
+/* Shows the help again in a bill window, which has no navigation bar. Far enough from the right to clear the window's
+   scroll bar when there is one. */
+.help-reopen {
+    position: fixed;
+    top: 8px;
+    right: 24px;
+    z-index: 10;
+}
+
+/* The help panel on the right, see help_panel.rs. */
+.help-panel {
+    flex: 0 0 auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-left: 8px;
+    border-left: 1px solid #404045;
+    background-color: #15151a;
+}
+
+/* The left edge, which is dragged to resize the panel. */
+.help-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    width: 8px;
+    cursor: ew-resize;
+    z-index: 5;
+}
+
+.help-drag-overlay {
+    position: fixed;
+    inset: 0;
+    cursor: ew-resize;
+    z-index: 1000;
+}
+
+.help-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #9aa6b2;
+}
+
+.help-title {
+    flex: 1 1 auto;
+}
+
+.help-button {
+    display: inline-flex;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
+}
+
+.help-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 14px 14px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #d4d4dc;
+}
+
+.help-content h1 {
+    font-size: 1.25rem;
+}
+
+.help-content h2 {
+    font-size: 1.05rem;
+    margin-top: 1.2em;
+}
+
+.help-content h3 {
+    font-size: 0.95rem;
+}
+
+.help-content a {
+    color: #06b6d4;
+}
+
+/* A button's icon in the help text, drawn like the button. */
+.help-icon {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    padding: 2px 4px;
+    border: 1px solid #505058;
+    border-radius: 4px;
+    background-color: #24242c;
+    color: #d0d0d0;
+}
+
+.help-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.help-content code {
+    font-size: 12px;
+}
+
+.help-content ul, .help-content ol {
+    padding-left: 1.4em;
+}
+
+/* The navigation bar along the top of the main window, see navbar.rs. */
+/* The main window, whose page is padded, unlike e.g. a bill's window. */
+body:has(.app-layout){
+  margin:0;
+  /* background:linear-gradient(180deg,#071025 0%, #071827 100%); */
+  color:#e6eef3;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  padding:2rem;
+}
+
+/* NAV BAR */
+.nav{
+  display:flex;
+  align-items:center;
+  gap:var(--gap);
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  /* background-color: green; */
+  padding:0.5rem 1rem;
+  border-radius:var(--radius);
+  box-shadow:0 6px 18px rgba(2,6,23,0.6);
+  backdrop-filter:blur(6px);
+  /* The blur makes the bar a layer of its own, so it is put above the page, for its menus to be above e.g. the help. */
+  position:relative;
+  z-index:50;
+  border:1px solid rgba(255,255,255,0.03);
+}
+
+/* A square the height of the bar, over its padding, with the bar's rounded corners on the left. Its size is fixed, as
+   WebKit does not size it from the bar's height, and sets the height of the bar, which is about what the items made it
+   before. */
+.nav-logo{
+  flex:0 0 auto;
+  width:3rem;
+  height:3rem;
+  margin:-0.5rem 0 -0.5rem -1rem;
+  border-radius:var(--radius) 0 0 var(--radius);
+  background-position:center;
+  background-size:contain;
+  background-repeat:no-repeat;
+}
+
+.nav-left{
+  display:flex;
+  gap:0.5rem;
+  align-items:center;
+}
+
+.brand{
+  display:inline-flex;
+  align-items:center;
+  gap:0.5rem;
+  font-weight:600;
+  letter-spacing:0.2px;
+  color:var(--accent);
+  margin-right:0.5rem;
+  text-decoration:none;
+}
+
+.nav-item{
+  display:inline-flex;
+  align-items:center;
+  gap:0.5rem;
+  text-decoration:none;
+  color:var(--muted);
+  padding:0.45rem 0.65rem;
+  border-radius:10px;
+  transition:background 150ms, transform 110ms;
+  font-size:0.95rem;
+}
+
+.nav-item.active{
+  
+  color:var(--accent);
+}
+
+.nav-item:hover,.nav-item:focus{
+  background:var(--glass);
+  color:#e6f6fb;
+  transform:translateY(-1px);
+  outline:none;
+}
+
+.spacer{flex:1 1 auto;}
+
+.nav-right{
+  display:flex;
+  align-items:center;
+  gap:0.5rem;
+}
+
+/* Dropdown */
+.dropdown{position:relative;}
+.dropdown-toggle{
+  appearance:none;
+  border:0;
+  background:transparent;
+  color:var(--muted);
+  display:inline-flex;
+  align-items:center;
+  gap:0.5rem;
+  padding:0.45rem 0.65rem;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:0.95rem;
+}
+.dropdown-toggle:hover,.dropdown-toggle:focus{
+  background:var(--glass);
+  color:#e6f6fb;
+  outline:none;
+}
+
+.profile-rename {
+  width: 12rem;
+  padding: 0.2rem 0.4rem;
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    /* background-color: yellow; */
+    /* transparent or translucent background */
+    background: transparent;
+    z-index: 20;  /* less than dropdown z-index */
+}
+
+.menu{
+  position:absolute;
+  right:0;
+  top:calc(100% + 8px);
+  min-width:200px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius:10px;
+  padding:0.35rem;
+  box-shadow:0 10px 30px rgba(2,6,23,0.6);
+  border:1px solid rgba(255,255,255,0.03);
+  /* Solid, so that what it is over, e.g. the help, does not show through. */
+  background-color:#15151a;
+  opacity:0;
+  transform:translateY(-6px) scale(0.98);
+  pointer-events:none;
+  transition:opacity 160ms ease, transform 160ms ease;
+  z-index:30;
+}
+.menu.open{
+  opacity:1;
+  transform:translateY(0) scale(1);
+  pointer-events:auto;
+  background-color: #000000;
+}
+
+.menu-item{
+  display:block;
+  padding:0.6rem 0.75rem;
+  border-radius:8px;
+  text-decoration:none;
+  color:var(--muted);
+  font-size:0.95rem;
+}
+.menu-item:hover,.menu-item:focus{
+  background:var(--glass);
+  color:#e6f6fb;
+  outline:none;
+}
+
+/* A profile in the menu, with a ... button for its actions on the right. */
+.menu-item.profile-item {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.5rem;
+  cursor:pointer;
+}
+
+.profile-actions {
+  position:relative;
+}
+
+.profile-actions-toggle {
+  padding:0 0.4rem;
+  line-height:1.2;
+  font-size:0.95rem;
+}
+
+.profile-actions-menu {
+  position:absolute;
+  right:0;
+  top:calc(100% + 4px);
+  min-width:120px;
+  padding:0.35rem;
+  border-radius:10px;
+  background-color:#000000;
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow:0 10px 30px rgba(2,6,23,0.6);
+  z-index:40;
+}
+
+.menu-item.create-new {
+  color: var(--accent);
+}
+
+
+.menu-item.create-new:hover,.menu-item.create-new:focus{
+  background:var(--glass);
+  color:#e6f6fb;
+  transform:translateY(-1px);
+  outline:none;
+}
+
+@media (max-width:640px){
+  .nav-left{gap:0.35rem;overflow:auto;padding-bottom:4px;}
+  .nav{padding:0.5rem;}
+  .brand{font-size:0.95rem;}
+}

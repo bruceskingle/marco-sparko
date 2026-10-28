@@ -23,109 +23,113 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in 'tests::test_handle_bill_total'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "octopus::tests::test_handle_bill_total",
-                    "--no-run",
-                    "--lib",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "lib"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'marco-sparko bill'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=marco-sparko",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--modules=octopus",
-                "bill"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'marco-sparko summary'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=marco-sparko",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--modules=octopus",
-                "summary"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'marco-sparko test'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=marco-sparko",
-                    "--package=marco-sparko"
-                ],
-                "filter": {
-                    "name": "marco-sparko",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--modules=octopus",
-                "test"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug cli",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin",
-                    "cli"
-                ],
-                "filter": {
-                    "name": "cli",
-                    "kind": "bin"
-                }
-            },
-            "args": [
-                "--debug"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
+        // The test no longer exists.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug unit tests in 'tests::test_handle_bill_total'",
+        //     "cargo": {
+        //         "args": [
+        //             "test",
+        //             "octopus::tests::test_handle_bill_total",
+        //             "--no-run",
+        //             "--lib",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "lib"
+        //         }
+        //     },
+        //     "args": [],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // The bill, summary and test commands were from the command line version, the app no longer takes commands.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko bill'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--modules=octopus",
+        //         "bill"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko summary'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--modules=octopus",
+        //         "summary"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko test'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--modules=octopus",
+        //         "test"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // There is no longer a cli binary.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug cli",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin",
+        //             "cli"
+        //         ],
+        //         "filter": {
+        //             "name": "cli",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //         "--debug"
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // The last build, without building it again.
         {
             "name": "Debug Pre-built app",
             "type": "lldb",
@@ -134,7 +138,8 @@
             "cwd": "${workspaceFolder}",
             "env": {
                 "CARGO_MANIFEST_DIR": "${workspaceFolder}",
-                "RUST_BACKTRACE": "1"
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
             }
         },
 
@@ -161,18 +166,22 @@
             "stdio": [null, "${workspaceFolder}/target/verbose.log", null],
             "env": {
                 "CARGO_MANIFEST_DIR": "${workspaceFolder}",
-                "RUST_BACKTRACE": "1"
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
             }
         },
+        // The app with the demo profile, a redacted, offline, copy of a real profile's data, e.g. for screenshots, see
+        // docs/Redaction.md. Make or refresh it with: marco-sparko --redact <profile> demo
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'marco-sparko'",
+            "name": "Debug Dioxus Desktop App (demo)",
             "cargo": {
                 "args": [
                     "build",
                     "--bin=marco-sparko",
-                    "--package=marco-sparko"
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
                 ],
                 "filter": {
                     "name": "marco-sparko",
@@ -180,27 +189,198 @@
                 }
             },
             "args": [
+                "-v",
+                "--profile",
+                "demo"
             ],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "stdio": [null, "${workspaceFolder}/target/verbose.log", null],
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
         },
+        // Fetches the latest data without a window, as a scheduled fetch does, see docs/ScheduledFetch.md. It uses the
+        // profile the app last used, add "--profile", "<name>" to the args for another one. Its output is in the
+        // terminal.
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'marco-sparko'",
+            "name": "Debug Fetch Latest Data",
             "cargo": {
                 "args": [
-                    "test",
-                    "--no-run",
+                    "build",
                     "--bin=marco-sparko",
-                    "--package=marco-sparko"
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
                 ],
                 "filter": {
                     "name": "marco-sparko",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "--fetch"
+            ],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
+        // Copies a profile's data to the demo profile with everything which identifies you replaced, without a window,
+        // see docs/Redaction.md. It asks which profile to copy. Its output is in the terminal.
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Redact Profile into Demo",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--redact",
+                "${input:redactProfile}",
+                "demo"
+            ],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
+        // Takes the screenshots in docs/screenshots.json, then exits, see docs/Screenshots.md: in the data directory
+        // /Users/yourname, which it clears first, for the first run, then with a copy of the demo profile. The first
+        // time, macOS asks for the Screen Recording permission for VS Code.
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Take Screenshots",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--home",
+                "/Users/yourname",
+                "--screenshots"
+            ],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
+        // Redacts the documents in unredacted_docs into docs, replacing those there, see docs/Redaction.md. Its output
+        // is in the terminal.
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Redact Docs",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=marco-sparko",
+                    "--package=marco-sparko",
+                    "--features=dioxus/desktop"
+                ],
+                "filter": {
+                    "name": "marco-sparko",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--redact",
+                "docs"
+            ],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1",
+                "OS_ACTIVITY_MODE": "disable"
+            }
+        },
+        // Serves the documentation book, see book.toml, at http://localhost:3000 and opens it in the browser. It is
+        // rebuilt and the browser reloaded whenever a file in docs or book changes. Stop it to stop the server. Needs
+        // mdBook, install it with: cargo binstall mdbook
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Serve Documentation Book",
+            "command": "mdbook serve --open",
             "cwd": "${workspaceFolder}"
+        }
+        // The same as Debug Dioxus Desktop App, without verbose output.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug executable 'marco-sparko'",
+        //     "cargo": {
+        //         "args": [
+        //             "build",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [
+        //     ],
+        //     "cwd": "${workspaceFolder}"
+        // },
+        // The executable has no tests, they are all in the library.
+        // {
+        //     "type": "lldb",
+        //     "request": "launch",
+        //     "name": "Debug unit tests in executable 'marco-sparko'",
+        //     "cargo": {
+        //         "args": [
+        //             "test",
+        //             "--no-run",
+        //             "--bin=marco-sparko",
+        //             "--package=marco-sparko"
+        //         ],
+        //         "filter": {
+        //             "name": "marco-sparko",
+        //             "kind": "bin"
+        //         }
+        //     },
+        //     "args": [],
+        //     "cwd": "${workspaceFolder}"
+        // }
+    ],
+    "inputs": [
+        {
+            "id": "redactProfile",
+            "type": "promptString",
+            "description": "The profile to copy into the demo profile, redacted",
+            "default": "n2"
         }
     ]
 }

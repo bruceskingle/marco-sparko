@@ -43,6 +43,12 @@ pub fn data_home() -> anyhow::Result<PathBuf> {
     Ok(data_home.path)
 }
 
+/// The data directory there would be without the --home option, e.g. where the profiles normally are when another
+/// data directory is used for screenshots, see screenshots.rs.
+pub fn usual_data_home() -> anyhow::Result<PathBuf> {
+    Ok(resolve(None, std::env::var_os(HOME_ENV_VAR), dirs::home_dir())?.path)
+}
+
 /// Where the data directory was set, for display, e.g. "the MARCO_SPARKO_HOME environment variable", or None if it is
 /// the home directory.
 pub fn data_home_source() -> Option<String> {
@@ -96,7 +102,7 @@ fn ensure_dir(path: &Path, source: &str) -> anyhow::Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
         if fs::metadata(path)?.permissions().mode() & 0o077 != 0 {
-            eprintln!("WARNING: the data directory {} can be accessed by other users, it should only be accessible by its owner (chmod 700)", path.display());
+            crate::log_warning!("The data directory {} can be accessed by other users, it should only be accessible by its owner (chmod 700)", path.display());
         }
     }
     Ok(())

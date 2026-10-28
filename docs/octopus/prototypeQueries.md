@@ -35,7 +35,7 @@ mutation login($input: ObtainJSONWebTokenInput!) {
       "refreshToken": "redacted_refresh_token_pZCI6InF3ZWxsLWtub3duL2p3a3MuanNvbiIsImtp",
       "refreshExpiresIn": 1725024454,
       "payload": {
-        "sub": "kraken|account-user:3235447",
+        "sub": "kraken|account-user:2402938",
         "gty": "API-KEY",
         "email": "dan@archer.org",
         "tokenUse": "access",
@@ -392,11 +392,11 @@ query getAccountUser {
 {
   "data": {
     "viewer": {
-      "id": "3235447",
+      "id": "2402938",
       "givenName": "Dan",
       "familyName": "Archer",
       "email": "dan@archer.org",
-      "mobile": "+44787123456",
+      "mobile": "+998747306649",
       "landline": "",
       "title": "",
       "pronouns": null,
@@ -429,7 +429,7 @@ query getAccountUser {
       },
       "accounts": [
         {
-          "id": "3403670",
+          "id": "8554970",
           "number": "A-B1C2D34E",
           "status": "ACTIVE",
           "brand": "OCTOPUS_ENERGY",
@@ -529,9 +529,9 @@ query getAccountUser {
           "preferredLanguageForComms": null,
           "properties": [
             {
-              "id": "2930512",
+              "id": "2267073",
               "postcode": "BB12 3AM",
-              "address": "Brookfield Farm, Ambridge, Bortchester, Borsetshire, BB12 3AM",
+              "address": "Address 96",
               "richAddress": null,
               "splitAddress": [
                 "BROOKFIELD FARM",
@@ -542,7 +542,7 @@ query getAccountUser {
               ],
               "occupancyPeriods": [
                 {
-                  "id": "3524305",
+                  "id": "3120013",
                   "effectiveFrom": "2021-05-03T23:00:00+00:00",
                   "effectiveTo": null,
                   "isOccupier": false
@@ -718,7 +718,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
       "electricityAgreements": [
         {
           "tariff": {
-            "id": "11353",
+            "id": "58077",
             "displayName": "Outgoing Octopus 12M Fixed",
             "fullName": "Outgoing Octopus 12M Fixed May 2019",
             "description": "Outgoing Octopus flat rate pays you for all exported energy at a flat rate.",
@@ -734,7 +734,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
         },
         {
           "tariff": {
-            "id": "175911",
+            "id": "587883",
             "displayName": "Intelligent Octopus Go",
             "fullName": "Intelligent Octopus Go",
             "description": "With Intelligent Octopus Go EV tariff, you have access to a super low electricity rate between 23:30 - 05:30 every night, plus it smart-charges your car at the cheapest and greenest times overnight.",
@@ -782,7 +782,7 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
       "gasAgreements": [
         {
           "tariff": {
-            "id": "49383",
+            "id": "20823",
             "displayName": "Flexible Octopus",
             "fullName": "Flexible Octopus",
             "description": "Flexible Octopus prices follow wholesale costs and update every 3 months.\r\n\r\nGood to know: Ofgem has announced the energy price cap will rise from October 1. Flexible Octopus rates will also rise in October – we'll share details soon.",
@@ -799,14 +799,14 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
       ],
       "properties": [
         {
-          "id": "2930512",
+          "id": "2267073",
           "electricityMeterPoints": [
             {
-              "id": "2875805",
+              "id": "7773674",
               "mpan": "1111111111111",
               "meters": [
                 {
-                  "id": "3657465",
+                  "id": "8753312",
                   "hasAndAllowsHhReadings": true,
                   "serialNumber": "21E1111111",
                   "isTradPrepay": false,
@@ -819,11 +819,11 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
               ]
             },
             {
-              "id": "3347939",
+              "id": "9253703",
               "mpan": "2222222222222",
               "meters": [
                 {
-                  "id": "3839934",
+                  "id": "7290965",
                   "hasAndAllowsHhReadings": true,
                   "serialNumber": "21E1111111",
                   "isTradPrepay": false,
@@ -838,11 +838,11 @@ query getMeters($accountNumber: String!, $propertiesActiveFrom: DateTime) {
           ],
           "gasMeterPoints": [
             {
-              "id": "2383770",
+              "id": "8936882",
               "mprn": "3333333333",
               "meters": [
                 {
-                  "id": "3274816",
+                  "id": "3512626",
                   "hasAndAllowsHhReadings": true,
                   "serialNumber": "E6S22222222222",
                   "smartDevices": [
@@ -872,7 +872,7 @@ This gives us the `meterId` (the `id` attribute of each `meter` object), the `mp
 query getElectricityMeterReadings {
     electricityMeterReadings(
         accountNumber: "A-B1C2D34E"
-        meterId: "3657465"
+        meterId: "8753312"
         first: 50
     ) {
         totalCount
@@ -911,7 +911,7 @@ query getElectricityMeterReadings {
       "edges": [
         {
           "node": {
-            "id": "533539646",
+            "id": "756204199",
             "readAt": "2024-08-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -928,7 +928,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "519155216",
+            "id": "727937307",
             "readAt": "2024-07-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -945,7 +945,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "504613787",
+            "id": "430678727",
             "readAt": "2024-06-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -962,7 +962,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "492413383",
+            "id": "681291264",
             "readAt": "2024-05-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -979,7 +979,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "478397854",
+            "id": "873975664",
             "readAt": "2024-04-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -996,7 +996,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "461836920",
+            "id": "262638415",
             "readAt": "2024-03-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1013,7 +1013,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "420426713",
+            "id": "924378881",
             "readAt": "2024-02-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1030,7 +1030,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "388713239",
+            "id": "333095337",
             "readAt": "2024-01-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1047,7 +1047,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "375209860",
+            "id": "136985104",
             "readAt": "2023-12-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1064,7 +1064,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "371195701",
+            "id": "544753519",
             "readAt": "2023-12-01T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1081,7 +1081,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "364979081",
+            "id": "591286157",
             "readAt": "2023-11-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1098,7 +1098,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "353391443",
+            "id": "610067990",
             "readAt": "2023-10-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1115,7 +1115,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "450941903",
+            "id": "630226117",
             "readAt": "2023-10-10T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1132,7 +1132,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "450941943",
+            "id": "695904557",
             "readAt": "2023-10-01T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1149,7 +1149,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "341436376",
+            "id": "722386156",
             "readAt": "2023-09-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1166,7 +1166,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "331701317",
+            "id": "753366381",
             "readAt": "2023-08-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1183,7 +1183,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "320550992",
+            "id": "486854077",
             "readAt": "2023-07-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1200,7 +1200,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "320551022",
+            "id": "245981623",
             "readAt": "2023-07-01T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1217,7 +1217,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "308682442",
+            "id": "868262784",
             "readAt": "2023-06-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1234,7 +1234,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "308682455",
+            "id": "822520476",
             "readAt": "2023-05-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1251,7 +1251,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "272571724",
+            "id": "212706217",
             "readAt": "2023-04-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1268,7 +1268,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "272571743",
+            "id": "457825013",
             "readAt": "2023-04-01T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1285,7 +1285,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "247550683",
+            "id": "397025718",
             "readAt": "2023-03-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1302,7 +1302,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "203513159",
+            "id": "787963842",
             "readAt": "2023-02-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1319,7 +1319,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "160230919",
+            "id": "984429736",
             "readAt": "2023-01-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1336,7 +1336,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "160230931",
+            "id": "739582411",
             "readAt": "2023-01-01T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1353,7 +1353,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "153333714",
+            "id": "463693412",
             "readAt": "2022-12-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1370,7 +1370,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "148138660",
+            "id": "787955602",
             "readAt": "2022-11-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1387,7 +1387,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "141845354",
+            "id": "543943901",
             "readAt": "2022-10-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1404,7 +1404,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "141845365",
+            "id": "553501711",
             "readAt": "2022-10-01T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1421,7 +1421,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "135199559",
+            "id": "146552003",
             "readAt": "2022-09-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1438,7 +1438,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "130298908",
+            "id": "334793399",
             "readAt": "2022-08-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1455,7 +1455,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "125320877",
+            "id": "965467757",
             "readAt": "2022-07-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1472,7 +1472,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "120035896",
+            "id": "591111189",
             "readAt": "2022-06-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1489,7 +1489,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "115109416",
+            "id": "458654111",
             "readAt": "2022-05-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1506,7 +1506,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "109252810",
+            "id": "285420604",
             "readAt": "2022-04-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1523,7 +1523,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "103128656",
+            "id": "973397104",
             "readAt": "2022-03-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1540,7 +1540,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "98549839",
+            "id": "72666718",
             "readAt": "2022-02-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1557,7 +1557,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "93718140",
+            "id": "44669976",
             "readAt": "2022-01-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1574,7 +1574,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "88411003",
+            "id": "97913702",
             "readAt": "2021-12-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1591,7 +1591,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "82921009",
+            "id": "81211061",
             "readAt": "2021-11-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1608,7 +1608,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "75269965",
+            "id": "84809821",
             "readAt": "2021-09-21T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1625,7 +1625,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "72682837",
+            "id": "69903172",
             "readAt": "2021-08-26T00:00:00+00:00",
             "readingSource": "Smart reading",
             "source": "SMART_METER",
@@ -1642,7 +1642,7 @@ query getElectricityMeterReadings {
         },
         {
           "node": {
-            "id": "73078181",
+            "id": "54907973",
             "readAt": "2021-08-25T10:58:28+00:00",
             "readingSource": "Data collector reading",
             "source": "DATA_COLLECTOR",
@@ -1771,7 +1771,7 @@ query energyProducts($postcode:String!) {
       "edges": [
         {
           "node": {
-            "id": "14360",
+            "id": "40569",
             "fullName": "Octopus 12M Fixed August 2024 v3",
             "displayName": "Octopus 12M Fixed",
             "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
@@ -1802,7 +1802,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "242336",
+                    "id": "101448",
                     "displayName": "Octopus 12M Fixed",
                     "fullName": "Octopus 12M Fixed August 2024 v3",
                     "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
@@ -1818,7 +1818,7 @@ query energyProducts($postcode:String!) {
                 },
                 {
                   "node": {
-                    "id": "242337",
+                    "id": "250193",
                     "displayName": "Octopus 12M Fixed",
                     "fullName": "Octopus 12M Fixed August 2024 v3",
                     "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
@@ -1837,7 +1837,7 @@ query energyProducts($postcode:String!) {
                 },
                 {
                   "node": {
-                    "id": "75840",
+                    "id": "74545",
                     "displayName": "Octopus 12M Fixed",
                     "fullName": "Octopus 12M Fixed August 2024 v3",
                     "description": "This tariff features 100% renewable electricity and fixes your unit rates and standing charge for 12 months.",
@@ -1854,7 +1854,7 @@ query energyProducts($postcode:String!) {
         },
         {
           "node": {
-            "id": "14140",
+            "id": "12162",
             "fullName": "Aira Flexible",
             "displayName": "Aira Flexible",
             "description": "Aira Flexible offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
@@ -1885,7 +1885,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "234536",
+                    "id": "684330",
                     "displayName": "Aira Flexible",
                     "fullName": "Aira Flexible",
                     "description": "Aira Flexible offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
@@ -1901,7 +1901,7 @@ query energyProducts($postcode:String!) {
                 },
                 {
                   "node": {
-                    "id": "234537",
+                    "id": "118174",
                     "displayName": "Aira Flexible",
                     "fullName": "Aira Flexible",
                     "description": "Aira Flexible offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
@@ -1955,7 +1955,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "176152",
+                    "id": "602522",
                     "displayName": "Flexible Octopus",
                     "fullName": "Flexible Octopus",
                     "description": "Flexible Octopus offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
@@ -1971,7 +1971,7 @@ query energyProducts($postcode:String!) {
                 },
                 {
                   "node": {
-                    "id": "176153",
+                    "id": "315843",
                     "displayName": "Flexible Octopus",
                     "fullName": "Flexible Octopus",
                     "description": "Flexible Octopus offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
@@ -1990,7 +1990,7 @@ query energyProducts($postcode:String!) {
                 },
                 {
                   "node": {
-                    "id": "49383",
+                    "id": "20823",
                     "displayName": "Flexible Octopus",
                     "fullName": "Flexible Octopus",
                     "description": "Flexible Octopus offers great value and 100% renewable electricity. As a variable tariff, your prices can rise and fall with wholesale prices - but we'll always give you notice of a change.",
@@ -2007,7 +2007,7 @@ query energyProducts($postcode:String!) {
         },
         {
           "node": {
-            "id": "14202",
+            "id": "45675",
             "fullName": "Intelligent Octopus Go - EV Saver",
             "displayName": "Intelligent Octopus Go - EV Saver",
             "description": "An EV tariff exclusively for customers that lease through Octopus EV",
@@ -2038,7 +2038,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "236702",
+                    "id": "800369",
                     "displayName": "Intelligent Octopus Go - EV Saver",
                     "fullName": "Intelligent Octopus Go - EV Saver",
                     "description": "An EV tariff exclusively for customers that lease through Octopus EV",
@@ -2061,7 +2061,7 @@ query energyProducts($postcode:String!) {
         },
         {
           "node": {
-            "id": "14133",
+            "id": "15021",
             "fullName": "Aira Zero",
             "displayName": "Aira Zero",
             "description": "Aira Zero is a heat pump tariff with eight hours of super cheap electricity every day to warm your home.",
@@ -2092,7 +2092,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "234298",
+                    "id": "642861",
                     "displayName": "Aira Zero",
                     "fullName": "Aira Zero",
                     "description": "Aira Zero is a heat pump tariff with eight hours of super cheap electricity every day to warm your home.",
@@ -2118,7 +2118,7 @@ query energyProducts($postcode:String!) {
         },
         {
           "node": {
-            "id": "14138",
+            "id": "54276",
             "fullName": "Octopus Tracker July 2024 v1",
             "displayName": "Octopus Tracker",
             "description": "Tracker gives you the most transparent energy pricing in the UK. Every day, we update the price of your energy based on an independently published wholesale market price. The unit rate is capped at 100p/kWh for electricity and 30p/kWh for gas (including VAT).",
@@ -2151,7 +2151,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "234480",
+                    "id": "997174",
                     "displayName": "Octopus Tracker",
                     "fullName": "Octopus Tracker July 2024 v1",
                     "description": "Tracker gives you the most transparent energy pricing in the UK. Every day, we update the price of your energy based on an independently published wholesale market price. The unit rate is capped at 100p/kWh for electricity and 30p/kWh for gas (including VAT).",
@@ -2167,7 +2167,7 @@ query energyProducts($postcode:String!) {
                 },
                 {
                   "node": {
-                    "id": "73463",
+                    "id": "14783",
                     "displayName": "Octopus Tracker",
                     "fullName": "Octopus Tracker July 2024 v1",
                     "description": "Tracker gives you the most transparent energy pricing in the UK. Every day, we update the price of your energy based on an independently published wholesale market price. The unit rate is capped at 100p/kWh for electricity and 30p/kWh for gas (including VAT).",
@@ -2184,7 +2184,7 @@ query energyProducts($postcode:String!) {
         },
         {
           "node": {
-            "id": "13979",
+            "id": "11479",
             "fullName": "Agile Octopus April 2024 v1",
             "displayName": "Agile Octopus",
             "description": "With Agile Octopus, you get access to half-hourly energy prices, tied to wholesale prices and updated daily.  The unit rate is capped at 100p/kWh (including VAT).",
@@ -2217,7 +2217,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "230015",
+                    "id": "313718",
                     "displayName": "Agile Octopus",
                     "fullName": "Agile Octopus April 2024 v1",
                     "description": "With Agile Octopus, you get access to half-hourly energy prices, tied to wholesale prices and updated daily.  The unit rate is capped at 100p/kWh (including VAT).",
@@ -2237,7 +2237,7 @@ query energyProducts($postcode:String!) {
         },
         {
           "node": {
-            "id": "10338",
+            "id": "15195",
             "fullName": "Intelligent Octopus Flux Import",
             "displayName": "Intelligent Octopus Flux Import",
             "description": "Power your home with 100% renewable energy on this Octopus Energy electricity tariff designed exclusively for solar and battery owners.",
@@ -2268,7 +2268,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "182257",
+                    "id": "336968",
                     "displayName": "Intelligent Octopus Flux Import",
                     "fullName": "Intelligent Octopus Flux Import",
                     "description": "Power your home with 100% renewable energy on this Octopus Energy electricity tariff designed exclusively for solar and battery owners.",
@@ -2322,7 +2322,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "178297",
+                    "id": "181571",
                     "displayName": "Octopus Flux Import",
                     "fullName": "Octopus Flux Import",
                     "description": "Power your home with 100% renewable energy on this Octopus Energy electricity tariff designed exclusively for solar and battery owners.",
@@ -2379,7 +2379,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "177076",
+                    "id": "640350",
                     "displayName": "Cosy Octopus",
                     "fullName": "Cosy Octopus",
                     "description": "Cosy Octopus is a heat pump tariff with eight hours of super cheap electricity every day to warm your home.",
@@ -2436,7 +2436,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "175897",
+                    "id": "218804",
                     "displayName": "Octopus Go",
                     "fullName": "Octopus Go",
                     "description": "The smart EV tariff with super cheap electricity between 00:30 - 05:30 every night",
@@ -2490,7 +2490,7 @@ query energyProducts($postcode:String!) {
               "edges": [
                 {
                   "node": {
-                    "id": "175911",
+                    "id": "587883",
                     "displayName": "Intelligent Octopus Go",
                     "fullName": "Intelligent Octopus Go",
                     "description": "With Intelligent Octopus Go EV tariff, you have access to a super low electricity rate between 23:30 - 05:30 every night, plus it smart-charges your car at the cheapest and greenest times overnight.",
@@ -2967,7 +2967,7 @@ query getBills($accountNumber: String!) {
                   }
                 ]
               },
-              "userId": 3235447,
+              "userId": 2402938,
               "toAddress": "dan@archer.org",
               "paymentDueDate": "2024-09-06",
               "consumptionStartDate": null,
@@ -3025,7 +3025,7 @@ query
         "edges": [
           {
             "node": {
-              "id": "236646425",
+              "id": "392720235",
               "billType": "STATEMENT",
               "fromDate": "2024-07-22",
               "toDate": "2024-08-21",
@@ -3042,7 +3042,7 @@ query
                 "edges": [
                   {
                     "node": {
-                      "id": "-1871040199",
+                      "id": "-3733512272",
                       "postedDate": "2024-08-20",
                       "createdAt": "2024-08-21T21:36:10.492186+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3055,7 +3055,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Gas",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3073,7 +3073,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1871043601",
+                      "id": "-2422530620",
                       "postedDate": "2024-08-20",
                       "createdAt": "2024-08-21T21:32:19.902722+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3086,7 +3086,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Electricity",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3104,7 +3104,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1871044025",
+                      "id": "-4754383383",
                       "postedDate": "2024-08-20",
                       "createdAt": "2024-08-21T21:32:01.991119+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3117,7 +3117,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Electricity",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3135,7 +3135,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1896251302",
+                      "id": "-9627766092",
                       "postedDate": "2024-08-14",
                       "createdAt": "2024-08-15T11:55:19.400763+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3148,7 +3148,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Powerups Reward",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3157,7 +3157,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1871043620",
+                      "id": "-2485076785",
                       "postedDate": "2024-08-12",
                       "createdAt": "2024-08-21T21:32:19.073366+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3170,7 +3170,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Electricity",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3188,7 +3188,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1871044052",
+                      "id": "-2152791248",
                       "postedDate": "2024-08-07",
                       "createdAt": "2024-08-21T21:32:01.008991+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3201,7 +3201,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Electricity",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3219,7 +3219,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1949392858",
+                      "id": "-6143568149",
                       "postedDate": "2024-07-29",
                       "createdAt": "2024-08-01T03:09:50.202838+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3232,7 +3232,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Direct debit",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": null,
@@ -3241,7 +3241,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1973989678",
+                      "id": "-8807623232",
                       "postedDate": "2024-07-24",
                       "createdAt": "2024-07-25T10:53:30.897903+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3254,7 +3254,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Powerups Reward",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3263,7 +3263,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1974036696",
+                      "id": "-1545863643",
                       "postedDate": "2024-07-24",
                       "createdAt": "2024-07-25T10:43:02.339290+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3276,7 +3276,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Powerups Reward",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3285,7 +3285,7 @@ query
                   },
                   {
                     "node": {
-                      "id": "-1974103763",
+                      "id": "-7474775633",
                       "postedDate": "2024-07-24",
                       "createdAt": "2024-07-25T10:17:07.255688+00:00",
                       "accountNumber": "A-B1C2D34E",
@@ -3298,7 +3298,7 @@ query
                       "isHeld": false,
                       "isIssued": true,
                       "title": "Powerups Reward",
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "isReversed": false,
                       "hasStatement": true,
                       "note": "",
@@ -3307,7 +3307,7 @@ query
                   }
                 ]
               },
-              "userId": 3235447,
+              "userId": 2402938,
               "toAddress": "dan@archer.org",
               "paymentDueDate": "2024-09-06",
               "consumptionStartDate": null,
@@ -3366,7 +3366,7 @@ query
                 "isHeld": false,
                 "reason": null
               },
-              "id": "236646425",
+              "id": "392720235",
               "isExternalBill": false,
               "issuedDate": "2024-08-22",
               "openingBalance": 17791,
@@ -3396,7 +3396,7 @@ query
                         "tax": 136
                       },
                       "balanceCarriedForward": 39303,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "consumption": {
                         "endDate": "2024-08-20",
                         "quantity": "360.7100",
@@ -3407,7 +3407,7 @@ query
                       },
                       "createdAt": "2024-08-21T21:36:10.492186+00:00",
                       "hasStatement": true,
-                      "id": "-1871040199",
+                      "id": "-3733512272",
                       "isExport": false,
                       "isHeld": false,
                       "isIssued": true,
@@ -3426,7 +3426,7 @@ query
                         "tax": 0
                       },
                       "balanceCarriedForward": 42150,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "consumption": {
                         "endDate": "2024-08-20",
                         "quantity": "181.0500",
@@ -3437,7 +3437,7 @@ query
                       },
                       "createdAt": "2024-08-21T21:32:19.902722+00:00",
                       "hasStatement": true,
-                      "id": "-1871043601",
+                      "id": "-2422530620",
                       "isExport": true,
                       "isHeld": false,
                       "isIssued": true,
@@ -3456,7 +3456,7 @@ query
                         "tax": 143
                       },
                       "balanceCarriedForward": 39434,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "consumption": {
                         "endDate": "2024-08-20",
                         "quantity": "334.7100",
@@ -3467,7 +3467,7 @@ query
                       },
                       "createdAt": "2024-08-21T21:32:01.991119+00:00",
                       "hasStatement": true,
-                      "id": "-1871044025",
+                      "id": "-4754383383",
                       "isExport": false,
                       "isHeld": false,
                       "isIssued": true,
@@ -3486,10 +3486,10 @@ query
                         "tax": 24
                       },
                       "balanceCarriedForward": 42431,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "createdAt": "2024-08-15T11:55:19.400763+00:00",
                       "hasStatement": true,
-                      "id": "-1896251302",
+                      "id": "-9627766092",
                       "isHeld": false,
                       "isIssued": true,
                       "isReversed": false,
@@ -3507,7 +3507,7 @@ query
                         "tax": 0
                       },
                       "balanceCarriedForward": 41929,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "consumption": {
                         "endDate": "2024-08-12",
                         "quantity": "300.8200",
@@ -3518,7 +3518,7 @@ query
                       },
                       "createdAt": "2024-08-21T21:32:19.073366+00:00",
                       "hasStatement": true,
-                      "id": "-1871043620",
+                      "id": "-2485076785",
                       "isExport": true,
                       "isHeld": false,
                       "isIssued": true,
@@ -3537,7 +3537,7 @@ query
                         "tax": 205
                       },
                       "balanceCarriedForward": 39522,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "consumption": {
                         "endDate": "2024-08-07",
                         "quantity": "322.5100",
@@ -3548,7 +3548,7 @@ query
                       },
                       "createdAt": "2024-08-21T21:32:01.008991+00:00",
                       "hasStatement": true,
-                      "id": "-1871044052",
+                      "id": "-2152791248",
                       "isExport": false,
                       "isHeld": false,
                       "isIssued": true,
@@ -3567,10 +3567,10 @@ query
                         "tax": 0
                       },
                       "balanceCarriedForward": 43831,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "createdAt": "2024-08-01T03:09:50.202838+00:00",
                       "hasStatement": true,
-                      "id": "-1949392858",
+                      "id": "-6143568149",
                       "isHeld": false,
                       "isIssued": true,
                       "isReversed": false,
@@ -3588,10 +3588,10 @@ query
                         "tax": 28
                       },
                       "balanceCarriedForward": 19041,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "createdAt": "2024-07-25T10:53:30.897903+00:00",
                       "hasStatement": true,
-                      "id": "-1973989678",
+                      "id": "-8807623232",
                       "isHeld": false,
                       "isIssued": true,
                       "isReversed": false,
@@ -3609,10 +3609,10 @@ query
                         "tax": 9
                       },
                       "balanceCarriedForward": 18470,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "createdAt": "2024-07-25T10:43:02.339290+00:00",
                       "hasStatement": true,
-                      "id": "-1974036696",
+                      "id": "-1545863643",
                       "isHeld": false,
                       "isIssued": true,
                       "isReversed": false,
@@ -3630,10 +3630,10 @@ query
                         "tax": 24
                       },
                       "balanceCarriedForward": 18284,
-                      "billingDocumentIdentifier": "236646425",
+                      "billingDocumentIdentifier": "392720235",
                       "createdAt": "2024-07-25T10:17:07.255688+00:00",
                       "hasStatement": true,
-                      "id": "-1974103763",
+                      "id": "-7474775633",
                       "isHeld": false,
                       "isIssued": true,
                       "isReversed": false,
@@ -3648,7 +3648,7 @@ query
                   "startCursor": "YXJyYXljb25uZWN0aW9uOjA="
                 }
               },
-              "userId": 3235447
+              "userId": 2402938
             }
           }
         ],

@@ -5,11 +5,18 @@ mod decimal;
 mod viewer_data_set;
 mod property;
 mod meter_point;
+mod smart_device;
+mod charging_session;
+mod telemetry;
+mod rate_limit;
 mod bill;
 mod meter;
 mod line_items;
 mod meter_agreement;
 mod measurements;
+mod electricity;
+mod fetch;
+mod logging_caller;
 mod stacked_bar_graph;
 mod trend_graph;
 mod category_filter;
@@ -25,7 +32,7 @@ use async_trait::async_trait;
 use dioxus::prelude::*;
 
 use context::{OctopusContext, OctopusRoot};
-use pages::{BillsPage, MeasurementsPage, PropertiesPage};
+use pages::{BillsPage, ElectricityPage, EvChargingPage, MeasurementsPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
 
 use time_tz::timezones;
@@ -43,7 +50,8 @@ include!(concat!(env!("OUT_DIR"), "/crate_info.rs"));
 compile_error!("graphql built with Errors");
 
 
-pub type RequestManager = sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>;
+/// Makes the requests of the pages, logging each one, see logging_caller.rs.
+pub type RequestManager = logging_caller::LoggingCaller<sparko_graphql::AuthenticatedRequestManager<OctopusTokenManager>>;
 
 
 /*
@@ -201,8 +209,12 @@ impl OctopusModule {
 }
 
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Module for OctopusModule {
+    async fn fetch_latest_data(&self) -> anyhow::Result<()> {
+        fetch::fetch_latest_data(&self.context).await
+    }
+
     fn cli_debug(&self) -> Result<(), anyhow::Error> {
         println!("Args: {:?}", self.octopus_args);
         println!("Octopus Module: account_id={}", self.context.account_id);
@@ -232,10 +244,36 @@ impl Module for OctopusModule {
                 path: "properties",
             },
             PageInfo {
-                label: "Measurements",
+                label: "Meters",
                 path: "measurements",
             },
+            PageInfo {
+                label: "Electricity",
+                path: "electricity",
+            },
+            PageInfo {
+                label: "EV Charging",
+                path: "ev",
+            },
         )
+    }
+
+    fn help_topic(&self, page_id: &str, path: &[String]) -> String {
+        let topic = match (page_id, path.first().map(String::as_str)) {
+            ("user", _) => "user",
+            ("account", _) => "account",
+            ("bills", _) => "bills",
+            ("properties", None) => "properties",
+            ("properties", Some(_)) => "property",
+            ("measurements", None) => "meters",
+            ("measurements", Some("telemetry")) => "home-mini",
+            ("measurements", Some(_)) => "meter",
+            ("electricity", _) => "electricity",
+            ("ev", None) => "ev-charging",
+            ("ev", Some(_)) => "charging-sessions",
+            _ => "index",
+        };
+        format!("{MODULE_ID}/{topic}.md")
     }
 
     fn get_component(&self, page_id: &str, path: Vec<String>) -> Element {
@@ -396,6 +434,16 @@ impl Module for OctopusModule {
                     MeasurementsPage { path }
                 }
             },
+            "ev" => {
+                rsx! {
+                    EvChargingPage { path }
+                }
+            },
+            "electricity" => {
+                rsx! {
+                    ElectricityPage { path }
+                }
+            },
             _ => {
                 rsx! {
                     div { "Unknown page_id, {page_id}" }
@@ -438,7 +486,7 @@ fn describe_login_error(error: &sparko_graphql::Error) -> String {
 impl OctopusModuleFactory {
     pub async fn do_build(&self) -> anyhow::Result<OctopusModule> {
 
-        let authenticated_request_manager = Arc::new(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?);
+        let authenticated_request_manager = Arc::new(logging_caller::LoggingCaller(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?));
        
         let client = OctopusModule::new(self.octopus_args.clone(), self.cache_config.clone(), self.profile.clone(), 
             authenticated_request_manager, self.verbose
@@ -455,7 +503,7 @@ impl OctopusModuleFactory {
 
             match token_manager.get_authenticator(true).await {
                 Ok(_token) => {
-                    println!("Logged in OK");
+                    crate::log_info!("Logged in to Octopus");
                     Ok(())
                 },
                 Err(error) => {
@@ -476,6 +524,7 @@ impl OctopusModuleFactory {
                  
                     }
                     errors.push(format!("Login failed, {}", describe_login_error(&error)));
+                    crate::log_error!("Login to Octopus failed, {}", describe_login_error(&error));
                     return Err(anyhow!(error));
                 },
             }
@@ -559,12 +608,19 @@ impl OctopusModuleFactory {
 impl ModuleFactory for OctopusModuleFactory {
 
     async fn is_ready(&self) -> anyhow::Result<bool> {
+        // An offline profile has no login, it only shows its cached data, see Profile::offline.
+        if self.context.profile.active_profile.offline {
+            return Ok(true);
+        }
         let (ready, error) = match self.token_manager.get_authenticator(false).await {
             Ok(_token) => (true, None),
             // There is no saved login, so the login page is shown without an error.
             Err(sparko_graphql::Error::MissingRequiredValueError(_)) => (false, None),
             Err(error) => (false, Some(format!("Unable to log in with the saved login details, {}", describe_login_error(&error)))),
         };
+        if let Some(error) = &error {
+            crate::log_error!("{error}");
+        }
         *self.saved_login_error.lock().unwrap() = error;
         Ok(ready)
     }

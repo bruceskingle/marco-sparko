@@ -40,6 +40,6 @@ shows details of some queries which might form the basis of a GraphQL applicatio
 ## HowTos
 If you are new to this the following HowTos may be helpful:
 
-[GraphQL Playground HowTo](GraphQL.md) Provides an introduction to GraphQL and shows how to use the GraphQL Playground UI to make interactive queries.
+[GraphQL Playground HowTo](../howto/GraphQL.md) Provides an introduction to GraphQL and shows how to use the GraphQL Playground UI to make interactive queries.
 
-[Chrome Browser Inspector HowTo](ChromeInspector.md) Provides an introduction to using the Chrome browser inspector to observe API calls made by web pages.
+[Chrome Browser Inspector HowTo](../howto/ChromeInspector.md) Provides an introduction to using the Chrome browser inspector to observe API calls made by web pages.

@@ -50,13 +50,14 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
                     data = Some(value);
                 },
                 Err(e) => {
-                    println!("Failed to read DataSet from {}: {:?}", path.display(), e);
+                    crate::log_warning!("Failed to read the cached {}, fetching it again: {e:?}", path.display());
                     refresh = true;
                 },
             }
         }
 
-        if refresh {
+        // An offline profile only has what is cached.
+        if refresh && !config.offline {
 
             let value = request_manager.call(&query_provider()?).await?;
 
@@ -69,7 +70,7 @@ impl<R: GraphQLResponse> SingleRecordDataSet<R>
         }
 
         Ok(Self {
-            data: data.unwrap()
+            data: data.ok_or_else(|| anyhow::anyhow!("{} is not in this offline profile's data", path.display()))?
         })
         
     }

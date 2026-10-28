@@ -97,7 +97,8 @@ where
             refresh = true;
         }
         
-        if refresh  {
+        // An offline profile only has what is cached.
+        if refresh && !config.offline {
             let query = initial_query_provider()?;
             let mut response = request_manager.call(&query).await?;
 

@@ -3,21 +3,23 @@
 
 Marco Sparko is a desktop application for MacOS and Windows which provides a view of your Octopus Energy account.
 
+**[Read the documentation](https://bruceskingle.github.io/marco-sparko/)** for how to install and use it.
+
 The application is a platform with a module framework which is intended to support other services as well, but at the moment Octopus Energy is the only module.
 
 # What Does it Do?
 
 Using this application you can get a view of your energy usage and costs. This chart shows daily total cost for electricity broken down into the Low and Standard rates for both Home and EV usage. The export button at the top right of the chart allows you to export the data for the current view in either ```.csv``` or ```JSON``` format.
 
-![Measurements Cost](docs/readMe/Screenshot6.png)
+![Meter Costs](docs/readMe/Screenshot6.png)
 
 The Home and EV view on the website only works back until a point in August, this app can display data before then, in the previous break down of OFF_PEAK and STANDARD rates:
 
-![Measurements Cost](docs/readMe/Screenshot7.png)
+![Meter Costs](docs/readMe/Screenshot7.png)
 
 It can also display a year on year trend graph of cost or units consumed, with smoothing options of 7 or 30 day moving averages or a cumulative sisplay. Here you can see the 7 day moving average view for all available data (starting in October 2024 in this case).
 
-![Measurements Cost](docs/readMe/Screenshot8.png)
+![Meter Costs](docs/readMe/Screenshot8.png)
 
 This application also allows you to get a detailed view of your energy account statements with an analysis of the unit rates you are consuming.
 In this screenshot you can see the summary lines from a statement more or less as they appear on the documents provided by the company.
@@ -63,7 +65,7 @@ latest release:
 
 Look for the one with the <img src="docs/gettingStarted/latest.png" width="60"> label, and then select the correct version for your computer. 
 
-The ```.dmg``` files are for Mac OSX and the ```.exe``` and ```.msi``` ones are for Microsoft Windows. The ```.exe``` and ```.msi``` files are just different ways of installing, the detailed installation instructions show the ```setup.exe``` version so unless you have a preference for the ```.msi``` approach you should use that.
+The ```.dmg``` files are for Mac OSX and the ```setup.exe``` ones are for Microsoft Windows. Releases up to 0.4.3 also had ```.msi``` installers for Windows, which install the same app.
 
 The ```x86``` files are for Intel based computers and the ```aarch64/arm64``` ones are for ARM CPUs, including "Apple Silicone" or Apple M1, M2 etc processors.
 

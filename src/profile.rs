@@ -139,13 +139,19 @@ pub fn set_active_profile(profile_name: &String) -> anyhow::Result<ActiveProfile
     }
 }
 
+/// Whether a profile may have the name, which is letters, digits and underscores, so that the hyphen in the name of a
+/// cache directory, e.g. n2-octopus, ends the profile's name, see cache_usage_in.
+pub fn is_valid_profile_name(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
 pub fn create_profile(profile_name: &str) -> anyhow::Result<ActiveProfile> {
     let profile_name = profile_name.trim();
     if profile_name.is_empty() {
         return Err(anyhow!("Profile name cannot be empty"));
     }
-    if !profile_name.chars().all(char::is_alphanumeric) {
-        return Err(anyhow!("Profile name must contain only alphanumeric characters"));
+    if !is_valid_profile_name(profile_name) {
+        return Err(anyhow!("Profile name must contain only letters, digits and underscores"));
     }
 
     let mut profiles: ProfileFile = if let Ok(file) = fs::File::open(&MarcoSparkoContext::get_file_path()?) {
@@ -207,6 +213,32 @@ pub fn update_profile<T>(profile_name: &String, module_id: &str, module_profile:
     }
 }
 
+/// Saves the profile name, offline, as a redacted copy of source, see redact.rs, replacing any previous copy. Its
+/// modules are set up as the source's are, without their logins. as_of is when its data was last fetched.
+pub fn save_redacted_profile(source: &Profile, name: &str, as_of: Option<i64>) -> anyhow::Result<()> {
+    let mut profiles: ProfileFile = serde_json::from_reader(fs::File::open(&MarcoSparkoContext::get_file_path()?)?)?;
+    profiles.retain(|profile| !profile_names_equal(&profile.name, name));
+    let modules = source.modules.iter()
+        .map(|(module_id, module)| {
+            let mut module = module.clone();
+            if let Some(module) = module.as_object_mut() {
+                module.remove("apiKey");
+            }
+            (module_id.clone(), module)
+        })
+        .collect();
+    profiles.push(Profile {
+        name: name.to_string(),
+        version: source.version.clone(),
+        modules,
+        settings: source.settings.clone(),
+        offline: true,
+        as_of,
+    });
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
+    Ok(())
+}
+
 /// The cache files of a profile, for each plugin a <profile>-<plugin> directory of cached data and a
 /// <profile>-<plugin>.json file of tokens.
 #[derive(Debug, Default, PartialEq)]
@@ -231,7 +263,7 @@ pub fn profile_cache_usage(profile_name: &str) -> anyhow::Result<ProfileCacheUsa
 }
 
 fn cache_usage_in(cache_dir: &Path, profile_name: &str) -> anyhow::Result<ProfileCacheUsage> {
-    // Profile names are alphanumeric, so the hyphen ends the profile name.
+    // Profile names are letters, digits and underscores, so the hyphen ends the profile name.
     let prefix = format!("{}-", profile_name);
     let mut usage = ProfileCacheUsage::default();
     if let Ok(read_dir) = fs::read_dir(cache_dir) {
@@ -292,8 +324,11 @@ pub fn delete_profile(profile_name: &str, active_profile: &str) -> anyhow::Resul
     for path in &usage.token_files {
         fs::remove_file(path)?;
     }
-    if !usage.data_dirs.is_empty() {
-        trash::delete_all(&usage.data_dirs)?;
+    // The log files go to the trash with the data.
+    let logs = crate::logging::log_files(profile_name)?;
+    let trashed: Vec<PathBuf> = usage.data_dirs.iter().cloned().chain(logs.into_iter().filter(|log| log.exists())).collect();
+    if !trashed.is_empty() {
+        trash::delete_all(&trashed)?;
     }
 
     serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profiles)?;
@@ -359,7 +394,55 @@ pub struct Profile {
     pub name: String,
     #[serde(default = "default_profile_version")]
     pub version: String,
-    pub modules: ModuleProfiles
+    pub modules: ModuleProfiles,
+    /// The app's own settings for the profile, which profiles from before there were any do not have.
+    #[serde(default)]
+    pub settings: Settings,
+    /// A redacted copy of another profile's data, see redact.rs, which only shows what it has, without logging in or
+    /// fetching anything.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub offline: bool,
+    /// For an offline profile, when its data was last fetched, as a unix timestamp. The app behaves as if it is then,
+    /// see clock.rs, so that its pages show the latest data.
+    #[serde(default, rename = "asOf", skip_serializing_if = "Option::is_none")]
+    pub as_of: Option<i64>,
+}
+
+/// The settings of a profile which are the app's rather than a module's, set on the Settings page.
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    #[serde(default)]
+    pub log: crate::logging::LogSettings,
+    #[serde(default)]
+    pub help: crate::help::HelpSettings,
+}
+
+/// Saves the settings of the profile.
+pub fn update_settings(profile_name: &str, settings: &Settings) -> anyhow::Result<()> {
+    let file = fs::File::open(&MarcoSparkoContext::get_file_path()?)?;
+    let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
+    let profile = profile_file.iter_mut()
+        .find(|profile| profile_names_equal(&profile.name, profile_name))
+        .ok_or_else(|| anyhow!("No such profile \"{}\"", profile_name))?;
+    // Whether the help is shown is saved by update_help_settings, from any window, so it is not overwritten here.
+    let help = profile.settings.help.clone();
+    profile.settings = settings.clone();
+    profile.settings.help = help;
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
+    Ok(())
+}
+
+/// Saves the help settings of the profile, see help::set_shown.
+pub fn update_help_settings(profile_name: &str, help: &crate::help::HelpSettings) -> anyhow::Result<()> {
+    let file = fs::File::open(&MarcoSparkoContext::get_file_path()?)?;
+    let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
+    let profile = profile_file.iter_mut()
+        .find(|profile| profile_names_equal(&profile.name, profile_name))
+        .ok_or_else(|| anyhow!("No such profile \"{}\"", profile_name))?;
+    profile.settings.help = help.clone();
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
+    Ok(())
 }
 
 impl Profile {
@@ -368,6 +451,9 @@ impl Profile {
             name: DEFAULT_PROFILE.to_string(),
             version: CURRENT_VERSION.to_string(),
             modules: ModuleProfiles::new(),
+            settings: Settings::default(),
+            offline: false,
+            as_of: None,
         }
     }
 }

@@ -1,0 +1,99 @@
+{
+    "window": {"width": 1700, "height": 1024},
+    "freshDataDirectory": "/Users/yourname",
+    "newProfiles": ["new_demo"],
+    "shots": [
+        {
+            "file": "docs/gettingStarted/Screenshot1.png", "help": true,
+            "steps": [ {"waitFor": "inactive"} ]
+        },
+        {
+            "file": "docs/octopus/Screenshot2.png",
+            "steps": [ {"click": "octopus"}, {"waitFor": "Octopus Login"} ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot1.png",
+            "steps": [ {"loadProfile": "demo"}, {"click": "octopus"}, {"click": "Meters"}, {"waitFor": "Meter Points"} ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot2.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"click": "Table"} ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot4.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"click": "Graph"} ]
+        },
+        {
+            "file": "docs/readMe/Screenshot6.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"click": "Graph"}, {"click": "Day"} ]
+        },
+        {
+            "file": "docs/octopus/Screenshot5.png",
+            "steps": [ {"click": "octopus"}, {"click": "Bills"}, {"waitFor": "Balance"} ]
+        },
+        {
+            "file": "docs/octopus/Screenshot6.png", "window": "newest",
+            "steps": [ {"click": "octopus"}, {"click": "Bills"}, {"select": ".bill-ref .link", "index": 1}, {"wait": 3000} ]
+        },
+        {
+            "file": "docs/octopus/Screenshot3.png", "pages": true,
+            "steps": [ {"click": "octopus"}, {"waitFor": "Viewer"} ]
+        },
+        {
+            "file": "docs/octopus/Screenshot4.png",
+            "steps": [  ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot3.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"click": "Table"}, {"select": "button[title='Change the period']"} ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot5.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"click": "Graph"}, {"click": "Day"}, {"click": "Categories"} ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot6.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"click": "Graph"}, {"click": "Day"}, {"click": "Export"} ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot7.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"select": "button[title='Change the period']"}, {"waitFor": "Select period"}, {"input": "input[type=date]", "index": 0, "value": "2024-10-01"}, {"click": "Apply"}, {"waitFor": "Categories"}, {"click": "Trend"}, {"click": "Units"}, {"click": "7 day"} ]
+        },
+        {
+            "file": "docs/octopus/meters/Screenshot8.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"select": "button[title='Change the period']"}, {"waitFor": "Select period"}, {"input": "input[type=date]", "index": 0, "value": "2024-10-01"}, {"click": "Apply"}, {"waitFor": "Categories"}, {"click": "Trend"}, {"click": "Units"}, {"click": "Cumulative"} ]
+        },
+        {
+            "file": "docs/readMe/Screenshot7.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"select": "button[title='Change the period']"}, {"waitFor": "Select period"}, {"input": "input[type=date]", "index": 0, "value": "2026-07-01"}, {"click": "Apply"}, {"waitFor": "Categories"}, {"click": "Graph"}, {"click": "Units"}, {"click": "Day"} ]
+        },
+        {
+            "file": "docs/readMe/Screenshot8.png",
+            "steps": [ {"click": "octopus"}, {"click": "Meters"}, {"row": "import", "select": ".link"}, {"waitFor": "Categories"}, {"select": "button[title='Change the period']"}, {"waitFor": "Select period"}, {"input": "input[type=date]", "index": 0, "value": "2024-01-01"}, {"click": "Apply"}, {"waitFor": "Categories"}, {"click": "Trend"}, {"click": "Units"}, {"click": "7 day"} ]
+        },
+        {
+            "file": "docs/readMe/Screenshot1.png", "window": "newest",
+            "steps": [ {"click": "octopus"}, {"click": "Bills"}, {"select": ".bill-ref .link", "index": 1}, {"wait": 3000}, {"scroll": "Summary of Charges"} ]
+        },
+        {
+            "file": "docs/readMe/Screenshot5.png", "window": "newest",
+            "steps": [ {"click": "octopus"}, {"click": "Bills"}, {"select": ".bill-ref .link", "index": 1}, {"wait": 3000}, {"scroll": "Consumption Analysis"} ]
+        },
+        {
+            "file": "docs/octopus/Screenshot7.png", "window": "newest",
+            "steps": [ {"click": "octopus"}, {"click": "Bills"}, {"row": "9.00", "select": ".bill-ref .link"}, {"wait": 3000} ]
+        },
+        {
+            "file": "docs/gettingStarted/profile-menu.png",
+            "steps": [ {"select": ".dropdown-toggle"} ]
+        },
+        {
+            "file": "docs/gettingStarted/profile-name.png",
+            "steps": [ {"select": ".dropdown-toggle"}, {"click": "Create New Profile"}, {"input": ".profile-rename", "value": "new_demo"} ]
+        },
+        {
+            "file": "docs/gettingStarted/profile-created.png",
+            "steps": [ {"select": ".dropdown-toggle"}, {"click": "Create New Profile"}, {"input": ".profile-rename", "value": "new_demo"}, {"key": "Enter"}, {"waitFor": "inactive"} ]
+        }
+    ]
+}

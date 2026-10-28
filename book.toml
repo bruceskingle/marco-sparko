@@ -1,0 +1,23 @@
+# The documentation, built from docs with mdBook (https://rust-lang.github.io/mdBook/) into target/book, and published
+# to GitHub Pages by .github/workflows/docs.yml. Preview it with: mdbook serve --open
+[book]
+title = "Marco Sparko"
+authors = ["Bruce Skingle"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "target/book"
+# A page in docs/SUMMARY.md which does not exist is an error, rather than being created empty.
+create-missing = false
+
+[output.html]
+# The app's look, see book/marco-sparko.css, with its dark theme as Dark and the light one as Light.
+default-theme = "light"
+preferred-dark-theme = "navy"
+theme = "book/theme"
+additional-css = ["book/marco-sparko.css"]
+additional-js = ["book/marco-sparko.js"]
+git-repository-url = "https://github.com/bruceskingle/marco-sparko"
+edit-url-template = "https://github.com/bruceskingle/marco-sparko/edit/main/{path}"
+site-url = "/marco-sparko/"

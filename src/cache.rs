@@ -7,6 +7,8 @@ use time::Month;
 pub struct CacheConfig {
     dir_path: PathBuf,
     pub verbose: bool,
+    /// Only what is cached is used, nothing is fetched, for a redacted profile, see Profile::offline.
+    pub offline: bool,
 }
 
 /// The configuration for a monthly bucket
@@ -44,6 +46,19 @@ impl CacheConfig {
         Ok( MonthBucket {path, start, next})
     }
 
+/// The cache file for the day date, in a directory for its month in the directory for its year, e.g.
+    /// 2026/October/25#hash_key
+    pub fn path_for_day(&self, hash_key: &str, date: &Date) -> anyhow::Result<PathBuf> {
+        let mut path = self.dir_path.clone();
+        Self::path_for_date(&mut path, date);
+        // The directories do not exist the first time a day in that year or month is cached.
+        crate::private_file::create_private_dir(&path)?;
+        path.push(date.month().to_string());
+        crate::private_file::create_private_dir(&path)?;
+        path.push(format!("{}#{}", date.day(), hash_key));
+        Ok(path)
+    }
+
     fn path_for_date(path: &mut PathBuf, date: &Date) {
         path.push(date.year().to_string());
         // path.push(date.month().to_string());
@@ -54,10 +69,11 @@ impl CacheConfig {
         path.push(format!("{}#{}", date.month(), hash_key));
     }
     
-    pub fn new(dir_path: PathBuf, verbose: bool) -> Self {
+    pub fn new(dir_path: PathBuf, verbose: bool, offline: bool) -> Self {
         CacheConfig {
             dir_path,
             verbose,
+            offline,
         }
     }
 }

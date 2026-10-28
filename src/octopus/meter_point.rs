@@ -14,7 +14,8 @@ pub struct MeterPointDataSet {
 
 impl MeterPointDataSet {
     pub async fn new(account_number: &String, config: &Arc<CacheConfig>, request_manager: &impl GraphQLCaller)  -> anyhow::Result<Self> {
-        let hash_key = format!("{}#MeterPoints", account_number);
+        // Named for the time of use schemes, which earlier versions did not fetch, so that they are fetched at once.
+        let hash_key = format!("{}#MeterPointsWithTimesOfUse", account_number);
         let query_provider = || {
             meter::active_meter_points_with_agreements::Query::builder()
                 .with_account_number(account_number.clone())

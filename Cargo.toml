@@ -1,7 +1,7 @@
 [package]
 name = "marco-sparko"
 description = "The Energy Explorer"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2024"
 default-run = "marco-sparko"
 
@@ -24,16 +24,16 @@ async-trait = "0.1.81"
 display_json = "0.2.1"
 rust_decimal = "1.36.0"
 rust_decimal_macros = "1.36.0"
-sparko_graphql = {version = "0.4.3", path = "../sparko_graphql" }
+sparko_graphql = {version = "0.4.4", path = "../sparko_graphql" }
 #serde_with = "3.9.0"
 #reedline-repl-rs = { version = "1.2.1", features = ["async"] }
 futures = "0.3.31"
 indexmap = "2.7.1"
-time-tz = "2.0.0"
+time-tz = { version = "2.0.0", features = ["system"] }
 #tzdb = "0.7.2"
 #tz-rs = "0.7.0"
-dioxus = { version = "0.7.3", features = ["router", "desktop"] }
-dioxus-desktop = "0.7"
+dioxus = { version = "0.7.10", features = ["router", "desktop"] }
+dioxus-desktop = "0.7.10"
 dioxus-free-icons = { version = "0.10", features = ["lucide"] }
 # Native file dialogs, the same version and features as dioxus-desktop uses
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
@@ -42,6 +42,11 @@ arboard = { version = "3", default-features = false }
 anyhow = "1.0.100"
 # Moves deleted profiles to the Trash (macOS), Recycle Bin (Windows) or freedesktop trash (Linux)
 trash = "5"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+webbrowser = "1.0.6"
+aho-corasick = "1.1"
+regex = "1.11"
+rand = "0.9"
 
 
 # Windows only, to create files which only their owner can access, see private_file.rs
@@ -51,14 +56,17 @@ windows = { version = "0.54", features = [
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_System_Threading",
-    "Win32_Storage_FileSystem"
+    "Win32_Storage_FileSystem",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_WindowsAndMessaging"
 ]}
 
 # macOS only, to position the system colour panel. The same versions as dioxus-desktop and rfd use.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.3"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSGeometry"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSColorPanel", "NSEvent", "NSPanel", "NSResponder", "NSScreen", "NSWindow"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSColorPanel", "NSEvent", "NSPanel", "NSGraphics", "NSResponder", "NSScreen", "NSWindow"] }
 
 [features]
 default = ["desktop"]

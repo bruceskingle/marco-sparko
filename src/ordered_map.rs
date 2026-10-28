@@ -85,6 +85,17 @@ where
     }
 }
 
+impl<'a, K, O, V> DoubleEndedIterator for OrderedMapIter<'a, K, O, V>
+where
+    K: Eq + std::hash::Hash + Ord,
+    O: Ord,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let (_, key) = self.order.next_back()?;
+        Some((key, &self.map.values[key].1))
+    }
+}
+
 impl<'a, K, O, V> IntoIterator for &'a OrderedMap<K, O, V>
 where
     K: Eq + std::hash::Hash + Ord,

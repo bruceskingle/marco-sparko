@@ -233,7 +233,7 @@ query getCurrentDemand(
   $start: DateTime, 
   $end: DateTime, 
   $grouping: TelemetryGrouping
-) @ms_required_by_default {
+) {
   	smartMeterTelemetry(deviceId: $meterDeviceId
       start: $start
       end: $end
@@ -293,6 +293,16 @@ query activeMeterPointsWithAgreements($accountNumber: String!) {
             ... on TariffType {
               productCode
               __typename
+            }
+          }
+          # When each rate applies, e.g. ECO7_NIGHT from 23:30 to 05:30, for tariffs with times of use.
+          timeOfUseScheme {
+            name
+            timezone
+            timeslots {
+              timeslot
+              activeFrom
+              activeTo
             }
           }
           __typename
@@ -370,5 +380,121 @@ query homeAndEvConsumptionBreakdown(
       __typename
     }
     __typename
+  }
+}
+query smartDevices($accountNumber: String!) {
+  devices(accountNumber: $accountNumber) {
+    id
+    name
+    deviceType
+    provider
+    propertyId
+    __typename
+    ... on SmartFlexChargePoint {
+      make
+      model
+      vehicleBatterySize
+      chargePointPowerOutput
+    }
+    ... on SmartFlexVehicle {
+      make
+      model
+      vehicleBatterySize
+      chargePointPowerOutput
+    }
+  }
+}
+
+query chargingSessions($accountNumber: String!, $deviceId: String!, $after: DateTime, $before: DateTime, $first: Int) {
+  devices(accountNumber: $accountNumber, deviceId: $deviceId) {
+    id
+    __typename
+    # Charge points and vehicles, the devices which charge.
+    ... on ElectricDevice {
+      chargingSessions(after: $after, before: $before, first: $first) {
+        ...chargingSessionFields
+      }
+    }
+  }
+}
+
+fragment chargingSessionFields on DeviceChargingSessionConnection {
+  edges {
+    node {
+      start
+      end
+      __typename
+      ... on SmartFlexChargingSession {
+        stateOfChargeChange
+        stateOfChargeFinal
+        energyAdded {
+          value
+          unit
+        }
+        cost {
+          amount
+          currency
+        }
+        type
+        targetType
+        dispatches {
+          start
+          end
+          type
+          energyAddedKwh
+        }
+        problems {
+          __typename
+          ... on SmartFlexChargingTruncation {
+            truncationCause
+            originalAchievableStateOfCharge
+            achievableStateOfCharge
+          }
+          ... on SmartFlexChargingError {
+            cause
+          }
+        }
+      }
+      ... on PublicChargingSession {
+        energyAdded {
+          value
+          unit
+        }
+        cost {
+          amount
+          currency
+        }
+        location
+      }
+    }
+  }
+}
+
+query meterTelemetry($deviceId: String!, $start: DateTime, $end: DateTime, $grouping: TelemetryGrouping) {
+  smartMeterTelemetry(deviceId: $deviceId, start: $start, end: $end, grouping: $grouping) {
+    readAt
+    consumption
+    export
+    demand
+    consumptionDelta
+    costDelta
+    costDeltaWithTax
+  }
+}
+
+# The rate limits of the fields which have them, to find when a field which is blocked for too many requests can be
+# requested again.
+query rateLimit {
+  rateLimitInfo {
+    fieldSpecificRateLimits(first: 100) {
+      edges {
+        node {
+          field
+          rate
+          ttl
+          isBlocked
+        }
+      }
+    }
   }
 }

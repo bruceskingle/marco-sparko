@@ -2,18 +2,22 @@
 name = "Marco Sparko"
 
 [bundle]
-icon = ["icons/icon.ico"]
+# The .ico for Windows. The .png for macOS, where dx (since 0.7.10) makes the app's .icns only from .png or .icns files,
+# and leaves the app without an icon if there are none.
+icon = ["icons/icon.ico", "assets/MarcoSparko.png"]
 identifier = "org.skingle"
 publisher = "BruceSkingle"
 
-# chat gpt imagined this...
-# [bundle.macos]
-# minimum_system_version = "11.0"
-# 
-# [bundle.macos.dmg]
-# background = "assets/dmg-background.png"
-# window_size = [885, 430]
-# icon_positions = {     "MarcoSparko.app" = [100, 100],     "Applications" = [375, 100] }
+[bundle.windows]
+icon_path = "icons/icon.ico"
+# WebView2 is part of Windows 11 and recent Windows 10, so the installer runs Microsoft's small bootstrapper, silently,
+# which only downloads and installs it if it is missing. The default embeds the whole offline installer (about 180 MB)
+# and runs it every time, with a dialog which says installation failed if WebView2 is already installed.
+webview_install_mode = { DownloadBootstrapper = { silent = true } }
+
+[bundle.windows.nsis]
+# The setup.exe's own icon, which is not taken from bundle.icon.
+installer_icon = "icons/icon.ico"
 
 [web.app]
 

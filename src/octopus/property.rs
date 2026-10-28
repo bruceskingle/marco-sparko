@@ -155,14 +155,17 @@ impl Property {
             });
         }
 
-        let mut meters = Vec::new();
-
+        // A row for each meter, with its meter point's details on the first row of the meter point's meters, or a row
+        // with just the meter point if it has no meters.
+        let mut meter_rows = Vec::new();
         for meter_point in &self.electricity_meter_points_ {
             // Meter points link to their measurements, consumption for import and generation for export.
             let mpan = meter_point.mpan_.clone();
-            let mpan_cell = {
-                rsx! {
-                    div {
+            let mut point_cells = Some(rsx! {
+                td { "Electricity" }
+                td { "{meter_point.id_}" }
+                td {
+                    span {
                         class: "link",
                         onclick: move |_| {
                             let mut path_signal = use_context::<Signal<Vec<String>>>();
@@ -171,105 +174,50 @@ impl Property {
                         "{meter_point.mpan_}"
                     }
                 }
-            };
-            meters.push(rsx!{
-                h2 { "Electricity Meter Point" }
-                table { class: "display",
-                    tr {
-                        th { class: "row-header", "ID" }
-                        td { "{meter_point.id_}" }
-                    
-                    }
-                    tr {
-                        th { class: "row-header", "MPAN" }
-                        td { {mpan_cell} }
-                    }
-                    tr {
-                        th { class: "row-header", "Status" }
-                        td { "{meter_point.status_}" }
-                    }
-                    tr {
-                        th { class: "row-header", "Supply End Date" }
-                        td { "{gui_opt_date(&meter_point.supply_end_date_)}" }
-                    }
-                }
+                td { "{meter_point.status_}" }
+                td { "{gui_opt_date(&meter_point.supply_end_date_)}" }
             });
-
-            for meter in &meter_point.meters_ {
+            if meter_point.meters_.is_empty() {
+                meter_rows.push(rsx! { tr { {point_cells.take()} td { colspan: 5 } } });
+            }
+            for (index, meter) in meter_point.meters_.iter().enumerate() {
                 let direction = if meter.import_meter_.is_none() { "Import" } else { "Export" };
-                meters.push(rsx!{
-                    h3 { "Electricity Meter" }
-                    table { class: "display",
-                        tr {
-                            th { class: "row-header", "Node ID" }
-                            td { "{meter.node_id_}" }
-                        }
-                        tr {
-                            th { class: "row-header", "Serial Number" }
-                            td { "{meter.serial_number_}" }
-                        }
-                        tr {
-                            th { class: "row-header", "Consumption Units" }
-                            td { "{meter.consumption_units_}" }
-                        }
-                        tr {
-                            th { class: "row-header", "Has And Allows HH Readings" }
-                            td { "{&meter.has_and_allows_hh_readings_}" }
-                        }
-                        tr {
-                            th { class: "row-header", "Direction" }
-                            td { "{direction}" }
-                        }
+                // Only the first row of the meter point has its details.
+                let point_cells = if index == 0 { point_cells.take() } else { Some(rsx! { td { colspan: 5 } }) };
+                meter_rows.push(rsx! {
+                    tr {
+                        {point_cells}
+                        td { "{meter.node_id_}" }
+                        td { "{meter.serial_number_}" }
+                        td { "{meter.consumption_units_}" }
+                        td { "{meter.has_and_allows_hh_readings_}" }
+                        td { "{direction}" }
                     }
                 });
             }
         }
-
-
-
         for meter_point in &self.gas_meter_points_ {
-            meters.push(rsx!{
-                h2 { "Gas Meter Point" }
-                table { class: "display",
-                    tr {
-                        th { class: "row-header", "ID" }
-                        td { "{meter_point.id_}" }
-                    }
-                    tr {
-                        th { class: "row-header", "MPRN" }
-                        td { "{meter_point.mprn_}" }
-                    }
-                    tr {
-                        th { class: "row-header", "Status" }
-                        td { "{meter_point.status_}" }
-                    }
-                    tr {
-                        th { class: "row-header", "Supply End Date" }
-                        td { "{gui_opt_date(&meter_point.supply_end_date_)}" }
-                    }
-                }
+            let mut point_cells = Some(rsx! {
+                td { "Gas" }
+                td { "{meter_point.id_}" }
+                td { "{meter_point.mprn_}" }
+                td { "{meter_point.status_}" }
+                td { "{gui_opt_date(&meter_point.supply_end_date_)}" }
             });
-
-            for meter in &meter_point.meters_ {
-                meters.push(rsx!{
-                    h3 { "Gas Meter" }
-                    table { class: "display",
-                        tr {
-                            th { class: "row-header", "Node ID" }
-                            td { "{meter.node_id_}" }
-                        }
-                        tr {
-                            th { class: "row-header", "Serial Number" }
-                            td { "{meter.serial_number_}" }
-                        }
-                        tr {
-                            th { class: "row-header", "Consumption Units" }
-                            td { "{meter.consumption_units_}" }
-                        }
-                        tr {
-                            th { class: "row-header", "Has And Allows HH Readings" }
-                            td { "{&meter.has_and_allows_hh_readings_}" }
-                        }
+            if meter_point.meters_.is_empty() {
+                meter_rows.push(rsx! { tr { {point_cells.take()} td { colspan: 5 } } });
+            }
+            for (index, meter) in meter_point.meters_.iter().enumerate() {
+                // Only the first row of the meter point has its details.
+                let point_cells = if index == 0 { point_cells.take() } else { Some(rsx! { td { colspan: 5 } }) };
+                meter_rows.push(rsx! {
+                    tr {
+                        {point_cells}
+                        td { "{meter.node_id_}" }
+                        td { "{meter.serial_number_}" }
+                        td { "{meter.consumption_units_}" }
+                        td { "{meter.has_and_allows_hh_readings_}" }
+                        td {}
                     }
                 });
             }
@@ -316,9 +264,26 @@ impl Property {
                     {item}
                 }
             }
-            for item in meters {
-                {item}
+            h2 { "Meters" }
+            table { class: "display",
+                tr { class: "header",
+                    th { "Fuel" }
+                    th { "Meter Point ID" }
+                    th { "MPAN / MPRN" }
+                    th { "Status" }
+                    th { "Supply End" }
+                    th { "Meter Node ID" }
+                    th { "Serial Number" }
+                    th { "Units" }
+                    th { title: "Has and allows half hourly readings", "Half Hourly" }
+                    th { "Direction" }
+                }
+                for row in meter_rows {
+                    {row}
+                }
             }
+            h2 { "Smart Device Network" }
+            {smart_device_network_table(&[self])}
         }
     }
 }
@@ -365,5 +330,101 @@ impl PropertyDataSet {
             property_map,
             meter_node_ids,
         })
+    }
+}
+
+/// A table of the devices on the smart meter networks of the properties, with a column for the property if there is
+/// more than one, and for the network if a property has more than one. The ID of a consumer access device, such as a
+/// Home Mini, links to the readings it provides of the electricity meter (ESME) on its network.
+pub fn smart_device_network_table(properties: &[&meter::account_properties_meters::PropertyType]) -> Element {
+    let several_properties = properties.len() > 1;
+    let several_networks = properties.iter().any(|property| property.smart_device_networks_.len() > 1);
+    let device_type = |device: &meter::account_properties_meters::SmartMeterDeviceType| device.type_.to_string().trim_matches('"').to_string();
+    let devices: Vec<(String, usize, String, String, &'static str, Option<String>)> = properties.iter()
+        .flat_map(|property| property.smart_device_networks_.iter()
+            .enumerate()
+            .flat_map(move |(network, devices)| {
+                let esme = devices.smart_devices_.iter()
+                    .find(|device| device_type(device) == "ESME")
+                    .map(|device| device.device_id_.clone());
+                devices.smart_devices_.iter().map(move |device| {
+                    let device_type = device_type(device);
+                    let description = device_type_description(&device_type);
+                    // Only a consumer access device links to the readings.
+                    let readings_of = if device_type == "CAD" { esme.clone() } else { None };
+                    (property.address_.clone(), network + 1, device.device_id_.clone(), device_type, description, readings_of)
+                })
+            }))
+        .collect();
+
+    if devices.is_empty() {
+        return rsx! { p { "No smart meter network" } };
+    }
+    rsx! {
+        table { class: "display",
+            tr { class: "header",
+                if several_properties {
+                    th { "Property" }
+                }
+                if several_networks {
+                    th { "Network" }
+                }
+                th { "Device ID" }
+                th { "Type" }
+                th { "Description" }
+            }
+            for (address, network, device_id, device_type, description, readings_of) in devices {
+                tr {
+                    if several_properties {
+                        td { "{address}" }
+                    }
+                    if several_networks {
+                        td { "{network}" }
+                    }
+                    td {
+                        if let Some(esme_id) = readings_of {
+                            span {
+                                class: "link",
+                                title: "Show the meter's readings every 10 seconds",
+                                onclick: {
+                                    let device_id = device_id.clone();
+                                    move |_| {
+                                        let mut path_signal = use_context::<Signal<Vec<String>>>();
+                                        path_signal.set(vec![
+                                            String::from("measurements"),
+                                            String::from("telemetry"),
+                                            esme_id.clone(),
+                                            device_id.clone(),
+                                        ]);
+                                    }
+                                },
+                                "{device_id}"
+                            }
+                        }
+                        else {
+                            "{device_id}"
+                        }
+                    }
+                    td { "{device_type}" }
+                    td { "{description}" }
+                }
+            }
+        }
+    }
+}
+
+/// What a type of device on a smart meter network is, from the SMETS names.
+fn device_type_description(device_type: &str) -> &'static str {
+    match device_type {
+        "ESME" => "Electricity smart meter",
+        "GSME" => "Gas smart meter",
+        "GPF" => "Gas proxy function, the gas meter's data on the communications hub",
+        "CHF" => "Communications hub",
+        "HCALCS" => "Load control switch",
+        "PPMID" => "In-home display (prepayment)",
+        "IHD" => "In-home display",
+        "CAD" => "Consumer access device, e.g. an Octopus Home Mini",
+        "IHD_OR_CAD" => "In-home display or consumer access device",
+        _ => "",
     }
 }

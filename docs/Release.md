@@ -2,87 +2,59 @@
 # Release Process
 
 Each release is developed on a branch called `vX.X.X` in both sparko_graphql and marco-sparko, which is squash
-merged to `main` and tagged `releaseX.X.X`. Publishing the marco-sparko release on GitHub builds and attaches the
-installers. Once it is released, the branches for the next version are started (step 5).
+merged to `main` and tagged `releaseX.X.X`. The installers are built on GitHub and attached to a draft release, which
+is published once they have been tried. Then the branches for the next version are started.
 
-The commands below are for zsh on the main dev machine, with both repos checked out in `~/git`. They need the GitHub
-CLI, `gh`, signed in with `gh auth login`. Start each terminal session by setting the version being released:
-
-```
-export RELEASE=0.4.4
-```
-
-## 1. Try the Installers
-The installers can be built from the release branch before anything is merged, to try them on other machines. The
-workflow builds a tag, so with the release branches checked out and pushed make a temporary one in both repos:
-
-```
-for repo in sparko_graphql marco-sparko; do
-  cd ~/git/$repo
-  git tag test$RELEASE
-  git push origin test$RELEASE
-done
-
-cd ~/git/marco-sparko
-gh workflow run release.yml --ref v$RELEASE -f tag=test$RELEASE
-```
-
-`--ref` runs the version of the workflow on the release branch, so changes to it can be tried before they are merged.
-
-Wait a few seconds for the run to start, then watch it (about 30 to 40 minutes, the Intel Mac is the slowest):
+The steps are run with [scripts/release.sh](../scripts/release.sh) on the main dev machine, with both repos checked
+out side by side in `~/git`. It needs the GitHub CLI, `gh`, signed in with `gh auth login`. The version comes from
+marco-sparko's Cargo.toml, which `start` sets at the beginning of each release, so it never needs to be typed again.
+Each command checks that both repos are in the state it expects (the right branch, nothing uncommitted, the tags it
+needs) and stops with an explanation at the first problem.
 
 ```
 cd ~/git/marco-sparko
-RUN=$(gh run list --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
-gh run watch $RUN
+./scripts/release.sh status
 ```
 
-### Downloading the Installers
-Each build's installers are kept as an artifact named `macos-aarch64`, `macos-x64`, `windows-x64` or
-`windows-arm64` for 90 days. Download them all once the run has finished:
+shows where things are: the branch, version and uncommitted changes of each repo, the test and release tags, the
+GitHub release and the latest workflow runs.
+
+The manual commands for each step are in the collapsed sections, in case the script cannot be used. They need the
+version in `RELEASE`, e.g. `export RELEASE=0.4.4`.
+
+## 1. Try the Installers (optional)
 
 ```
-gh run download $RUN --dir ~/Downloads/marco-sparko-$RELEASE
+./scripts/release.sh try
 ```
 
-Or download particular builds with `-n`, e.g. while the slower builds are still running (if `gh` refuses because the
-run is in progress, wait for it to finish):
+Builds the installers from the release branches before anything is merged, to try them on other machines. It tags both
+release branches `testX.X.X` (moving the tags if they exist), runs the workflow, watches it (about 30 to 40 minutes,
+the Intel Mac is the slowest) and downloads the installers, each in a folder named after its build:
 
 ```
-gh run download $RUN -n windows-arm64 -n macos-aarch64 --dir ~/Downloads/marco-sparko-$RELEASE
+~/Downloads/marco-sparko-X.X.X-test/macos-aarch64/MarcoSparko_X.X.X_aarch64.dmg      Apple silicon Mac
+~/Downloads/marco-sparko-X.X.X-test/macos-x64/MarcoSparko_X.X.X_x86_64.dmg           Intel Mac
+~/Downloads/marco-sparko-X.X.X-test/windows-arm64/MarcoSparko_X.X.X_arm64-setup.exe  ARM PC
+~/Downloads/marco-sparko-X.X.X-test/windows-x64/MarcoSparko_X.X.X_x64-setup.exe      Intel or AMD PC
 ```
 
-To list what has been uploaded so far:
+Each run of `try` replaces them. Run it again after fixing anything. The test tags are deleted by `merge`.
+
+If a build fails, it shows the commands to see why and to re-run the failed jobs.
+
+Ctrl+C stops watching but not the run. To pick it up again, e.g. after a re-run of failed jobs, and download the
+installers when it finishes:
 
 ```
-gh api repos/bruceskingle/marco-sparko/actions/runs/$RUN/artifacts --jq '.artifacts[] | "\(.name) \(.size_in_bytes)"'
+./scripts/release.sh watch
 ```
 
-On a Windows VM (with `gh` installed from https://github.com/cli/cli/releases and signed in), in PowerShell:
+To try the installer on another machine, see
+[Trying the Installer on Another Machine](#trying-the-installer-on-another-machine).
 
-```
-cd ~\git\marco-sparko
-$RUN = gh run list --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId'
-gh run download $RUN -n windows-arm64 --dir $HOME\Downloads\marco-sparko-test
-```
-
-The artifacts can also be downloaded from the run's page on the Actions tab of the marco-sparko repo, under
-**Artifacts** at the bottom of the Summary (only the name is a link).
-
-### If a Build Fails
-See which step failed and why:
-
-```
-gh run view $RUN --log-failed
-```
-
-If that prints nothing, get the whole log of the failed job (its ID is shown next to it by `gh run watch`):
-
-```
-gh api repos/bruceskingle/marco-sparko/actions/jobs/<job id>/logs | grep -B2 -A10 -i "error\|panicked"
-```
-
-Fix the problem on the release branch, commit and push, then move the temporary tags and run it again:
+<details>
+<summary>Manual commands</summary>
 
 ```
 for repo in sparko_graphql marco-sparko; do
@@ -95,8 +67,76 @@ cd ~/git/marco-sparko
 gh workflow run release.yml --ref v$RELEASE -f tag=test$RELEASE
 ```
 
-### Afterwards
-Delete the temporary tags, they can be made again for another try:
+`--ref` runs the version of the workflow on the release branch, so changes to it can be tried before they are merged.
+Wait a few seconds for the run to start, then watch it and download the installers:
+
+```
+RUN=$(gh run list --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run watch $RUN
+gh run download $RUN --dir ~/Downloads/marco-sparko-$RELEASE-test
+```
+
+Each build's installers are kept as an artifact named `macos-aarch64`, `macos-x64`, `windows-x64` or `windows-arm64`
+for 90 days. Particular builds can be downloaded with `-n`, e.g. while the slower builds are still running (if `gh`
+refuses because the run is in progress, wait for it to finish):
+
+```
+gh run download $RUN -n windows-arm64 -n macos-aarch64 --dir ~/Downloads/marco-sparko-$RELEASE-test
+gh api repos/bruceskingle/marco-sparko/actions/runs/$RUN/artifacts --jq '.artifacts[] | "\(.name) \(.size_in_bytes)"'
+```
+
+On a Windows VM, in PowerShell:
+
+1. Install `gh` with `winget install --id GitHub.cli`, or from https://github.com/cli/cli/releases (the "windows
+   arm64 installer" or "windows amd64 installer", which is the `.msi`). Then open a new PowerShell window and sign in
+   with `gh auth login`.
+
+2. Find the run ID, the number which identifies the run of the workflow. It is shown in any of these places:
+   - On the Mac, in the output of `try`, `build` or `watch`: `==> Watching run 40215599738 ...`
+   - In the first line which `gh run watch` shows, after "Release ·": `* v0.4.4 Release · 40215599738`. The other
+     numbers it shows, `(ID 121252356794)` after each job, are job IDs, which are not what is needed here (they are
+     only used to get one job's log, see below).
+   - In the address of the run's page on the Actions tab: `.../marco-sparko/actions/runs/40215599738`
+   - Listed with the recent runs, on either machine, with
+     `gh run list -R bruceskingle/marco-sparko --workflow release.yml --limit 5`
+     (the ID is the long number in the ID column, the newest run is first).
+
+3. Set `$RUN` to it. The variables set on the Mac are not set in PowerShell, so this is always needed there. With the
+   number from step 2 in place of 40215599738:
+
+   ```
+   $RUN = "40215599738"
+   ```
+
+   or, to use the latest run without looking up its number:
+
+   ```
+   $RUN = gh run list -R bruceskingle/marco-sparko --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId'
+   ```
+
+   `echo $RUN` shows which run it is set to.
+
+4. Download the installer, `windows-arm64` on an ARM PC or `windows-x64` on an Intel or AMD PC:
+
+   ```
+   gh run download $RUN -R bruceskingle/marco-sparko -n windows-arm64 --dir $HOME\Downloads\marco-sparko-test
+   ```
+
+   `-R` means these commands work in any directory. The setup.exe is in `Downloads\marco-sparko-test`.
+
+The artifacts can also be downloaded from the run's page on the Actions tab of the marco-sparko repo, under
+**Artifacts** at the bottom of the Summary (only the name is a link).
+
+If a build fails, see why with the first command, or the second if that prints nothing (the job ID is shown next to
+the job by `gh run watch`), and re-run the failed jobs with the third:
+
+```
+gh run view $RUN --log-failed
+gh api repos/bruceskingle/marco-sparko/actions/jobs/<job id>/logs | grep -B2 -A10 -i "error\|panicked"
+gh run rerun $RUN --failed
+```
+
+Delete the test tags afterwards:
 
 ```
 for repo in sparko_graphql marco-sparko; do
@@ -106,9 +146,30 @@ for repo in sparko_graphql marco-sparko; do
 done
 ```
 
+</details>
+
 ## 2. Merge to Main and Tag
-Make sure everything is committed and pushed. Then, sparko_graphql first, create a pull request and squash merge it
-to `main`:
+
+```
+./scripts/release.sh merge
+```
+
+For each repo, sparko_graphql first: creates a pull request from the release branch (unless there is one), squash
+merges it to `main` (`gh` asks for confirmation), and tags `main` `releaseX.X.X`. It then merges `main` back into the
+release branch, which changes no files but means a later pull request only shows new changes, and deletes the test
+tags. If it fails part way, run it again and it carries on.
+
+To make more changes after merging, before the release is published:
+
+```
+./scripts/release.sh untag
+```
+
+deletes the release tags (and the draft release, if `build` has made one). Commit the changes to the release
+branches, then run `merge` again.
+
+<details>
+<summary>Manual commands</summary>
 
 ```
 for repo in sparko_graphql marco-sparko; do
@@ -121,39 +182,24 @@ for repo in sparko_graphql marco-sparko; do
 done
 ```
 
-`gh pr merge` asks for confirmation. The pull requests can be merged on GitHub instead, choose **Squash and merge**.
-
-Tag the merged `main` in both repos:
-
-```
-for repo in sparko_graphql marco-sparko; do
-  cd ~/git/$repo
-  git checkout main
-  git pull
-  git tag release$RELEASE
-  git push origin release$RELEASE
-done
-```
-
-### More Changes After Merging
-A squash merge does not record that the branch's commits are on `main`, so before making more changes on the release
-branch merge `main` back into it. This changes no files, but without it the next pull request shows every change in
-the release again:
+The pull requests can be merged on GitHub instead, choose **Squash and merge**. Then tag `main` and merge it back
+into the release branches:
 
 ```
 for repo in sparko_graphql marco-sparko; do
   cd ~/git/$repo
-  git checkout v$RELEASE
-  git pull
   git fetch origin
+  git tag release$RELEASE origin/main
+  git push origin release$RELEASE
   git merge origin/main -m "Merge main after squash merge"
   git push
 done
 ```
 
-If the release has been tagged but not published, delete the tags, make the changes, and repeat this step:
+To make more changes, delete the draft release (if there is one) and the release tags:
 
 ```
+gh release delete release$RELEASE --yes
 for repo in sparko_graphql marco-sparko; do
   cd ~/git/$repo
   git tag -d release$RELEASE
@@ -161,8 +207,19 @@ for repo in sparko_graphql marco-sparko; do
 done
 ```
 
+</details>
+
 ## 3. Final Check
-Do a clean build of the tagged source and click around the app:
+
+```
+./scripts/release.sh check
+```
+
+Checks out the release tags in both repos, does a clean build and runs the app. Click around, then quit the app and it
+switches both repos back to the release branches. If something needs fixing, use `untag` as in step 2.
+
+<details>
+<summary>Manual commands</summary>
 
 ```
 cd ~/git/sparko_graphql
@@ -173,85 +230,158 @@ cargo clean
 dx run --release
 ```
 
-If something needs fixing, go back to the release branch as in "More Changes After Merging" in step 2.
+Then go back to the release branches. If Cargo.lock shows as changed, it was regenerated (e.g. by the editor) and it
+is safe to discard it:
 
-## 4. Release
-Publish the release. This starts the `Release` workflow in
-[.github/workflows/release.yml](../.github/workflows/release.yml), which builds and tests the installers on GitHub and
-attaches them to the release:
+```
+for repo in sparko_graphql marco-sparko; do
+  cd ~/git/$repo
+  git restore Cargo.lock
+  git checkout v$RELEASE
+done
+```
+
+</details>
+
+## 4. Build the Draft Release
+
+```
+./scripts/release.sh build
+```
+
+Creates a draft GitHub release for the tag, with the release's section of the [ChangeLog](ChangeLog.md) as its notes
+(see [Release Notes](#release-notes)), then runs the
+[Release workflow](../.github/workflows/release.yml) on the tag, which builds and tests the installers and attaches
+them to the draft. The files are only attached if all four builds succeed. It downloads them from the draft, all in
+one folder, and shows the draft's URL:
+
+```
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_aarch64.dmg      Apple silicon Mac
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_x86_64.dmg       Intel Mac
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_arm64-setup.exe  ARM PC
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_x64-setup.exe    Intel or AMD PC
+```
+
+Try the installers, and check the release notes on GitHub (the draft is at the top of the Releases page). A draft is
+only visible to people who can push to the repo.
+
+### Release Notes
+
+The notes are the `## Release X.X.X` section of [ChangeLog.md](ChangeLog.md) as it is at the `releaseX.X.X` tag,
+without that heading, as the release has its own title. So write the ChangeLog for the release before `merge`, and
+`build` stops if it has no section for the release. GitHub shows every line break in release notes, so the lines of
+each paragraph, list item and quote are joined, and links to other docs, e.g. `[...](ScheduledFetch.md)`, are made
+links to the docs on GitHub at the tag.
+
+Running `build` again on an existing draft leaves its notes alone. To change them, either edit them on GitHub (choose
+**Edit** on the draft), or change the ChangeLog (`untag`, commit, `merge`, as in step 2) and replace the notes with
+its section with:
+
+```
+./scripts/release.sh notes
+```
+
+If a build fails, fix it as in step 2 (`untag`, commit, `merge`, `check`) and run `build` again. Running `build` again
+on an existing draft replaces its installers. As with `try`, `./scripts/release.sh watch` picks up the run again after
+Ctrl+C or a re-run of failed jobs, and downloads the installers from the draft when it finishes. To try the installer
+on another machine, see [Trying the Installer on Another Machine](#trying-the-installer-on-another-machine).
+
+<details>
+<summary>Manual commands</summary>
 
 ```
 cd ~/git/marco-sparko
-gh release create release$RELEASE --verify-tag --title "Release $RELEASE" --generate-notes
+gh release create release$RELEASE --draft --verify-tag --title "Release $RELEASE" --notes-file <file>
+gh workflow run release.yml --ref release$RELEASE -f tag=release$RELEASE -f attach=true
 ```
 
-Wait a few seconds, then watch the build (about 30 to 40 minutes):
+Wait a few seconds for the run to start, then watch it and download the installers from the draft:
 
 ```
 RUN=$(gh run list --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run watch $RUN
-gh release view release$RELEASE
-```
-
-When it has finished the release should have these files:
-
-```
-MarcoSparko_X.X.X_aarch64.dmg
-MarcoSparko_X.X.X_x64.dmg
-MarcoSparko_X.X.X_x64-setup.exe
-MarcoSparko_X.X.X_x64_en-US.msi
-MarcoSparko_X.X.X_arm64-setup.exe
-MarcoSparko_X.X.X_arm64_en-US.msi
-```
-
-Download them, e.g. to try the released installers:
-
-```
 gh release download release$RELEASE --dir ~/Downloads/marco-sparko-$RELEASE
 ```
 
-or on a Windows VM in PowerShell, just the Windows ones:
+`<file>` is the release's section of the ChangeLog, without its heading, with the lines of each paragraph joined, see
+[Release Notes](#release-notes). `--generate-notes` in place of `--notes-file <file>` lists the merged pull requests
+instead.
+
+On a Windows VM in PowerShell, just the Windows installers (with the version in place of 0.4.4):
 
 ```
-gh release download release0.4.4 -R bruceskingle/marco-sparko -p '*.msi' -p '*-setup.exe' --dir $HOME\Downloads\marco-sparko
+gh release download release0.4.4 -R bruceskingle/marco-sparko -p '*-setup.exe' --dir $HOME\Downloads\marco-sparko
 ```
 
-The files are only attached if all four builds succeed. If one fails, see "If a Build Fails" in step 1. If the
-problem was temporary, re-run the failed jobs:
+The release should have these files:
 
 ```
-gh run rerun $RUN --failed
+MarcoSparko_X.X.X_aarch64.dmg
+MarcoSparko_X.X.X_x86_64.dmg
+MarcoSparko_X.X.X_x64-setup.exe
+MarcoSparko_X.X.X_arm64-setup.exe
 ```
 
-Otherwise delete the release (leaving the tags), fix the problem as in "More Changes After Merging" in step 2, and
-create the release again:
+</details>
+
+## 5. Publish
 
 ```
-gh release delete release$RELEASE --yes
+./scripts/release.sh publish
 ```
 
-## 5. Start the Next Release Branch
-Set `RELEASE` to the next version:
+Checks that the draft has all four installers, then publishes it as the latest release. Nothing is built again, so the
+installers are the ones which were tried.
+
+<details>
+<summary>Manual commands</summary>
+
+```
+gh release edit release$RELEASE --draft=false --latest
+```
+
+or choose **Publish release** on the draft's edit page on GitHub.
+
+</details>
+
+## 6. Start the Next Release
+
+```
+./scripts/release.sh start
+```
+
+Creates the `vX.X.X` branches for the next patch version (e.g. 0.4.4 after 0.4.3) in both repos from `main`, sets
+the version in both Cargo.toml files and the version of sparko_graphql which marco-sparko uses, builds to update the
+Cargo.lock files, commits and pushes. For a different version, give it, e.g. `./scripts/release.sh start 0.5.0`. If
+the branches already exist it switches to them.
+
+Then commit to the `vX.X.X` branches and push as usual. When it is ready to release, go back to step 1.
+
+If a change needs its own branch, e.g. because someone else is working on it, branch from the release branch and
+merge it back into it, or merge their pull request on GitHub with the release branch as the base:
+
+```
+git checkout -b my-feature v0.4.4
+# ... commit and push my-feature, then when it is done
+git checkout v0.4.4
+git pull
+git merge my-feature
+git push
+```
+
+<details>
+<summary>Manual commands</summary>
 
 ```
 export RELEASE=0.4.5
-```
 
-Create the release branch in both repos from the latest `main`:
-
-```
 for repo in sparko_graphql marco-sparko; do
   cd ~/git/$repo
   git checkout main
   git pull
   git checkout -b v$RELEASE
 done
-```
 
-Set the new version in both Cargo.toml files, and the version of sparko_graphql which marco-sparko uses, then build
-so that the Cargo.lock files are updated too:
-
-```
 cd ~/git/sparko_graphql
 sed -i '' "1,/^version = /s/^version = .*/version = \"$RELEASE\"/" Cargo.toml
 cargo build
@@ -260,11 +390,7 @@ cd ~/git/marco-sparko
 sed -i '' -e "1,/^version = /s/^version = .*/version = \"$RELEASE\"/" \
   -e "s/^sparko_graphql = {version = \"[^\"]*\"/sparko_graphql = {version = \"$RELEASE\"/" Cargo.toml
 cargo build
-```
 
-Check the changes, then commit and push the branches:
-
-```
 for repo in sparko_graphql marco-sparko; do
   cd ~/git/$repo
   git diff --stat
@@ -273,22 +399,85 @@ for repo in sparko_graphql marco-sparko; do
 done
 ```
 
-## 6. Develop
-Commit to `v$RELEASE` and push as usual. When it is ready to release, go back to step 1.
+</details>
 
-If a change needs its own branch, e.g. because someone else is working on it, branch from the release branch and
-merge it back into it:
+## Other Build and Test Machines
+
+To build and test the latest release branch on another machine, with both repos checked out side by side there too:
 
 ```
-git checkout -b my-feature v$RELEASE
-# ... commit and push my-feature, then when it is done
-git checkout v$RELEASE
+./scripts/release.sh sync
+```
+
+Fetches both repos and checks out and updates the latest `vX.X.X` branch in each, so that marco-sparko is built with
+the matching sparko_graphql. For another branch, give it, e.g. `./scripts/release.sh sync 0.4.4` or
+`./scripts/release.sh sync main`. It does not need `gh`. It stops without changing anything if either repo has
+uncommitted changes, and only fast forwards, so it stops if a branch has commits on that machine which are not on
+GitHub. Then build as usual, e.g. `dx serve`.
+
+<details>
+<summary>Manual commands</summary>
+
+```
+export RELEASE=0.4.4
+
+for repo in sparko_graphql marco-sparko; do
+  cd ~/git/$repo
+  git fetch
+  git checkout v$RELEASE
+  git pull --ff-only
+done
+```
+
+</details>
+
+## Trying the Installer on Another Machine
+
+When `try` or `build` has finished on the main dev machine, on the other machine run:
+
+```
+./scripts/release.sh sync
+./scripts/release.sh download
+```
+
+`sync` puts the repos on the release branch, which `download` needs because the version comes from them. `download`
+then downloads just the installer for that machine, from the latest run: the `.dmg` for an Apple silicon or Intel Mac,
+or the `setup.exe` for an ARM or Intel/AMD PC. It stops if the run has not finished, so wait for it with `watch` first.
+
+After `try`, the installer is in a folder named after its build, e.g. on an Apple silicon Mac:
+
+```
+~/Downloads/marco-sparko-X.X.X-test/macos-aarch64/MarcoSparko_X.X.X_aarch64.dmg
+```
+
+After `build`, it is downloaded from the draft release, e.g. on an ARM PC:
+
+```
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_arm64-setup.exe
+```
+
+The folder and file names for each machine are listed in [step 1](#1-try-the-installers-optional) and
+[step 4](#4-build-the-draft-release). On Windows `~` is the user's folder, e.g. `C:\Users\yourname`.
+
+On Windows, in PowerShell (or a Command Prompt), one command does both:
+
+```
+~\git\marco-sparko\scripts\sync-and-download.cmd
+```
+
+It runs `release.sh` in Git Bash, which comes with Git for Windows. `gh` needs to be installed and signed in, as in the
+manual commands of [step 1](#1-try-the-installers-optional). The other commands of `release.sh` are for the Mac.
+
+Git for Windows usually gives files Windows line endings, which bash cannot run, so
+[.gitattributes](../.gitattributes) keeps `release.sh` with Unix ones. A copy checked out before that was added may
+still have Windows ones, and fail with errors like `$'\r': command not found`. Fix it once, in PowerShell:
+
+```
+cd ~\git\marco-sparko
 git pull
-git merge my-feature
-git push
+Remove-Item scripts\release.sh
+git checkout scripts/release.sh
 ```
-
-Someone else's feature branch can be merged with a pull request on GitHub instead, with `v$RELEASE` as the base.
 
 # Old Release Instructions
 The manual build steps used before the workflow are in [Release-archive.md](Release-archive.md).

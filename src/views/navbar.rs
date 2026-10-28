@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
-use crate::{ MarcoSparkoContext, UpgradeRequested, components::{app::Route, delete_profile::DeleteProfileDialog}, profile::profile_names_equal};
+use crate::{ MarcoSparkoContext, UpgradeRequested, components::{app::Route, delete_profile::DeleteProfileDialog}, profile::{Settings, profile_names_equal}};
+use crate::views::help_panel::HelpPanel;
+use crate::views::log_panel::LogPanel;
 use dioxus::prelude::*;
+use dioxus_free_icons::{Icon, icons::ld_icons::{LdCircleHelp, LdScrollText, LdSettings, LdUser}};
 
 // use crate::PROFILE_MANAGER;
 
-const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
+const APP_ICON: Asset = asset!("/assets/MarcoSparko.png");
 
 /// The Navbar component that will be rendered on all pages of our app since every page is under the layout.
 ///
@@ -31,6 +34,38 @@ pub fn Navbar() -> Element {
     let mut profile_actions_open = use_signal(|| None::<String>);
     let mut delete_profile = use_signal(|| None::<String>);
 
+    // The active profile's settings, for the Settings page and the log panel, which follow the profile when it changes.
+    let mut settings = use_context_provider(|| Signal::new(context.profile.active_profile.settings.clone()));
+    use_effect(move || {
+        if let Some(context) = context_signal.read().as_ref() {
+            settings.set(context.profile.active_profile.settings.clone());
+        }
+    });
+    // Not in screenshots, see screenshots.rs.
+    let show_log = settings.read().log.show && !crate::screenshots::running();
+    // Shows or hides the log panel, and saves it so that it stays that way.
+    let set_show_log = {
+        let profile_name = context.profile.active_profile.name.clone();
+        move |show: bool| {
+            let mut new_settings: Settings = settings.read().clone();
+            new_settings.log.show = show;
+            if let Err(error) = crate::profile::update_settings(&profile_name, &new_settings) {
+                crate::log_error!("Failed to save whether the log is shown: {error}");
+            }
+            settings.set(new_settings);
+        }
+    };
+
+    // Whether the help is shown, in every window, see help::use_help_shown.
+    let mut help_shown = crate::help::use_help_shown();
+    let show_help = help_shown();
+    let mut set_show_help = move |show: bool| {
+        crate::help::set_shown(show);
+        help_shown.set(show);
+    };
+    // The help of the module screen being shown, which the Module view sets.
+    let module_help_topic = use_context_provider(|| crate::help::ModuleHelpTopic(Signal::new(None)));
+
     let mut all = Vec::new();
     for name in &context.profile.all_profiles {
         all.push(name.clone());
@@ -39,10 +74,23 @@ pub fn Navbar() -> Element {
     // get the current route so we can mark the active nav item
     let current_route = use_route::<Route>();
     let navigator = use_navigator();
+    let help_topic = match &current_route {
+        Route::Home {} => String::from("home.md"),
+        Route::ProfileSize { .. } => String::from("profile-size.md"),
+        Route::Settings {} => String::from("settings.md"),
+        Route::Module { module_id } => module_help_topic.0().unwrap_or_else(|| format!("{module_id}/index.md")),
+    };
     
     rsx! {
-        document::Link { rel: "stylesheet", href: NAVBAR_CSS }
+        div { class: "app-layout",
         nav { class: "nav",
+            // The app's icon, filling the height of the bar, which also goes to the home page.
+            Link {
+                class: "nav-logo",
+                to: Route::Home {},
+                title: "Marco Sparko",
+                style: "background-image: url({APP_ICON});",
+            }
             div { class: "nav-left",
 
                 Link {
@@ -68,6 +116,23 @@ pub fn Navbar() -> Element {
             div { class: "spacer" }
 
             div { class: "nav-right",
+                button {
+                    r#type: "button",
+                    class: if show_help { "nav-icon-button active" } else { "nav-icon-button" },
+                    title: if show_help { "Hide the help" } else { "Show the help" },
+                    onclick: move |_| set_show_help(!show_help),
+                    Icon { icon: LdCircleHelp, width: 16, height: 16 }
+                }
+                button {
+                    r#type: "button",
+                    class: if show_log { "nav-icon-button active" } else { "nav-icon-button" },
+                    title: if show_log { "Hide the log" } else { "Show the log" },
+                    onclick: {
+                        let mut set_show_log = set_show_log.clone();
+                        move |_| set_show_log(!show_log)
+                    },
+                    Icon { icon: LdScrollText, width: 16, height: 16 }
+                }
                 div { class: "dropdown",
                     button {
                         key: "{new_profile_generation}",
@@ -111,10 +176,7 @@ pub fn Navbar() -> Element {
                                                     // });
                                                     // context_signal.set(Some(new_context));
                                                     // end
-                                                    let new_context = Arc::new(MarcoSparkoContext {
-                                                        args: crate::Args::ms_parse(),
-                                                        profile: active_profile,
-                                                    });
+                                                    let new_context = MarcoSparkoContext::for_profile(crate::Args::ms_parse(), active_profile);
                                                     context_signal.set(Some(new_context));
                                                     //next
                                                     upgrade_requested.set(UpgradeRequested(false));
@@ -136,7 +198,8 @@ pub fn Navbar() -> Element {
                                 },
                             }
                         } else {
-                            "Profile {context.profile.active_profile.name} "
+                            Icon { class: "inline-icon", icon: LdUser, width: 14, height: 14 }
+                            " Profile {context.profile.active_profile.name} "
                             svg {
                                 width: "14",
                                 height: "14",
@@ -174,10 +237,7 @@ pub fn Navbar() -> Element {
                                     move |_| {
                                         menu_open.set(false);
                                         profile_actions_open.set(None);
-                                        let new_context = Arc::new(MarcoSparkoContext {
-                                            args: crate::Args::ms_parse(),
-                                            profile: crate::profile::set_active_profile(&name)?,
-                                        });
+                                        let new_context = MarcoSparkoContext::for_profile(crate::Args::ms_parse(), crate::profile::set_active_profile(&name)?);
 
                                         context_signal.set(Some(new_context));
                                         upgrade_requested.set(UpgradeRequested(false));
@@ -251,6 +311,13 @@ pub fn Navbar() -> Element {
                         }
                     }
                 }
+                button {
+                    r#type: "button",
+                    class: if matches!(current_route, Route::Settings {}) { "nav-icon-button active" } else { "nav-icon-button" },
+                    title: "Settings",
+                    onclick: move |_| { navigator.push(Route::Settings {}); },
+                    Icon { icon: LdSettings, width: 16, height: 16 }
+                }
             }
         }
 
@@ -258,7 +325,26 @@ pub fn Navbar() -> Element {
             DeleteProfileDialog { name, on_close: move |_| delete_profile.set(None) }
         }
 
-        Outlet::<Route> {}
+        div { class: "app-body",
+            div { class: "app-page",
+                Outlet::<Route> {}
+            }
+            if show_help {
+                HelpPanel {
+                    topic: help_topic,
+                    on_close: move |_| set_show_help(false),
+                }
+            }
+        }
+        if show_log {
+            LogPanel {
+                on_close: {
+                    let mut set_show_log = set_show_log.clone();
+                    move |_| set_show_log(false)
+                },
+            }
+        }
+        }
     }
 }
 

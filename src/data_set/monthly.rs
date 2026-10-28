@@ -2,12 +2,12 @@ use std::{
     collections::BTreeMap,
     fs::{FileTimes, OpenOptions},
     io::{BufRead, BufReader, Seek, SeekFrom, Write},
-    time::{Duration, SystemTime},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Serialize, de::DeserializeOwned};
 use sparko_graphql::{
-    GraphQLCaller, GraphQLQuery, GraphQLResponse,
+    GraphQLCaller, GraphQLQuery, GraphQLResponse, ProgressMonitor,
     types::{Date, DateTime},
 };
 
@@ -28,16 +28,23 @@ where
     V: DeserializeOwned + Serialize
 {
     
+    /// The month containing date, from the cache, fetched again if it is more than refresh_after old and not yet
+    /// complete, or if force is set. A month is complete once it has been fetched more than refresh_after after it
+    /// ended, so it has had time to get the data for its end, and then it is not fetched again unless forced. An empty
+    /// month counts as fetched, but a new file is dated the epoch, so if the fetch fails it is fetched again next time.
+    /// With force, the whole month is fetched rather than from the last final record.
     pub async fn new<R, Q, IQP, CQP, RI, IN, I>(
             hash_key: &str,
             date: &Date,
             refresh_after: Duration,
+            force: bool,
             initial_query_provider: IQP,
             continuation_query_provider: CQP,
             response_iterator: RI,
             indexer: IN,
             config: &CacheConfig,
-            request_manager: &impl GraphQLCaller
+            request_manager: &impl GraphQLCaller,
+            progress: &(impl ProgressMonitor + ?Sized),
         ) -> anyhow::Result<Self>
         where
             R: GraphQLResponse,
@@ -82,17 +89,27 @@ where
     //         I: IntoIterator<Item = V>,
     // {
         let mut data: BTreeMap<DateTime, (DataSetAttributes, V)> = BTreeMap::new();
+        let created = !month_bucket.path.exists();
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .open(&month_bucket.path)?;
         let _guard = file.lock()?;
+        if created {
+            // Nothing has been fetched for this month yet, so it is stale until a fetch of it succeeds.
+            file.set_times(FileTimes::new().set_modified(UNIX_EPOCH))?;
+        }
         let modified = file.metadata()?.modified()?;
-        let mut refresh =  SystemTime::now()
+        let stale = SystemTime::now()
             .duration_since(modified)
             .map(|age| age > refresh_after)
             .unwrap_or(false); // If the file is modified in the future, do not refresh it.
+        // The end of the month, in UTC, which is close enough as the month is given refresh_after to complete.
+        let month_end = UNIX_EPOCH + Duration::from_secs(
+            month_bucket.next.midnight().assume_utc().unix_timestamp().max(0) as u64);
+        let complete = modified > month_end + refresh_after;
+        let mut refresh = force || (stale && !complete);
         let mut rewrite = false;
 
         let mut last_final_index = None;
@@ -142,21 +159,31 @@ where
                     println!("ERROR: failed to read record {:?}", e);
                     refresh = true;
 
+                    // Fetched again from the start, and stale until that succeeds.
                     file.seek(SeekFrom::Start(0))?;
                     file.set_len(0)?;
+                    file.set_times(FileTimes::new().set_modified(UNIX_EPOCH))?;
                     data.clear();
+                    last_final_index = None;
+                    first_non_final_index = None;
                     break;
                 },
             }
         }
 
-        if data.len() == 0 {
-            refresh = true;
-        }
-        
-        if refresh  {
+        // An offline profile only has what is cached.
+        if refresh && !config.offline {
 
-            let last_index = if let Some(l) = &last_final_index {
+            // With force everything is fetched again, in case what was cached is wrong, and replaces what was cached,
+            // so records the server no longer has are dropped. The file is only rewritten if the fetch succeeds.
+            if force {
+                data.clear();
+                rewrite = true;
+            }
+            let last_index = if force {
+                None
+            }
+            else if let Some(l) = &last_final_index {
                 if let Some(f) = &first_non_final_index {
                     if f < l {
                         first_non_final_index
@@ -188,7 +215,7 @@ where
                 None
             };
             let query = initial_query_provider(&month_bucket.start, last_record)?;
-            let mut response = request_manager.call(&query).await?;
+            let mut response = request_manager.call3(&query, None, progress).await?;
 
             // Self::handle_records(response, response_iterator, indexer, &mut data, &mut file)?;
 
@@ -219,7 +246,9 @@ where
                         let update = if let Some((_attrs, current_value)) = data.get(&index) {
                             let v = serde_json::to_string(&value)?;
                             let c = serde_json::to_string(current_value)?;
-                            println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
+                            if config.verbose {
+                                println!("COMPARE \n{}\n{}\n={}", v, c, v!=c);
+                            }
                             v != c
                         }
                         else {
@@ -236,7 +265,7 @@ where
                 if let Some(continuation_query) = cq {
                     let query = continuation_query?;
 
-                    response = request_manager.call(&query).await?;
+                    response = request_manager.call3(&query, None, progress).await?;
 
                     
                 }
