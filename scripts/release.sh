@@ -6,15 +6,17 @@
 # first problem.
 #
 # This is for macOS (it uses BSD sed) with both repos checked out side by side, e.g. ~/git/marco-sparko and
-# ~/git/sparko_graphql, and needs the GitHub CLI (gh) signed in.
+# ~/git/sparko_graphql, and needs the GitHub CLI (gh) signed in. sync and download also work in Git Bash on Windows, to
+# test there.
 
 set -euo pipefail
 
 # sparko_graphql first, as marco-sparko depends on it.
 REPOS="sparko_graphql marco-sparko"
 WORKFLOW=release.yml
-# The installers attached to each release, with VERSION replaced by the version.
-INSTALLERS="MarcoSparko_VERSION_aarch64.dmg MarcoSparko_VERSION_x64.dmg MarcoSparko_VERSION_x64-setup.exe
+# The installers attached to each release, with VERSION replaced by the version. The Intel Mac's was _x64.dmg before
+# dx 0.7.10.
+INSTALLERS="MarcoSparko_VERSION_aarch64.dmg MarcoSparko_VERSION_x86_64.dmg MarcoSparko_VERSION_x64-setup.exe
 MarcoSparko_VERSION_arm64-setup.exe"
 
 GIT_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -38,10 +40,13 @@ Usage: $(basename "$0") <command>
   try              Build the installers from the release branches, without merging, and download them
   merge            Squash merge the release branches to main, tag them releaseX.X.X, and merge main back
   check            Clean build and run the tagged source, then go back to the release branches
-  build            Create a draft GitHub release, build and attach the installers, and download them
+  build            Create a draft GitHub release, with the notes from the ChangeLog, build and attach the installers,
+                   and download them
+  notes            Replace the draft release's notes with the release's section of the ChangeLog, as it is at the tag
   publish          Publish the draft release, once the installers have been tried and the notes edited
   untag            Delete the release tags (and draft release) to make more changes before releasing
   watch            Watch the latest run of try or build again, e.g. after Ctrl+C, and download its installers
+  download         Download the installer for this machine from the latest try or build, e.g. on another machine
   sync [branch]    On another machine, e.g. to build and test there: fetch both repos and check out and update the
                    same branch in each, e.g. 0.4.4, v0.4.4 or main (default: the latest vX.X.X release branch)
 EOF
@@ -189,6 +194,51 @@ download_test_installers() {
     info "The installers are in $download"
 }
 
+# The release's section of docs/ChangeLog.md at the release tag, for the GitHub release notes, without its heading (the
+# release has its own title). Links to other docs are relative, so they are made links to the docs on GitHub at the tag.
+changelog_notes() {
+    local tag="release$1"
+    git -C "$(repo_dir marco-sparko)" show "$tag:docs/ChangeLog.md" \
+        | awk -v version="$1" '/^## Release /{ show = ($3 == version); next } show' \
+        | unwrap_markdown \
+        | sed -E "s#\]\(([^)#:][^):]*)\)#](https://github.com/$OWNER/marco-sparko/blob/$tag/docs/\1)#g"
+}
+
+# Joins the lines of each paragraph, list item and quote, which the docs wrap at 120 characters, because GitHub shows
+# each line break in release notes. Headings, list items, blank lines and code blocks start a new line.
+unwrap_markdown() {
+    awk '
+        function flush() { if (holding) print held; held = ""; holding = 0 }
+        function hold(line) { flush(); held = line; holding = 1 }
+        /^[[:space:]]*```/ { flush(); code = !code; print; next }
+        code { print; next }
+        /^[[:space:]]*$/ || /^#/ || /^[[:space:]]*([-*+]|[0-9]+\.)[[:space:]]/ || /^[[:space:]]*\|/ { hold($0); next }
+        /^>/ {
+            text = $0
+            sub(/^>[[:space:]]?/, "", text)
+            if (held ~ /^>/ && text != "" && held !~ /^>[[:space:]]*$/) { held = held " " text } else { hold($0) }
+            next
+        }
+        {
+            text = $0
+            sub(/^[[:space:]]+/, "", text)
+            if (holding && held !~ /^[[:space:]]*$/ && held !~ /^#/ && held !~ /^[[:space:]]*\|/) { held = held " " text }
+            else { hold($0) }
+        }
+        END { flush() }
+    '
+}
+
+# Writes the release notes to a temporary file and prints its name, stopping if the ChangeLog has none.
+changelog_notes_file() {
+    local file
+    file=$(mktemp)
+    changelog_notes "$1" > "$file"
+    grep -q '[^[:space:]]' "$file" \
+        || die "docs/ChangeLog.md at release$1 has no \"## Release $1\" section for the release notes"
+    echo "$file"
+}
+
 # Downloads the installers attached to the draft release by build's workflow run.
 download_release_installers() {
     local version=$1 tag download
@@ -198,11 +248,40 @@ download_release_installers() {
     gh release download "$tag" -R "$OWNER/marco-sparko" --dir "$download"
     info "The installers are in $download"
     echo
-    echo "Try them, then edit the release notes on GitHub (the draft is listed on the Releases page):"
+    echo "Try them, and check the release notes, from the ChangeLog, on GitHub (the draft is listed on the Releases page):"
     gh release view "$tag" -R "$OWNER/marco-sparko" --json url --jq .url
-    echo "or with: gh release edit $tag -R $OWNER/marco-sparko --notes-file <file>"
     echo
     info "When it is ready, next: $(basename "$0") publish"
+}
+
+# The name of the workflow's artifact with the installer for this machine. The architecture is the machine's own, not
+# that of the shell, which may be running under Rosetta or Windows' x64 emulation.
+this_platform() {
+    case $(uname -s) in
+        Darwin)
+            if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then echo macos-aarch64; else echo macos-x64; fi
+            ;;
+        MINGW* | MSYS* | CYGWIN*)
+            # Git Bash would otherwise turn /v into a path.
+            if MSYS2_ARG_CONV_EXCL='*' reg query 'HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' /v PROCESSOR_ARCHITECTURE 2>/dev/null \
+                | grep -q ARM64; then
+                echo windows-arm64
+            else
+                echo windows-x64
+            fi
+            ;;
+        *) die "There are no installers for $(uname -s)" ;;
+    esac
+}
+
+# The release's installer in the workflow's artifact, see INSTALLERS.
+installer_pattern() {
+    case $1 in
+        macos-aarch64) echo '*_aarch64.dmg' ;;
+        macos-x64) echo '*_x86_64.dmg' ;;
+        windows-arm64) echo '*_arm64-setup.exe' ;;
+        windows-x64) echo '*_x64-setup.exe' ;;
+    esac
 }
 
 # The latest vX.X.X release branch on GitHub, by version, empty if there is none.
@@ -424,22 +503,26 @@ cmd_check() {
 }
 
 cmd_build() {
-    local version tag state
+    local version tag state notes
     require_gh
     version=$(release_version)
     tag="release$version"
     for repo in $REPOS; do
         remote_tag_exists "$repo" "$tag" || die "$repo has no $tag tag, run merge first"
     done
+    git -C "$(repo_dir marco-sparko)" fetch -q --tags origin
 
     state=$(release_state "$tag")
     case $state in
         published) die "$tag has already been published" ;;
         none)
-            info "Creating the draft release $tag"
-            gh release create "$tag" -R "$OWNER/marco-sparko" --draft --verify-tag --title "Release $version" --generate-notes
+            notes=$(changelog_notes_file "$version")
+            info "Creating the draft release $tag, with the notes from the ChangeLog"
+            gh release create "$tag" -R "$OWNER/marco-sparko" --draft --verify-tag --title "Release $version" \
+                --notes-file "$notes"
+            rm -f "$notes"
             ;;
-        draft) info "The draft release $tag already exists, its installers will be replaced" ;;
+        draft) info "The draft release $tag already exists, its installers will be replaced (and not its notes, see notes)" ;;
     esac
 
     # The workflow from the tagged commit, so it is the one which was released.
@@ -466,6 +549,50 @@ cmd_watch() {
             ;;
         *) die "The latest run ($id) is from $ref, not from try or build of $version" ;;
     esac
+}
+
+# Downloads the installer for this machine from the latest run, from the run's artifact for try, or from the draft (or
+# published) release for build, to the same place as try and build download all of them.
+cmd_download() {
+    local version id ref status platform download
+    require_gh
+    version=$(release_version)
+    platform=$(this_platform)
+    id=$(latest_run_id)
+    [ -n "$id" ] || die "There are no runs of the $WORKFLOW workflow"
+    ref=$(gh run view "$id" -R "$OWNER/marco-sparko" --json headBranch --jq .headBranch)
+    status=$(gh run view "$id" -R "$OWNER/marco-sparko" --json status --jq .status)
+    [ "$status" = "completed" ] || die "The latest run ($id) is $status, wait for it with: $(basename "$0") watch"
+    case $ref in
+        "v$version")
+            download="$HOME/Downloads/marco-sparko-$version-test/$platform"
+            rm -rf "$download"
+            info "Downloading $platform from run $id"
+            gh run download "$id" -R "$OWNER/marco-sparko" -n "$platform" --dir "$download"
+            ;;
+        "release$version")
+            download="$HOME/Downloads/marco-sparko-$version"
+            info "Downloading $(installer_pattern "$platform") from release$version"
+            gh release download "release$version" -R "$OWNER/marco-sparko" -p "$(installer_pattern "$platform")" \
+                --dir "$download" --clobber
+            ;;
+        *) die "The latest run ($id) is from $ref, not from try or build of $version" ;;
+    esac
+    info "The installer is in $download"
+}
+
+cmd_notes() {
+    local version tag notes
+    require_gh
+    version=$(release_version)
+    tag="release$version"
+    [ "$(release_state "$tag")" = "draft" ] || die "There is no draft release $tag, run build first"
+    git -C "$(repo_dir marco-sparko)" fetch -q --tags origin
+    notes=$(changelog_notes_file "$version")
+    gh release edit "$tag" -R "$OWNER/marco-sparko" --notes-file "$notes"
+    rm -f "$notes"
+    info "The notes of $tag are now the ChangeLog's:"
+    gh release view "$tag" -R "$OWNER/marco-sparko" --json url --jq .url
 }
 
 cmd_publish() {
@@ -506,6 +633,9 @@ cmd_untag() {
     info "Make the changes on the v$version branches, then run merge again"
 }
 
+# In braces, with exit, so that bash reads all of this before running it, and never reads any more of the file, which
+# sync may change, e.g. when it pulls a new version of this script.
+{
 [ $# -ge 1 ] || usage
 command=$1
 shift
@@ -516,9 +646,13 @@ case $command in
     merge) cmd_merge ;;
     check) cmd_check ;;
     build) cmd_build ;;
+    notes) cmd_notes ;;
     publish) cmd_publish ;;
     untag) cmd_untag ;;
     watch) cmd_watch ;;
+    download) cmd_download ;;
     sync) cmd_sync "$@" ;;
     *) usage ;;
 esac
+exit
+}

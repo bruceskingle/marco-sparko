@@ -30,8 +30,16 @@ version in `RELEASE`, e.g. `export RELEASE=0.4.4`.
 
 Builds the installers from the release branches before anything is merged, to try them on other machines. It tags both
 release branches `testX.X.X` (moving the tags if they exist), runs the workflow, watches it (about 30 to 40 minutes,
-the Intel Mac is the slowest) and downloads the installers to `~/Downloads/marco-sparko-X.X.X-test`. Run it again
-after fixing anything. The test tags are deleted by `merge`.
+the Intel Mac is the slowest) and downloads the installers, each in a folder named after its build:
+
+```
+~/Downloads/marco-sparko-X.X.X-test/macos-aarch64/MarcoSparko_X.X.X_aarch64.dmg      Apple silicon Mac
+~/Downloads/marco-sparko-X.X.X-test/macos-x64/MarcoSparko_X.X.X_x86_64.dmg           Intel Mac
+~/Downloads/marco-sparko-X.X.X-test/windows-arm64/MarcoSparko_X.X.X_arm64-setup.exe  ARM PC
+~/Downloads/marco-sparko-X.X.X-test/windows-x64/MarcoSparko_X.X.X_x64-setup.exe      Intel or AMD PC
+```
+
+Each run of `try` replaces them. Run it again after fixing anything. The test tags are deleted by `merge`.
 
 If a build fails, it shows the commands to see why and to re-run the failed jobs.
 
@@ -41,6 +49,9 @@ installers when it finishes:
 ```
 ./scripts/release.sh watch
 ```
+
+To try the installer on another machine, see
+[Trying the Installer on Another Machine](#trying-the-installer-on-another-machine).
 
 <details>
 <summary>Manual commands</summary>
@@ -238,25 +249,49 @@ done
 ./scripts/release.sh build
 ```
 
-Creates a draft GitHub release for the tag (with notes generated from the merged pull requests), then runs the
+Creates a draft GitHub release for the tag, with the release's section of the [ChangeLog](ChangeLog.md) as its notes
+(see [Release Notes](#release-notes)), then runs the
 [Release workflow](../.github/workflows/release.yml) on the tag, which builds and tests the installers and attaches
-them to the draft. The files are only attached if all four builds succeed. It downloads them to
-`~/Downloads/marco-sparko-X.X.X` and shows the draft's URL.
+them to the draft. The files are only attached if all four builds succeed. It downloads them from the draft, all in
+one folder, and shows the draft's URL:
 
-Try the installers, and edit the release notes on GitHub (the draft is at the top of the Releases page, choose
-**Edit**), or with `gh release edit releaseX.X.X --notes-file <file>`. A draft is only visible to people who can push
-to the repo.
+```
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_aarch64.dmg      Apple silicon Mac
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_x86_64.dmg       Intel Mac
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_arm64-setup.exe  ARM PC
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_x64-setup.exe    Intel or AMD PC
+```
+
+Try the installers, and check the release notes on GitHub (the draft is at the top of the Releases page). A draft is
+only visible to people who can push to the repo.
+
+### Release Notes
+
+The notes are the `## Release X.X.X` section of [ChangeLog.md](ChangeLog.md) as it is at the `releaseX.X.X` tag,
+without that heading, as the release has its own title. So write the ChangeLog for the release before `merge`, and
+`build` stops if it has no section for the release. GitHub shows every line break in release notes, so the lines of
+each paragraph, list item and quote are joined, and links to other docs, e.g. `[...](ScheduledFetch.md)`, are made
+links to the docs on GitHub at the tag.
+
+Running `build` again on an existing draft leaves its notes alone. To change them, either edit them on GitHub (choose
+**Edit** on the draft), or change the ChangeLog (`untag`, commit, `merge`, as in step 2) and replace the notes with
+its section with:
+
+```
+./scripts/release.sh notes
+```
 
 If a build fails, fix it as in step 2 (`untag`, commit, `merge`, `check`) and run `build` again. Running `build` again
 on an existing draft replaces its installers. As with `try`, `./scripts/release.sh watch` picks up the run again after
-Ctrl+C or a re-run of failed jobs, and downloads the installers from the draft when it finishes.
+Ctrl+C or a re-run of failed jobs, and downloads the installers from the draft when it finishes. To try the installer
+on another machine, see [Trying the Installer on Another Machine](#trying-the-installer-on-another-machine).
 
 <details>
 <summary>Manual commands</summary>
 
 ```
 cd ~/git/marco-sparko
-gh release create release$RELEASE --draft --verify-tag --title "Release $RELEASE" --generate-notes
+gh release create release$RELEASE --draft --verify-tag --title "Release $RELEASE" --notes-file <file>
 gh workflow run release.yml --ref release$RELEASE -f tag=release$RELEASE -f attach=true
 ```
 
@@ -268,6 +303,10 @@ gh run watch $RUN
 gh release download release$RELEASE --dir ~/Downloads/marco-sparko-$RELEASE
 ```
 
+`<file>` is the release's section of the ChangeLog, without its heading, with the lines of each paragraph joined, see
+[Release Notes](#release-notes). `--generate-notes` in place of `--notes-file <file>` lists the merged pull requests
+instead.
+
 On a Windows VM in PowerShell, just the Windows installers (with the version in place of 0.4.4):
 
 ```
@@ -278,7 +317,7 @@ The release should have these files:
 
 ```
 MarcoSparko_X.X.X_aarch64.dmg
-MarcoSparko_X.X.X_x64.dmg
+MarcoSparko_X.X.X_x86_64.dmg
 MarcoSparko_X.X.X_x64-setup.exe
 MarcoSparko_X.X.X_arm64-setup.exe
 ```
@@ -291,7 +330,7 @@ MarcoSparko_X.X.X_arm64-setup.exe
 ./scripts/release.sh publish
 ```
 
-Checks that the draft has all six installers, then publishes it as the latest release. Nothing is built again, so the
+Checks that the draft has all four installers, then publishes it as the latest release. Nothing is built again, so the
 installers are the ones which were tried.
 
 <details>
@@ -391,6 +430,54 @@ done
 ```
 
 </details>
+
+## Trying the Installer on Another Machine
+
+When `try` or `build` has finished on the main dev machine, on the other machine run:
+
+```
+./scripts/release.sh sync
+./scripts/release.sh download
+```
+
+`sync` puts the repos on the release branch, which `download` needs because the version comes from them. `download`
+then downloads just the installer for that machine, from the latest run: the `.dmg` for an Apple silicon or Intel Mac,
+or the `setup.exe` for an ARM or Intel/AMD PC. It stops if the run has not finished, so wait for it with `watch` first.
+
+After `try`, the installer is in a folder named after its build, e.g. on an Apple silicon Mac:
+
+```
+~/Downloads/marco-sparko-X.X.X-test/macos-aarch64/MarcoSparko_X.X.X_aarch64.dmg
+```
+
+After `build`, it is downloaded from the draft release, e.g. on an ARM PC:
+
+```
+~/Downloads/marco-sparko-X.X.X/MarcoSparko_X.X.X_arm64-setup.exe
+```
+
+The folder and file names for each machine are listed in [step 1](#1-try-the-installers-optional) and
+[step 4](#4-build-the-draft-release). On Windows `~` is the user's folder, e.g. `C:\Users\yourname`.
+
+On Windows, in PowerShell (or a Command Prompt), one command does both:
+
+```
+~\git\marco-sparko\scripts\sync-and-download.cmd
+```
+
+It runs `release.sh` in Git Bash, which comes with Git for Windows. `gh` needs to be installed and signed in, as in the
+manual commands of [step 1](#1-try-the-installers-optional). The other commands of `release.sh` are for the Mac.
+
+Git for Windows usually gives files Windows line endings, which bash cannot run, so
+[.gitattributes](../.gitattributes) keeps `release.sh` with Unix ones. A copy checked out before that was added may
+still have Windows ones, and fail with errors like `$'\r': command not found`. Fix it once, in PowerShell:
+
+```
+cd ~\git\marco-sparko
+git pull
+Remove-Item scripts\release.sh
+git checkout scripts/release.sh
+```
 
 # Old Release Instructions
 The manual build steps used before the workflow are in [Release-archive.md](Release-archive.md).

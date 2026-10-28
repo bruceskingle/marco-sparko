@@ -1,0 +1,4 @@
+# Shell scripts keep Unix line endings on Windows too, where they are run in Git Bash, which cannot run them with
+# Windows ones, and Windows batch files have Windows line endings everywhere.
+*.sh text eol=lf
+*.cmd text eol=crlf
