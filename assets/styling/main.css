@@ -118,8 +118,6 @@ body {
 /* Main content fills remaining space */
 .content {
     flex: 1 1 auto;         /* fill remaining width */
-    /* Not wider than the space left, whatever the width of what is in it. */
-    min-width: 0;
     /* padding: 20px; */
     overflow: auto;
 
