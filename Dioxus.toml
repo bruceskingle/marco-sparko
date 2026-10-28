@@ -2,7 +2,9 @@
 name = "Marco Sparko"
 
 [bundle]
-icon = ["icons/icon.ico"]
+# The .ico for Windows. The .png for macOS, where dx (since 0.7.10) makes the app's .icns only from .png or .icns files,
+# and leaves the app without an icon if there are none.
+icon = ["icons/icon.ico", "assets/MarcoSparko.png"]
 identifier = "org.skingle"
 publisher = "BruceSkingle"
 
@@ -16,15 +18,6 @@ webview_install_mode = { DownloadBootstrapper = { silent = true } }
 [bundle.windows.nsis]
 # The setup.exe's own icon, which is not taken from bundle.icon.
 installer_icon = "icons/icon.ico"
-
-# chat gpt imagined this...
-# [bundle.macos]
-# minimum_system_version = "11.0"
-# 
-# [bundle.macos.dmg]
-# background = "assets/dmg-background.png"
-# window_size = [885, 430]
-# icon_positions = {     "MarcoSparko.app" = [100, 100],     "Applications" = [375, 100] }
 
 [web.app]
 
