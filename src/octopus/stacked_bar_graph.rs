@@ -549,6 +549,7 @@ pub fn StackedBarGraph(
             onresize: move |event| {
                 match event.data().get_content_box_size() {
                     Ok(size) if size.width > 0.0 && size.height > 0.0 => {
+                        log_graph_size("stacked", size.width, size.height);
                         dimensions.set(Some((size.width, size.height)));
                     }
                     Ok(_) => eprintln!("Stacked consumption graph resized to an empty size"),
@@ -737,4 +738,27 @@ mod tests {
         assert_eq!(axis_unit(StackedBarMode::Cost, gbp, "kwh", "/h"), "£/h");
         assert_eq!(axis_unit(StackedBarMode::Cost, Currency::NONE, "kwh", ""), "");
     }
+}
+
+// TEMPORARY diagnostics for the graph which shrinks and shakes on an Intel Mac: prints what the graph measured, with
+// the sizes of the window, the page and the boxes around the graph, each time it resizes. Remove once it is fixed.
+pub(crate) fn log_graph_size(graph: &'static str, width: f64, height: f64) {
+    const SIZES: &str = r#"
+        const size = (element) => {
+            const rect = element.getBoundingClientRect();
+            return `${element.tagName.toLowerCase()}.${element.getAttribute('class')} ${rect.width.toFixed(1)}x${rect.height.toFixed(1)} scroll ${element.scrollWidth}x${element.scrollHeight}`;
+        };
+        const graph = document.querySelector('.stacked-consumption-graph');
+        const boxes = [];
+        for (let element = graph; element; element = element.parentElement) {
+            boxes.push(size(element));
+        }
+        return `window ${innerWidth}x${innerHeight} dpr ${devicePixelRatio} zoom ${visualViewport ? visualViewport.scale : '?'}\n    ` + boxes.join('\n    ');
+    "#;
+    spawn(async move {
+        match document::eval(SIZES).join::<String>().await {
+            Ok(sizes) => println!("GRAPH {graph} measured {width:.1}x{height:.1}\n    {sizes}"),
+            Err(error) => println!("GRAPH {graph} measured {width:.1}x{height:.1}, sizes failed: {error:?}"),
+        }
+    });
 }

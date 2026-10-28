@@ -256,6 +256,7 @@ pub fn TrendGraph(
             onresize: move |event| {
                 match event.data().get_content_box_size() {
                     Ok(size) if size.width > 0.0 && size.height > 0.0 => {
+                        crate::octopus::stacked_bar_graph::log_graph_size("trend", size.width, size.height);
                         dimensions.set(Some((size.width, size.height)));
                     }
                     Ok(_) => eprintln!("Trend graph resized to an empty size"),
