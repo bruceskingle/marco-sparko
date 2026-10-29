@@ -27,5 +27,8 @@ pub use profile_size::ProfileSize;
 mod settings;
 pub use settings::Settings;
 
+mod devices;
+pub use devices::Devices;
+
 pub mod log_panel;
 pub mod help_panel;

@@ -1,17 +1,19 @@
-//! Reads the samples a Capture Device took of the gateway, see capture/ in this repo, and saves them as snapshots, so
-//! that the app has them for the times it was not running, e.g. while the computer slept.
+//! Reads the samples the profile's capture devices took of the gateway, see capture/ in this repo and
+//! capture_device.rs, and saves them as snapshots, so that the app has them for the times it was not running, e.g.
+//! while the computer slept.
 //!
-//! The device keeps what the app's samples use, not whole responses, see capture/src/records.rs, and only since it last
-//! started, so it should be read at least as often as it fills up, every 12 hours by default.
+//! A device keeps what the app's samples use, not whole responses, see capture/src/records.rs, on its SD card if it
+//! has one, otherwise only since it last started, in RAM.
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 
-use anyhow::anyhow;
 use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::CacheConfig;
+use crate::capture_device::{DeviceClient, DeviceProfile, StatusError};
 
 use super::snapshot;
 
@@ -21,8 +23,7 @@ use super::snapshot;
 struct Device {
     boot_time: Option<String>,
     reset_reason: Option<String>,
-    records: Option<u64>,
-    capacity: Option<u64>,
+    storage: Option<String>,
     free_heap: Option<u64>,
 }
 
@@ -33,41 +34,59 @@ struct Records {
 }
 
 pub struct CaptureClient {
-    http: reqwest::Client,
-    /// The time of the latest record read, to only ask for later ones. Not kept between runs, so the first read reads
-    /// everything the device has, saving those not already saved.
-    read_until: Mutex<Option<OffsetDateTime>>,
+    /// The time of the latest record read from each device, by its ID, to only ask for later ones. Not kept between
+    /// runs: the first read of a device asks for those after the latest snapshot in the cache.
+    read_until: Mutex<HashMap<String, OffsetDateTime>>,
 }
 
 impl CaptureClient {
-    pub fn new() -> anyhow::Result<CaptureClient> {
-        Ok(CaptureClient { http: crate::http::client_builder().build()?, read_until: Mutex::new(None) })
+    pub fn new() -> CaptureClient {
+        CaptureClient { read_until: Mutex::new(HashMap::new()) }
     }
 
-    /// Reads the device's records since the last read, saving those for which there is no snapshot yet, and returns
-    /// how many were saved. address is the device's IP address or host name, with a port if not 80.
-    pub async fn read(&self, address: &str, cache_config: &CacheConfig, progress: &mut dyn FnMut(String)) -> anyhow::Result<usize> {
+    /// Reads the records of each device which captures the gateway, saving those for which there is no snapshot yet.
+    /// Returns false if none of them does, e.g. there are none, so that the app polls the gateway itself, and an error
+    /// if none which does could be read.
+    pub async fn read(&self, devices: &[DeviceProfile], cache_config: &CacheConfig, progress: &mut dyn FnMut(String)) -> anyhow::Result<bool> {
+        let mut captures = false;
+        let mut first_error = None;
+        let mut read_any = false;
+        for device in devices {
+            match self.read_device(device, cache_config, progress).await {
+                Ok(()) => {
+                    captures = true;
+                    read_any = true;
+                }
+                // It does not capture the gateway.
+                Err(error) if error.downcast_ref::<StatusError>().is_some_and(|error| error.status == 404) => {}
+                Err(error) => {
+                    captures = true;
+                    crate::log_warning!("Unable to read the capture device {}, {error:#}", device.id);
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        match first_error {
+            Some(error) if !read_any => Err(error),
+            _ => Ok(captures),
+        }
+    }
+
+    async fn read_device(&self, device: &DeviceProfile, cache_config: &CacheConfig, progress: &mut dyn FnMut(String)) -> anyhow::Result<()> {
         if cache_config.offline {
-            return Err(anyhow!("This profile is offline, so nothing can be fetched"));
+            return Err(anyhow::anyhow!("This profile is offline, so nothing can be fetched"));
         }
-        let base = if address.contains("://") { address.trim_end_matches('/').to_string() } else { format!("http://{address}") };
-        let mut url = reqwest::Url::parse(&format!("{base}/capture/tesla/records"))?;
-        let since = *self.read_until.lock().unwrap();
-        if let Some(since) = since {
-            url.query_pairs_mut().append_pair("since", &since.format(&Rfc3339)?);
-        }
-        progress(format!("Reading the capture device at {address}"));
-        crate::log_info!("Capture device GET {url}");
-        let response = self.http.get(url).send().await?;
-        let status = response.status();
-        let text = response.text().await?;
-        if !status.is_success() {
-            return Err(anyhow!("the capture device responded {status}: {}", crate::http::summary(&text)));
-        }
-        let records: Records = serde_json::from_str(&text)?;
-        let device = &records.device;
-        crate::log_info!("Capture device at {address}: {} records new, {:?} of {:?} kept, started {:?} after {:?}, free heap {:?}",
-            records.records.len(), device.records, device.capacity, device.boot_time, device.reset_reason, device.free_heap);
+        let known = self.read_until.lock().unwrap().get(&device.id).copied();
+        let since = known.or_else(|| snapshot::latest(cache_config).as_ref().and_then(snapshot::time_of));
+        let query: Vec<(&str, String)> = since.map(|since| since.format(&Rfc3339)).transpose()?
+            .into_iter().map(|since| ("since", since)).collect();
+        progress(format!("Reading the capture device {}", device.id));
+        crate::log_info!("Capture device {} GET /api/capture/tesla/records {query:?}", device.id);
+        let json = DeviceClient::for_device(device)?.get_query("capture/tesla/records", &query).await?;
+        let records: Records = serde_json::from_value(json)?;
+        let info = &records.device;
+        crate::log_info!("Capture device {}: {} records new, kept on {:?}, started {:?} after {:?}, free heap {:?}",
+            device.id, records.records.len(), info.storage, info.boot_time, info.reset_reason, info.free_heap);
 
         let mut saved = 0;
         let mut latest = since;
@@ -81,8 +100,10 @@ impl CaptureClient {
             }
             latest = latest.max(Some(time));
         }
-        *self.read_until.lock().unwrap() = latest;
-        progress(format!("Saved {saved} of the {} new samples from the capture device", records.records.len()));
-        Ok(saved)
+        if let Some(latest) = latest {
+            self.read_until.lock().unwrap().insert(device.id.clone(), latest);
+        }
+        progress(format!("Saved {saved} of the {} new samples from the capture device {}", records.records.len(), device.id));
+        Ok(())
     }
 }

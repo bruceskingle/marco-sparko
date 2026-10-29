@@ -232,7 +232,8 @@ pub fn save_redacted_profile(source: &Profile, name: &str, as_of: Option<i64>) -
         name: name.to_string(),
         version: source.version.clone(),
         modules,
-        settings: source.settings.clone(),
+        // Not the capture devices, whose keys would let anyone with the copy manage them.
+        settings: Settings { capture_devices: Vec::new(), ..source.settings.clone() },
         offline: true,
         as_of,
     });
@@ -417,6 +418,9 @@ pub struct Settings {
     pub log: crate::logging::LogSettings,
     #[serde(default)]
     pub help: crate::help::HelpSettings,
+    /// The capture devices this profile has adopted, see capture_device.rs, saved by update_capture_devices.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capture_devices: Vec<crate::capture_device::DeviceProfile>,
 }
 
 /// Saves the settings of the profile.
@@ -426,10 +430,25 @@ pub fn update_settings(profile_name: &str, settings: &Settings) -> anyhow::Resul
     let profile = profile_file.iter_mut()
         .find(|profile| profile_names_equal(&profile.name, profile_name))
         .ok_or_else(|| anyhow!("No such profile \"{}\"", profile_name))?;
-    // Whether the help is shown is saved by update_help_settings, from any window, so it is not overwritten here.
+    // Whether the help is shown is saved by update_help_settings, from any window, and the capture devices by
+    // update_capture_devices, so they are not overwritten here.
     let help = profile.settings.help.clone();
+    let capture_devices = std::mem::take(&mut profile.settings.capture_devices);
     profile.settings = settings.clone();
     profile.settings.help = help;
+    profile.settings.capture_devices = capture_devices;
+    serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
+    Ok(())
+}
+
+/// Saves the capture devices the profile has adopted, see capture_device.rs.
+pub fn update_capture_devices(profile_name: &str, devices: &[crate::capture_device::DeviceProfile]) -> anyhow::Result<()> {
+    let file = fs::File::open(&MarcoSparkoContext::get_file_path()?)?;
+    let mut profile_file: ProfileFile = serde_json::from_reader(file)?;
+    let profile = profile_file.iter_mut()
+        .find(|profile| profile_names_equal(&profile.name, profile_name))
+        .ok_or_else(|| anyhow!("No such profile \"{}\"", profile_name))?;
+    profile.settings.capture_devices = devices.to_vec();
     serde_json::to_writer_pretty(private_file::create_private_file(&MarcoSparkoContext::get_file_path()?)?, &profile_file)?;
     Ok(())
 }

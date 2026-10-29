@@ -7,7 +7,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'marco-sparko'",
+            "name": "Unit Tests",
+            "presentation": { "group": "3 Tests", "order": 1 },
             "cargo": {
                 "args": [
                     "test",
@@ -131,7 +132,8 @@
         // },
         // The last build, without building it again.
         {
-            "name": "Debug Pre-built app",
+            "name": "App: Already Built, No Rebuild",
+            "presentation": { "group": "1 App", "order": 3 },
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/marco-sparko",
@@ -146,7 +148,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug Dioxus Desktop App",
+            "name": "App",
+            "presentation": { "group": "1 App", "order": 1 },
             "cargo": {
                 "args": [
                     "build",
@@ -175,7 +178,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug Dioxus Desktop App (demo)",
+            "name": "App: Demo Profile",
+            "presentation": { "group": "1 App", "order": 2 },
             "cargo": {
                 "args": [
                     "build",
@@ -207,7 +211,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug Fetch Latest Data",
+            "name": "Fetch Latest Data",
+            "presentation": { "group": "2 Tools", "order": 1 },
             "cargo": {
                 "args": [
                     "build",
@@ -237,6 +242,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Redact Profile into Demo",
+            "presentation": { "group": "2 Tools", "order": 2 },
             "cargo": {
                 "args": [
                     "build",
@@ -269,6 +275,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Take Screenshots",
+            "presentation": { "group": "2 Tools", "order": 4 },
             "cargo": {
                 "args": [
                     "build",
@@ -300,6 +307,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Redact Docs",
+            "presentation": { "group": "2 Tools", "order": 3 },
             "cargo": {
                 "args": [
                     "build",
@@ -323,37 +331,8 @@
                 "RUST_BACKTRACE": "1",
                 "OS_ACTIVITY_MODE": "disable"
             }
-        },
-        // Serves the documentation book, see book.toml, at http://localhost:3000 and opens it in the browser. It is
-        // rebuilt and the browser reloaded whenever a file in docs or book changes. Stop it to stop the server. Needs
-        // mdBook, install it with: cargo binstall mdbook
-        {
-            "type": "node-terminal",
-            "request": "launch",
-            "name": "Serve Documentation Book",
-            "command": "mdbook serve --open",
-            "cwd": "${workspaceFolder}"
-        },
-        // Builds the capture device's firmware, see capture/README.md, flashes it to the CYD plugged in by USB, showing
-        // its progress, then shows the device's log. Ctrl+R restarts the device, Ctrl+C stops showing the log, the
-        // device runs on. 460800 baud is 4 times faster than espflash's default (921600 fails on the CYD), take --baud out if flashing fails.
-        {
-            "type": "node-terminal",
-            "request": "launch",
-            "name": "Flash Capture Device",
-            "command": "cargo build --release && espflash flash --baud 460800 --monitor target/xtensa-esp32-espidf/release/marco-sparko-capture",
-            "cwd": "${workspaceFolder}/capture"
-        },
-        // Shows the log of the ESP32 plugged in by USB, without restarting it, see capture/log.py. Ctrl+C stops it, the
-        // device runs on. Not espflash monitor, which stops the device even with --no-reset. Stop it before flashing.
-        {
-            "type": "node-terminal",
-            "request": "launch",
-            "name": "Capture Device Log",
-            "command": "python3 log.py",
-            "cwd": "${workspaceFolder}/capture"
         }
-        // The same as Debug Dioxus Desktop App, without verbose output.
+        // The same as App, without verbose output.
         // {
         //     "type": "lldb",
         //     "request": "launch",

@@ -48,8 +48,6 @@ pub struct Profile {
     /// The email and password of the gateway's customer login, kept so that it can log in again when its token expires.
     pub email: Option<String>,
     pub password: Option<String>,
-    /// The address of a capture device which polls the gateway, see capture.rs, which is read instead of the gateway.
-    pub capture_device: Option<String>,
 }
 
 /// Debug output is used in verbose mode, so the password is hidden.
@@ -60,7 +58,6 @@ impl std::fmt::Debug for Profile {
             .field("din", &self.din)
             .field("email", &self.email)
             .field("password", &self.password.as_ref().map(|_| sparko_graphql::redact::REDACTED))
-            .field("capture_device", &self.capture_device)
             .finish()
     }
 }
@@ -87,10 +84,9 @@ impl TeslaContext {
         Ok(())
     }
 
-    /// Takes a snapshot, finding the gateway again first if it does not answer at its address, and saving the token it
-    /// gives. If the password is rejected it is removed from the profile, so that it is not tried again.
     /// Reads the module's profile again, as the pages and the poller each build their own module, see polling::build,
-    /// so a change saved by one, e.g. the capture device, is not otherwise seen by the other until the app restarts.
+    /// so a change saved by one, e.g. a rejected password removed, is not otherwise seen by the other until the app
+    /// restarts.
     fn reload_profile(&self) {
         let name = self.context.profile.active_profile.name.clone();
         let profile = crate::profile::fetch_active_profile(&Some(name))
@@ -102,12 +98,16 @@ impl TeslaContext {
         }
     }
 
-    /// With a capture device, reads the samples it took instead, as it polls the gateway, so the app does not.
+    /// Takes a snapshot, finding the gateway again first if it does not answer at its address, and saving the token it
+    /// gives. If the password is rejected it is removed from the profile, so that it is not tried again.
+    ///
+    /// If any of the profile's capture devices polls the gateway, reads the samples they took instead, see capture.rs,
+    /// so that the app does not poll it too.
     async fn take_snapshot(&self, slot: Option<time::OffsetDateTime>, progress: &mut dyn FnMut(String)) -> anyhow::Result<()> {
         self.reload_profile();
-        let capture_device = self.profile.lock().unwrap().capture_device.clone();
-        if let Some(address) = capture_device {
-            return self.capture.read(&address, &self.cache_config, progress).await.map(|_| ());
+        let devices = crate::capture_device::adopted_devices(&self.context.profile.active_profile.name);
+        if self.capture.read(&devices, &self.cache_config, progress).await? {
+            return Ok(());
         }
         let din = self.profile.lock().unwrap().din.clone();
         if let Some(din) = din.filter(|_| !self.cache_config.offline) {
@@ -247,21 +247,8 @@ fn PowerwallPage(context: SharedProp<TeslaContext>) -> Element {
     let time = latest.as_ref().and_then(snapshot::time_of).map(crate::util::local_date_time).unwrap_or_default();
     let meters = latest.as_ref().map(snapshot::meters).unwrap_or_default();
     let charge = latest.as_ref().and_then(|snapshot| snapshot.pointer("/responses/system_status~1soe/percentage")).and_then(|value| value.as_f64());
-    let saved_device = context.0.profile.lock().unwrap().capture_device.clone();
-    let mut capture_device = use_signal(|| saved_device.clone().unwrap_or_default());
-    let save_device = {
-        let context = context.clone();
-        move |_| {
-            let address = capture_device().trim().to_string();
-            context.0.reload_profile();
-            let profile = Profile { capture_device: Some(address).filter(|address| !address.is_empty()), ..context.0.profile.lock().unwrap().clone() };
-            messages.set(Vec::new());
-            match context.0.save_profile(profile) {
-                Ok(()) => generation += 1,
-                Err(error) => messages.write().push(format!("Unable to save the capture device, {error:#}")),
-            }
-        }
-    };
+    // Which the button reads, if the profile has any, see TeslaContext::take_snapshot.
+    let has_devices = !use_context::<Signal<crate::profile::Settings>>().read().capture_devices.is_empty();
     let take = move |_| {
         let context = context.clone();
         spawn(async move {
@@ -280,18 +267,8 @@ fn PowerwallPage(context: SharedProp<TeslaContext>) -> Element {
         p {
             "What the gateway said at the time of the latest snapshot. Power is in kW, positive when importing from the grid or discharging the battery. Energy is in kWh since the gateway was installed."
         }
-        p {
-            "Capture device: "
-            input {
-                r#type: "text",
-                placeholder: "Its IP address, or empty to poll the gateway",
-                value: "{capture_device}",
-                oninput: move |e| capture_device.set(e.value()),
-            }
-            button { onclick: save_device, "Save" }
-        }
-        if saved_device.is_some() {
-            button { disabled: busy(), onclick: take, if busy() { "Reading the capture device..." } else { "Read the Capture Device" } }
+        if has_devices {
+            button { disabled: busy(), onclick: take, if busy() { "Reading the capture devices..." } else { "Read the Capture Devices" } }
         } else {
             button { disabled: busy(), onclick: take, if busy() { "Taking a snapshot..." } else { "Take a Snapshot" } }
         }
@@ -441,7 +418,7 @@ impl ModuleFactory for TeslaModuleFactory {
     async fn is_ready(&self) -> anyhow::Result<bool> {
         // An offline profile has no login, it only shows its cached data, see Profile::offline.
         Ok(self.context.profile.active_profile.offline
-            || self.profile.capture_device.is_some()
+            || !self.context.profile.active_profile.settings.capture_devices.is_empty()
             || (self.profile.gateway_host.is_some() && self.profile.email.is_some() && self.profile.password.is_some()))
     }
 
@@ -569,7 +546,7 @@ impl ModuleFactory for TeslaModuleFactory {
         Ok(Box::new(TeslaModule {
             context: Arc::new(TeslaContext {
                 client,
-                capture: CaptureClient::new()?,
+                capture: CaptureClient::new(),
                 cache_config: self.cache_config.clone(),
                 context: self.context.clone(),
                 profile: Mutex::new(self.profile.clone()),

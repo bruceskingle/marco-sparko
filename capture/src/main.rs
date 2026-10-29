@@ -31,6 +31,7 @@ fn main() -> anyhow::Result<()> {
         ))?
         .with_feature(Box::new(tesla::TeslaCapture::new()))?
         .with_display_orientation(DisplayOrientation::Rotate0)?
+        .with_firmware(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
         .build()?;
 
     sparko_esp32.start()

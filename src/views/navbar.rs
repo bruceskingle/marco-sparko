@@ -65,6 +65,8 @@ pub fn Navbar() -> Element {
     };
     // The help of the module screen being shown, which the Module view sets.
     let module_help_topic = use_context_provider(|| crate::help::ModuleHelpTopic(Signal::new(None)));
+    // The help of the Home page being shown, which Home sets.
+    let home_help_topic = use_context_provider(|| crate::help::HomeHelpTopic(Signal::new("home.md")));
 
     let mut all = Vec::new();
     for name in &context.profile.all_profiles {
@@ -75,7 +77,7 @@ pub fn Navbar() -> Element {
     let current_route = use_route::<Route>();
     let navigator = use_navigator();
     let help_topic = match &current_route {
-        Route::Home {} => String::from("home.md"),
+        Route::Home {} => String::from(home_help_topic.0()),
         Route::ProfileSize { .. } => String::from("profile-size.md"),
         Route::Settings {} => String::from("settings.md"),
         Route::Module { module_id } => module_help_topic.0().unwrap_or_else(|| format!("{module_id}/index.md")),

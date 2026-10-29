@@ -27,6 +27,16 @@ pub fn Home(
     let mut upgrade_requested = use_context::<Signal<UpgradeRequested>>();
     // The page of Home which is shown, see HOME_PAGES.
     let mut page = use_signal(|| HOME_PAGES[0].path);
+    // The help follows the page shown, see the Navbar.
+    let home_help = try_use_context::<crate::help::HomeHelpTopic>();
+    use_effect(move || {
+        let topic = if page() == "devices" { "devices.md" } else { "home.md" };
+        if let Some(mut help) = home_help
+            && *help.0.peek() != topic
+        {
+            help.0.set(topic);
+        }
+    });
 
     let profile = &context.profile.active_profile;
     let profile_version = &context.profile.active_profile.version.to_string();
@@ -217,6 +227,7 @@ pub fn Home(
                     on_select: move |path: &'static str| page.set(path),
                     match page() {
                         "polling" => rsx! { PollingPage {} },
+                        "devices" => rsx! { super::Devices {} },
                         _ => modules_page,
                     }
                 }
@@ -226,7 +237,8 @@ pub fn Home(
 }
 
 /// The pages of Home, the first of which is shown first.
-const HOME_PAGES: [PageInfo; 2] = [
+const HOME_PAGES: [PageInfo; 3] = [
     PageInfo { label: "Modules", path: "modules" },
     PageInfo { label: "Polling", path: "polling" },
+    PageInfo { label: "Devices", path: "devices" },
 ];

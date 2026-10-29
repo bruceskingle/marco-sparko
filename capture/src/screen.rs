@@ -27,8 +27,9 @@ pub struct Screen<DM: DisplayManager> {
     display_manager: Arc<Mutex<DM>>,
     store: Arc<Mutex<Store>>,
     area: Rectangle,
-    /// The store's generation last shown, so that it is only redrawn when it changes.
-    shown: Option<u32>,
+    /// The store's and display's generations last shown, so that it is only redrawn when either changes, e.g. after
+    /// adoption's pairing code has been shown, see DisplayManager::generation.
+    shown: Option<(u32, u32)>,
 }
 
 impl<DM: DisplayManager> Screen<DM> {
@@ -66,9 +67,11 @@ fn lines(store: &Store) -> Vec<(String, bool)> {
         None => lines.push(("Waiting for first poll".to_string(), false)),
         Some(poll) => {
             let time = poll.time.with_timezone(&Local).format("%H:%M");
-            match &poll.error {
-                None => lines.push((format!("Polled {time}"), false)),
-                Some(error) => lines.push((format!("{time} {error}"), true)),
+            match (&poll.error, store.storage_problem()) {
+                (None, None) => lines.push((format!("Polled {time}"), false)),
+                // e.g. no SD card, so the records will be lost when the device restarts.
+                (None, Some(_)) => lines.push((format!("Polled {time}, no SD"), true)),
+                (Some(error), _) => lines.push((format!("{time} {error}"), true)),
             }
         }
     }
@@ -86,12 +89,16 @@ impl<DM: DisplayManager> ScheduledTask<Esp32Platform> for Screen<DM> {
             let store = self.store.lock().unwrap();
             (store.generation(), lines(&store))
         };
-        if self.shown == Some(generation) {
+        let mut manager = self.display_manager.lock().unwrap();
+        if manager.overlay_active() {
             return Ok(());
         }
-        self.shown = Some(generation);
+        let shown = (generation, manager.generation());
+        if self.shown == Some(shown) {
+            return Ok(());
+        }
+        self.shown = Some(shown);
 
-        let mut manager = self.display_manager.lock().unwrap();
         let background = manager.map_color(&Color::Black);
         let text = MonoTextStyle::new(&FONT_10X20, manager.map_color(&Color::White));
         let warning = MonoTextStyle::new(&FONT_10X20, manager.map_color(&Color::Yellow));

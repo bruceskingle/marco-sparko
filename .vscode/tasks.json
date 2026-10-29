@@ -1,4 +1,41 @@
 {
+	// Things which only run a command, in a terminal, rather than debug: Terminal > Run Task, or Tasks: Run Task from
+	// the Command Palette, picks one and runs it. The debugging ones are in launch.json.
 	"version": "2.0.0",
-	"tasks": []
+	"tasks": [
+		{
+			// Builds the capture device's firmware, see capture/README.md, flashes it to the ESP32 plugged in by USB,
+			// showing its progress, then shows the device's log. Ctrl+R restarts the device, Ctrl+C stops showing the
+			// log, the device runs on. 460800 baud is 4 times faster than espflash's default (921600 fails on the CYD),
+			// take --baud out if flashing fails. Stop Device: Log first, as it holds the port.
+			"label": "Device: Flash",
+			"type": "shell",
+			"command": "cargo build --release && espflash flash --baud 460800 --monitor target/xtensa-esp32-espidf/release/marco-sparko-capture",
+			"options": { "cwd": "${workspaceFolder}/capture" },
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "focus": true, "panel": "dedicated" }
+		},
+		{
+			// Shows the log of the ESP32 plugged in by USB, without restarting it, see capture/log.py. Ctrl+C stops it,
+			// the device runs on. Not espflash monitor, which stops the device even with --no-reset.
+			"label": "Device: Log",
+			"type": "shell",
+			"command": "python3 log.py",
+			"options": { "cwd": "${workspaceFolder}/capture" },
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "focus": true, "panel": "dedicated" }
+		},
+		{
+			// Serves the documentation book, see book.toml, at http://localhost:3000 and opens it in the browser. It is
+			// rebuilt and the browser reloaded whenever a file in docs or book changes. Stop it to stop the server. Needs
+			// mdBook, install it with: cargo binstall mdbook
+			"label": "Docs: Serve Book",
+			"type": "shell",
+			"command": "mdbook serve --open",
+			"options": { "cwd": "${workspaceFolder}" },
+			"problemMatcher": [],
+			"isBackground": true,
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		}
+	]
 }

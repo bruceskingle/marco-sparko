@@ -28,7 +28,7 @@ use sparko_embedded_std::platform::PlatformInitializer;
 use sparko_embedded_std::task::scheduler::ScheduledTask;
 use sparko_esp_idf::{Esp32Platform, Esp32PlatformInitializer, Feature};
 
-use crate::records::{ENDPOINTS, Record, Response, Store, format_time};
+use crate::records::{self, ENDPOINTS, Record, Response, Store, format_time};
 use crate::screen::Screen;
 
 /// The feature's name, which is also its NVS namespace, so at most 15 characters.
@@ -96,8 +96,9 @@ impl Feature for TeslaCapture {
             .map(|schedule| schedule.pattern.to_string())
             .unwrap_or_else(|| DEFAULT_SCHEDULE.to_string());
         let capacity = config.tesla_capacity.filter(|capacity| *capacity > 0).unwrap_or(DEFAULT_CAPACITY);
-        let store = Arc::new(Mutex::new(Store::new(capacity as usize)));
-        let device = Device::new();
+        let dir = sparko.sd_card().map(|mount_point| std::path::Path::new(mount_point).join("capture").join("tesla"));
+        let store = Arc::new(Mutex::new(Store::new(capacity as usize, dir, CAPTURED_BY)));
+        let device = Arc::new(Device::new());
 
         let mut poll = PollTask {
             gateway: Gateway {
@@ -119,26 +120,62 @@ impl Feature for TeslaCapture {
         poll.poll(sparko, None);
         initializer.add_task(Box::new(poll), &schedule_spec)?;
 
-        sparko.server_manager.on("/capture/tesla/records", Method::Get, move |request| {
-            let since = since(request.uri());
-            let mut response = request.into_response(200, None, &[("Content-Type", "application/json")])?;
-            let store = store.lock().unwrap();
-            // Written a record at a time, as all of them would not fit in the RAM as one piece of JSON.
-            response.write_all(b"{\"device\":")?;
-            response.write_all(&serde_json::to_vec(&device.to_json(&store))?)?;
-            response.write_all(b",\"records\":[")?;
-            for (index, record) in store.since(since).enumerate() {
-                if index > 0 {
-                    response.write_all(b",")?;
-                }
-                response.write_all(&serde_json::to_vec(&record.to_json(CAPTURED_BY))?)?;
-            }
-            response.write_all(b"]}")?;
-            Ok(())
-        })?;
+        // Only on the API, which once the device has been adopted needs the app's key, as the records say when the
+        // house is empty.
+        if let Some(api_server) = sparko.api_server.as_mut() {
+            api_server.on("/api/capture/tesla/records", Method::Get, move |request| {
+                serve_records(request, &store, &device)
+            })?;
+        }
 
         Ok(())
     }
+}
+
+/// The records since the time in the request's since parameter, see since, and the device's details, as
+/// {"device": {...}, "records": [...]}: from the SD card if there is one, see records::write_files_since, otherwise
+/// those in RAM.
+fn serve_records(
+    request: esp_idf_svc::http::server::Request<&mut esp_idf_svc::http::server::EspHttpConnection<'_>>,
+    store: &Mutex<Store>,
+    device: &Device,
+) -> anyhow::Result<()> {
+    let since = since(request.uri());
+    let mut response = request.into_response(200, None, &[("Content-Type", "application/json")])?;
+    // Written a record at a time, as all of them would not fit in the RAM as one piece of JSON.
+    let (files, device_json) = {
+        let store = store.lock().unwrap();
+        (store.files(), device.to_json(&store))
+    };
+    response.write_all(b"{\"device\":")?;
+    response.write_all(&serde_json::to_vec(&device_json)?)?;
+    response.write_all(b",\"records\":[")?;
+    let mut first = true;
+    let mut write = |record: &[u8]| -> anyhow::Result<()> {
+        if !first {
+            response.write_all(b",")?;
+        }
+        first = false;
+        response.write_all(record)?;
+        Ok(())
+    };
+    let result = match files {
+        // Not holding the store, so that polling carries on while a few days are read.
+        Some(dir) => records::write_files_since(&dir, since, &mut write).map(|_| ()),
+        None => {
+            let store = store.lock().unwrap();
+            store.since(since).try_for_each(|record| write(&serde_json::to_vec(&record.to_json(store.captured_by()))?))
+        }
+    };
+    response.write_all(b"]")?;
+    // Those before it have been sent, so the app can still save them, and see why there are no more.
+    if let Err(error) = result {
+        warn!("Unable to read the records, {error:#}");
+        response.write_all(b",\"recordsError\":")?;
+        response.write_all(&serde_json::to_vec(&format!("{error:#}"))?)?;
+    }
+    response.write_all(b"}")?;
+    Ok(())
 }
 
 /// The since parameter of the query string, an RFC 3339 time, e.g. ?since=2026-10-29T07:30:00Z
@@ -176,8 +213,10 @@ impl Device {
             "now": format_time(Utc::now()),
             "bootTime": format_time(self.boot_time),
             "resetReason": self.reset_reason,
-            "records": store.len(),
-            "capacity": store.capacity(),
+            "storage": store.storage(),
+            "storageProblem": store.storage_problem(),
+            "recordsInRam": store.len(),
+            "ramCapacity": store.capacity(),
             "freeHeap": unsafe { esp_idf_sys::esp_get_free_heap_size() },
             "minimumFreeHeap": unsafe { esp_idf_sys::esp_get_minimum_free_heap_size() },
         })

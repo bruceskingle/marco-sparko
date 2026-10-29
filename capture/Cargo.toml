@@ -23,7 +23,7 @@ url = "2.5.8"
 embedded-graphics = "0.8"
 
 sparko-embedded-std = { path = "../../sparko-embedded-std/libs/sparko-embedded-std" }
-sparko-esp-idf = { path = "../../sparko-embedded-std/libs/sparko-esp-idf", features = ["board-cyd"] }
+sparko-esp-idf = { path = "../../sparko-embedded-std/libs/sparko-esp-idf", features = ["board-cyd", "sd-card"] }
 
 esp-idf-svc = { version = "0.52.1", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 # Remove `generic-queue-8` if you plan to use `embassy-time` WITH `embassy-executor`

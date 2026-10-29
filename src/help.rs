@@ -40,6 +40,7 @@ static PAGES: &[HelpPage] = help_pages![
     "home.md",
     "profile-size.md",
     "settings.md",
+    "devices.md",
     "log.md",
     "date-range.md",
     "graphs.md",
@@ -168,6 +169,10 @@ pub fn to_html(path: &str, markdown: &str) -> String {
 /// The help page of the screen being shown in a module, set by the module's view with use_help_topic, see the Navbar.
 #[derive(Clone, Copy)]
 pub struct ModuleHelpTopic(pub Signal<Option<String>>);
+
+/// The help page of the Home page being shown, e.g. devices.md, set by Home, see the Navbar.
+#[derive(Clone, Copy)]
+pub struct HomeHelpTopic(pub Signal<&'static str>);
 
 /// Sets the help page of the module screen being shown, if it has one. Does nothing outside the main window.
 pub fn use_help_topic(topic: Option<String>) {

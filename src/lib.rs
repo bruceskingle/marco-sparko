@@ -6,6 +6,7 @@ mod octopus;
 mod myenergi;
 mod tesla;
 mod http;
+pub mod capture_device;
 mod cache_browser;
 pub mod polling;
 pub mod util;

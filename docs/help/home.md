@@ -14,6 +14,10 @@ Some data is only available for a while, and nothing else keeps it, such as what
 
 Polling stops while the app is closed or the computer is asleep. The devices' totals carry on counting meanwhile, so the energy of that time is still counted, only not when within it it was used. The zappi's charge added is only kept until the car is next plugged in, so open the app before plugging in the car.
 
+## Devices
+
+Devices lists the [capture devices](devices.md) the profile has adopted, small always-on boards which fetch data while this computer sleeps, and adopts more.
+
 The buttons at the top right:
 
 - ![Help](icons/help.svg) shows or hides this help.

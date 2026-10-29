@@ -13,7 +13,7 @@ From this directory, with the ESP Rust toolchain installed (see sparko-embedded-
 - `python3 log.py` shows its log without restarting it (needs pyserial). Not `espflash monitor`, which restarts
   it, or with `--no-reset` leaves it stopped in its bootloader.
 
-In VS Code, the Run and Debug list has **Flash Capture Device** and **Capture Device Log**.
+In VS Code, Terminal > Run Task has **Device: Flash** and **Device: Log**.
 
 ## Setting it up
 
@@ -46,3 +46,7 @@ Then enter the device's IP address on the app's Powerwall page.
   `system_status/grid_status` and `operation`, keeping only the fields the app uses.
 
 The records are only kept in RAM, so they are lost when the device restarts.
+
+The same records are at `https://<device>/api/capture/tesla/records`, on the device's HTTPS API, which also has
+`/api/info`, `/api/config` and `/api/restart`, see sparko-embedded-std's CLAUDE.md. Its certificate is the device's
+own, so use `curl -k` for now; the app will pin its fingerprint, from `/api/info`, when it adopts the device.

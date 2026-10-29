@@ -20,6 +20,7 @@
     - [Home](help/home.md)
     - [Profile](help/profile-size.md)
     - [Settings](help/settings.md)
+    - [Capture Devices](help/devices.md)
     - [The Log](help/log.md)
     - [Choosing Dates](help/date-range.md)
     - [Using the Graphs](help/graphs.md)

@@ -1101,6 +1101,40 @@ button.danger:disabled {
     margin-top: 12px;
 }
 
+/* The Capture Devices page. */
+.device-card {
+    max-width: 60em;
+    margin: 12px 0 24px 0;
+    padding: 4px 16px 12px 16px;
+    border: 1px solid rgb(61, 61, 61);
+    border-radius: 8px;
+}
+
+.device-details th {
+    text-align: left;
+    font-weight: normal;
+    padding-right: 16px;
+}
+
+.device-feature {
+    margin: 12px 0;
+    border: 1px solid rgb(61, 61, 61);
+    border-radius: 6px;
+}
+
+.device-setting {
+    display: grid;
+    grid-template-columns: 12em auto auto 1fr;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+}
+
+/* A setting changed but not yet saved. */
+.device-setting.changed span:first-child {
+    color: var(--ok);
+}
+
 /* The explanation on an open bill, which Octopus has not issued yet. */
 .open-bill-note {
     max-width: 60em;
