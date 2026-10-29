@@ -333,6 +333,25 @@
             "name": "Serve Documentation Book",
             "command": "mdbook serve --open",
             "cwd": "${workspaceFolder}"
+        },
+        // Builds the capture device's firmware, see capture/README.md, flashes it to the CYD plugged in by USB, showing
+        // its progress, then shows the device's log. Ctrl+R restarts the device, Ctrl+C stops showing the log, the
+        // device runs on. 460800 baud is 4 times faster than espflash's default (921600 fails on the CYD), take --baud out if flashing fails.
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Flash Capture Device",
+            "command": "cargo build --release && espflash flash --baud 460800 --monitor target/xtensa-esp32-espidf/release/marco-sparko-capture",
+            "cwd": "${workspaceFolder}/capture"
+        },
+        // Shows the log of the ESP32 plugged in by USB, without restarting it, see capture/log.py. Ctrl+C stops it, the
+        // device runs on. Not espflash monitor, which stops the device even with --no-reset. Stop it before flashing.
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Capture Device Log",
+            "command": "python3 log.py",
+            "cwd": "${workspaceFolder}/capture"
         }
         // The same as Debug Dioxus Desktop App, without verbose output.
         // {

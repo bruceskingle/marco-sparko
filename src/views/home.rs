@@ -1,6 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{MarcoSparkoContext, ModuleRegistrations, UpgradeRequested, components::app::Route, profile::CURRENT_VERSION};
+use crate::{MarcoSparkoContext, ModuleRegistrations, PageInfo, UpgradeRequested, components::app::Route, profile::CURRENT_VERSION};
+
+use super::polling::PollingPage;
+use super::sidebar::SidebarLayout;
 use dioxus::prelude::*;
 
 
@@ -19,8 +22,11 @@ pub fn Home(
     let opt_context = &*context_signal.read();
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
-    let mut modules = HashMap::new();
+    // By name, so that they are always in the same order.
+    let mut modules = BTreeMap::new();
     let mut upgrade_requested = use_context::<Signal<UpgradeRequested>>();
+    // The page of Home which is shown, see HOME_PAGES.
+    let mut page = use_signal(|| HOME_PAGES[0].path);
 
     let profile = &context.profile.active_profile;
     let profile_version = &context.profile.active_profile.version.to_string();
@@ -137,21 +143,23 @@ pub fn Home(
                 rsx!( "" )
             }?;
 
-            rsx! {
+            let modules_page = rsx! {
                 div {
                     // h1 { "This is Home #{xid}!" }
                     // Sized here too, so that it is not shown at the image's full size until the stylesheet has loaded.
                     img { class: "home-icon", src: APP_ICON, alt: "Marco Sparko", width: "128", height: "128" }
                     h1 { "Modules" }
                     for (module_id , active) in modules {
-                        Link {
-                            class: "nav-item",
-                            to: Route::Module {
-                                module_id: module_id.clone(),
-                            },
-                            "{module_id}"
+                        div {
+                            Link {
+                                class: "nav-item",
+                                to: Route::Module {
+                                    module_id: module_id.clone(),
+                                },
+                                "{module_id}"
+                            }
+                            " [{active}]"
                         }
-                        " [{active}]"
                     }
                     h2 { "Data Directory" }
                     p { "{data_directory}" }
@@ -200,7 +208,25 @@ pub fn Home(
                     }
                     {debug}
                 }
+            };
+
+            rsx! {
+                SidebarLayout {
+                    pages: HOME_PAGES.to_vec(),
+                    active: page(),
+                    on_select: move |path: &'static str| page.set(path),
+                    match page() {
+                        "polling" => rsx! { PollingPage {} },
+                        _ => modules_page,
+                    }
+                }
             }
         }
     }
 }
+
+/// The pages of Home, the first of which is shown first.
+const HOME_PAGES: [PageInfo; 2] = [
+    PageInfo { label: "Modules", path: "modules" },
+    PageInfo { label: "Polling", path: "polling" },
+];

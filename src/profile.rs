@@ -219,6 +219,7 @@ pub fn save_redacted_profile(source: &Profile, name: &str, as_of: Option<i64>) -
     let mut profiles: ProfileFile = serde_json::from_reader(fs::File::open(&MarcoSparkoContext::get_file_path()?)?)?;
     profiles.retain(|profile| !profile_names_equal(&profile.name, name));
     let modules = source.modules.iter()
+        .filter(|(module_id, _)| crate::redact::is_redactable(module_id))
         .map(|(module_id, module)| {
             let mut module = module.clone();
             if let Some(module) = module.as_object_mut() {

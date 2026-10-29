@@ -22,6 +22,44 @@ pub struct MonthBucket {
 }
 
 impl CacheConfig {
+    /// The module's cache directory, which holds all its cache files.
+    pub fn dir_path(&self) -> &std::path::Path {
+        &self.dir_path
+    }
+
+    /// The cache files whose hash key starts with key, e.g. snapshot- for 2026/October/28#snapshot-134054, newest
+    /// first by when they were written.
+    pub fn files_with_key(&self, key: &str) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        let mut dirs = vec![self.dir_path.clone()];
+        while let Some(dir) = dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                }
+                else if path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.contains(&format!("#{key}"))) {
+                    if let Ok(modified) = entry.metadata().and_then(|metadata| metadata.modified()) {
+                        found.push((modified, path));
+                    }
+                }
+            }
+        }
+        found.sort_by(|a, b| b.0.cmp(&a.0));
+        found.into_iter().map(|(_, path)| path).collect()
+    }
+
+    /// The contents of a JSON cache file, None if it cannot be read.
+    pub fn read_json(path: &std::path::Path) -> Option<serde_json::Value> {
+        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    }
+
+    /// The contents of the latest cache file whose hash key starts with key, see files_with_key.
+    pub fn latest_json(&self, key: &str) -> Option<serde_json::Value> {
+        Self::read_json(self.files_with_key(key).first()?)
+    }
+
     pub fn path_for_hash_key(&self, hash_key: &str) -> PathBuf {
         let mut path = self.dir_path.clone();
         path.push(hash_key);
@@ -48,6 +86,15 @@ impl CacheConfig {
 
 /// The cache file for the day date, in a directory for its month in the directory for its year, e.g.
     /// 2026/October/25#hash_key
+    /// The path of the cache file for the day date, see path_for_day, without making its directories, to read it.
+    pub fn existing_path_for_day(&self, hash_key: &str, date: &Date) -> PathBuf {
+        let mut path = self.dir_path.clone();
+        Self::path_for_date(&mut path, date);
+        path.push(date.month().to_string());
+        path.push(format!("{}#{}", date.day(), hash_key));
+        path
+    }
+
     pub fn path_for_day(&self, hash_key: &str, date: &Date) -> anyhow::Result<PathBuf> {
         let mut path = self.dir_path.clone();
         Self::path_for_date(&mut path, date);

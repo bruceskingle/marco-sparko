@@ -1,0 +1,274 @@
+//! Snapshots of what the gateway says, each the responses of its LIVE endpoints at one time, in a cache file, and once a
+//! day the details which rarely change, from its DAILY endpoints, in another.
+//!
+//! The gateway only says what is happening now, but its meters' energy totals only ever increase, so the energy of
+//! any time between two snapshots is the difference between them.
+
+use anyhow::anyhow;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
+
+use crate::CacheConfig;
+
+use super::local::LocalClient;
+
+/// What is fetched for every snapshot, see local::ENDPOINTS. status is small, and has the gateway's software version.
+const LIVE: &[&str] = &[
+    "status",
+    "meters/aggregates",
+    "system_status",
+    "system_status/soe",
+    "system_status/grid_status",
+    "operation",
+];
+
+/// What rarely changes, so is fetched once a day, or again when the gateway's software version changes.
+const DAILY: &[&str] = &[
+    "site_info",
+    "powerwalls",
+    "meters/site",
+    "meters/solar",
+];
+
+const SNAPSHOT_KEY: &str = "snapshot-";
+const DETAILS_KEY: &str = "details-";
+
+/// The responses of the endpoints, as {"slot": ..., "requested": ..., "received": ..., "responses": {endpoint:
+/// response}}. slot is the time the poll was scheduled for, see polling::next_slot, if it was, requested when the first
+/// request was sent, and received when the last response arrived. An endpoint which fails is recorded as
+/// {"error": "..."}, unless the login fails, which stops it.
+async fn fetch(client: &LocalClient, endpoints: &[&str], slot: Option<OffsetDateTime>, progress: &mut dyn FnMut(String)) -> anyhow::Result<serde_json::Value> {
+    let requested = crate::clock::now_utc();
+    let mut responses = serde_json::Map::new();
+    for endpoint in endpoints {
+        progress(format!("Fetching {endpoint}"));
+        let response = match client.get(endpoint).await {
+            Ok(json) => json,
+            Err(error) if error.is::<super::local::PasswordRejected>() => return Err(error),
+            Err(error) => {
+                crate::log_warning!("Unable to fetch {endpoint} from the Tesla gateway, {error:#}");
+                serde_json::json!({ "error": format!("{error:#}") })
+            },
+        };
+        responses.insert(endpoint.to_string(), response);
+    }
+    let received = crate::clock::now_utc();
+    Ok(serde_json::json!({
+        "slot": slot.map(|slot| slot.format(&Rfc3339)).transpose()?,
+        "requested": requested.format(&Rfc3339)?,
+        "received": received.format(&Rfc3339)?,
+        "responses": responses,
+    }))
+}
+
+/// When a snapshot or details are of: the slot of a scheduled poll, otherwise when it was requested, or for one saved
+/// before those were recorded its time.
+pub fn time_of(json: &serde_json::Value) -> Option<OffsetDateTime> {
+    ["slot", "requested", "time"].iter()
+        .find_map(|name| json[*name].as_str())
+        .and_then(|time| OffsetDateTime::parse(time, &Rfc3339).ok())
+}
+
+/// The cache file for the time json is of, see time_of, e.g. 2026/October/28#snapshot-134054
+fn path_for(cache_config: &CacheConfig, key: &str, json: &serde_json::Value) -> anyhow::Result<std::path::PathBuf> {
+    let now = time_of(json).unwrap_or_else(crate::clock::now_utc);
+    let time = now.time();
+    let key = format!("{key}{:02}{:02}{:02}", time.hour(), time.minute(), time.second());
+    cache_config.path_for_day(&key, &now.date().into())
+}
+
+/// Saves json in its cache file, see path_for.
+fn save(cache_config: &CacheConfig, key: &str, json: &serde_json::Value) -> anyhow::Result<()> {
+    let path = path_for(cache_config, key, json)?;
+    // Compact, one record a line, as the Octopus cache files are, which Cache Files shows pretty printed.
+    serde_json::to_writer(crate::private_file::create_private_file(&path)?, json)?;
+    Ok(())
+}
+
+/// Saves a snapshot taken elsewhere, e.g. by a capture device, unless there is one for its time already, which may have
+/// more in it, returning whether it was saved.
+pub fn save_if_new(cache_config: &CacheConfig, json: &serde_json::Value) -> anyhow::Result<bool> {
+    if path_for(cache_config, SNAPSHOT_KEY, json)?.exists() {
+        return Ok(false);
+    }
+    save(cache_config, SNAPSHOT_KEY, json)?;
+    Ok(true)
+}
+
+/// The gateway's software version, in the status response.
+fn version(json: &serde_json::Value) -> Option<&str> {
+    json.pointer("/responses/status/version").and_then(|version| version.as_str())
+}
+
+/// Takes a snapshot, and the details too if they have not been fetched today or the gateway's software has changed,
+/// saying what it did with progress. slot is the time the poll was scheduled for, if it was, see Module::poll.
+pub async fn take(client: &LocalClient, cache_config: &CacheConfig, slot: Option<OffsetDateTime>, progress: &mut dyn FnMut(String)) -> anyhow::Result<()> {
+    if cache_config.offline {
+        return Err(anyhow!("This profile is offline, so nothing can be fetched"));
+    }
+    let now = crate::clock::now_utc();
+    let snapshot = fetch(client, LIVE, slot, progress).await?;
+    save(cache_config, SNAPSHOT_KEY, &snapshot)?;
+    progress(format!("Saved the snapshot of {}", time_of(&snapshot).map(crate::util::local_date_time).unwrap_or_default()));
+
+    let details = latest_file(cache_config, DETAILS_KEY);
+    let fetched_today = details.as_ref()
+        .and_then(time_of)
+        .is_some_and(|time| time.date() == now.date());
+    let same_version = details.as_ref().is_some_and(|details| version(details) == version(&snapshot));
+    if !fetched_today || !same_version {
+        let mut details = fetch(client, DAILY, slot, progress).await?;
+        // So that the next snapshot can tell whether the software has changed since.
+        details["responses"]["status"] = snapshot["responses"]["status"].clone();
+        save(cache_config, DETAILS_KEY, &details)?;
+        progress("Saved the gateway's details".to_string());
+    }
+    Ok(())
+}
+
+/// The latest snapshot, if there is one.
+pub fn latest(cache_config: &CacheConfig) -> Option<serde_json::Value> {
+    latest_file(cache_config, SNAPSHOT_KEY)
+}
+
+/// The latest cache file whose key starts with key.
+fn latest_file(cache_config: &CacheConfig, key: &str) -> Option<serde_json::Value> {
+    cache_config.latest_json(key)
+}
+
+/// One meter of meters/aggregates, e.g. the battery, with power in W and energy in kWh.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Meter {
+    pub name: String,
+    pub power: f64,
+    pub imported: f64,
+    pub exported: f64,
+}
+
+/// The meters of a snapshot's meters/aggregates response, in which energy is in Wh.
+pub fn meters(snapshot: &serde_json::Value) -> Vec<Meter> {
+    let Some(aggregates) = snapshot.pointer("/responses/meters~1aggregates").and_then(|value| value.as_object()) else {
+        return Vec::new();
+    };
+    aggregates.iter()
+        .filter(|(_, meter)| meter.get("instant_power").is_some())
+        .map(|(name, meter)| {
+            let number = |field: &str| meter.get(field).and_then(|value| value.as_f64()).unwrap_or_default();
+            Meter {
+                name: name.clone(),
+                power: number("instant_power"),
+                imported: number("energy_imported") / 1000.0,
+                exported: number("energy_exported") / 1000.0,
+            }
+        })
+        .collect()
+}
+
+/// What one snapshot says, for the Samples page.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Sample {
+    pub time: Option<OffsetDateTime>,
+    pub meters: Vec<Meter>,
+    /// The battery's charge, as the gateway says it, which the Tesla app shows less the 5% it keeps in reserve.
+    pub charge: Option<f64>,
+    /// The backup reserve, as the gateway says it, which the Tesla app shows less 5%.
+    pub reserve: Option<f64>,
+    pub mode: Option<String>,
+    pub grid_status: Option<String>,
+    /// What took the snapshot, e.g. marco-sparko-capture 0.1.0, None if the app did, see capture.rs.
+    pub captured_by: Option<String>,
+}
+
+impl Sample {
+    fn from_snapshot(snapshot: &serde_json::Value) -> Sample {
+        let text = |pointer: &str| snapshot.pointer(pointer).and_then(|value| value.as_str()).map(String::from);
+        let number = |pointer: &str| snapshot.pointer(pointer).and_then(|value| value.as_f64());
+        Sample {
+            time: time_of(snapshot),
+            meters: meters(snapshot),
+            charge: number("/responses/system_status~1soe/percentage"),
+            reserve: number("/responses/operation/backup_reserve_percent"),
+            mode: text("/responses/operation/real_mode"),
+            grid_status: text("/responses/system_status~1grid_status/grid_status"),
+            captured_by: text("/capturedBy"),
+        }
+    }
+
+    /// The meter, e.g. battery, if the snapshot has it.
+    pub fn meter(&self, name: &str) -> Option<&Meter> {
+        self.meters.iter().find(|meter| meter.name == name)
+    }
+}
+
+/// The time a snapshot's cache file is for, from its path, e.g. 2026/October/28#snapshot-134054, see path_for.
+fn path_time(path: &std::path::Path) -> Option<OffsetDateTime> {
+    let name = path.file_name()?.to_str()?;
+    let (day, time) = name.split_once(&format!("#{SNAPSHOT_KEY}"))?;
+    let month = path.parent()?;
+    let year = month.parent()?.file_name()?.to_str()?;
+    let month = month.file_name()?.to_str()?;
+    let text = format!("{year} {month} {day} {time}");
+    let format = time::macros::format_description!("[year] [month repr:long] [day] [hour][minute][second]");
+    Some(time::PrimitiveDateTime::parse(&text, format).ok()?.assume_utc())
+}
+
+/// The latest limit snapshots, newest first, by the times they are of, not when they were saved, as a capture device's
+/// are saved when it is read, see capture.rs.
+pub fn samples(cache_config: &CacheConfig, limit: usize) -> Vec<Sample> {
+    let mut paths: Vec<_> = cache_config.files_with_key(SNAPSHOT_KEY).into_iter()
+        .map(|path| (path_time(&path), path))
+        .collect();
+    paths.sort_by(|a, b| b.0.cmp(&a.0));
+    paths.iter()
+        .take(limit)
+        .filter_map(|(_, path)| CacheConfig::read_json(path))
+        .map(|snapshot| Sample::from_snapshot(&snapshot))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_capture_device_record_is_a_sample() {
+        // As capture/src/records.rs writes them.
+        let record = serde_json::json!({
+            "slot": "2026-10-29T07:30:00.000000Z",
+            "requested": "2026-10-29T07:30:00.201000Z",
+            "received": "2026-10-29T07:30:02.950000Z",
+            "capturedBy": "marco-sparko-capture 0.1.0",
+            "responses": {
+                "meters/aggregates": {"site": {"instant_power": -16.0, "energy_imported": 44128493.36542916,
+                    "energy_exported": 13867712.52581578, "last_communication_time": "2026-10-29T07:30:01.015587Z"}},
+                "system_status/soe": {"percentage": 100.0},
+                "system_status/grid_status": {"grid_status": "SystemGridConnected", "grid_services_active": false},
+                "operation": {"error": "the gateway responded 502 to operation: "},
+            },
+        });
+        let sample = Sample::from_snapshot(&record);
+        assert_eq!(sample.time, OffsetDateTime::parse("2026-10-29T07:30:00Z", &Rfc3339).ok());
+        assert_eq!(sample.meter("site").map(|meter| meter.imported), Some(44128.49336542916));
+        assert_eq!(sample.charge, Some(100.0));
+        assert_eq!(sample.grid_status.as_deref(), Some("SystemGridConnected"));
+        assert_eq!(sample.reserve, None);
+        assert_eq!(sample.captured_by.as_deref(), Some("marco-sparko-capture 0.1.0"));
+    }
+
+    #[test]
+    fn the_time_is_read_from_the_path() {
+        let path = std::path::Path::new("/cache/n2-tesla/2026/October/29#snapshot-111151");
+        assert_eq!(path_time(path), OffsetDateTime::parse("2026-10-29T11:11:51Z", &Rfc3339).ok());
+    }
+
+    #[test]
+    fn meters_are_read_from_the_aggregates() {
+        let snapshot = serde_json::json!({"responses": {"meters/aggregates": {
+            "battery": {"instant_power": 600, "energy_imported": 20567877, "energy_exported": 18241742},
+            "error": "not a meter",
+        }}});
+        assert_eq!(meters(&snapshot), vec![
+            Meter { name: "battery".to_string(), power: 600.0, imported: 20567.877, exported: 18241.742 },
+        ]);
+    }
+}

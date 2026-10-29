@@ -3,7 +3,12 @@ mod ordered_map;
 pub use ordered_map::OrderedMap;
 
 mod octopus;
-mod util;
+mod myenergi;
+mod tesla;
+mod http;
+mod cache_browser;
+pub mod polling;
+pub mod util;
 mod views;
 pub mod components;
 mod profile;
@@ -235,7 +240,7 @@ pub fn fetch_latest_data(args: Args) -> bool {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct PageInfo {
     label: &'static str,
     path: &'static str,
@@ -257,6 +262,16 @@ pub trait Module {
     /// Fetches the latest data of every page, as if each was shown with the last FETCH_DAYS days, printing its progress,
     /// for --fetch. Data which is already cached and up to date is not fetched again.
     async fn fetch_latest_data(&self) -> anyhow::Result<()>;
+    /// How often the app polls the module while it is open, see polling.rs, None if it is not polled.
+    fn poll_interval(&self) -> Option<std::time::Duration> {
+        None
+    }
+    /// Polls once, e.g. a snapshot of a device which keeps no history of its own, returning a short summary of what it
+    /// found, for the Polling page and the log. slot is the time the poll is scheduled for, which the sample is saved
+    /// with, see polling::next_slot, or None if it is not a scheduled poll, e.g. the first.
+    async fn poll(&self, _slot: Option<time::OffsetDateTime>) -> anyhow::Result<String> {
+        Err(anyhow!("{} is not polled", self.module_id()))
+    }
 }
 
 #[async_trait]
@@ -345,6 +360,8 @@ impl ModuleRegistrations {
         let mut module_registrations = HashMap::new();
 
         Self::load_module(&mut module_registrations, octopus::OctopusModule::registration(), verbose);
+        Self::load_module(&mut module_registrations, myenergi::MyenergiModule::registration(), verbose);
+        Self::load_module(&mut module_registrations, tesla::TeslaModule::registration(), verbose);
 
         if verbose {
             println!("Loaded {} modules", module_registrations.len());

@@ -14,6 +14,10 @@ pub use home::Home;
 mod module;
 pub use module::Module;
 
+mod sidebar;
+
+mod polling;
+
 mod navbar;
 pub use navbar::Navbar;
 

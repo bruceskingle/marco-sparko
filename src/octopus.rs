@@ -22,6 +22,7 @@ mod trend_graph;
 mod category_filter;
 mod context;
 mod pages;
+mod flex_poll;
 
 use std::sync::Arc;
 
@@ -127,6 +128,8 @@ pub struct OctopusModule{
     account_manager: ViewerDataSet,
     /// Shared with the pages, see OctopusRoot.
     context: Arc<OctopusContext>,
+    /// The requests polling has made, see flex_poll.rs.
+    call_budget: flex_poll::CallBudget,
 }
 
 const MODULE_ID: &str = "octopus";
@@ -170,6 +173,7 @@ impl OctopusModule {
             octopus_args,
             account_manager,
             context,
+            call_budget: flex_poll::CallBudget::default(),
         })
     }
 
@@ -213,6 +217,14 @@ impl OctopusModule {
 impl Module for OctopusModule {
     async fn fetch_latest_data(&self) -> anyhow::Result<()> {
         fetch::fetch_latest_data(&self.context).await
+    }
+
+    fn poll_interval(&self) -> Option<std::time::Duration> {
+        Some(flex_poll::POLL_INTERVAL)
+    }
+
+    async fn poll(&self, slot: Option<time::OffsetDateTime>) -> anyhow::Result<String> {
+        flex_poll::poll(&self.context, slot, &self.call_budget).await
     }
 
     fn cli_debug(&self) -> Result<(), anyhow::Error> {

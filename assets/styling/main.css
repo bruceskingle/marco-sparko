@@ -1457,3 +1457,9 @@ body:has(.app-layout){
   .nav{padding:0.5rem;}
   .brand{font-size:0.95rem;}
 }
+
+/* A zappi's record of the minute a polled status is from, under the status, see the myenergi Samples page. */
+tr.minute-row td {
+    opacity: 0.6;
+    font-style: italic;
+}

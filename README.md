@@ -17,7 +17,7 @@ The Home and EV view on the website only works back until a point in August, thi
 
 ![Meter Costs](docs/readMe/Screenshot7.png)
 
-It can also display a year on year trend graph of cost or units consumed, with smoothing options of 7 or 30 day moving averages or a cumulative sisplay. Here you can see the 7 day moving average view for all available data (starting in October 2024 in this case).
+It can also display a year on year trend graph of cost or units consumed, with smoothing options of 7 or 30 day moving averages or a cumulative display. Here you can see the 7 day moving average view for all available data (starting in October 2024 in this case).
 
 ![Meter Costs](docs/readMe/Screenshot8.png)
 

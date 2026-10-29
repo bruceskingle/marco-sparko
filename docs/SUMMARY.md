@@ -37,6 +37,10 @@
     - [Electricity](help/octopus/electricity.md)
     - [EV Charging](help/octopus/ev-charging.md)
         - [Charging Sessions](help/octopus/charging-sessions.md)
+- [myenergi](help/myenergi/index.md)
+    - [Logging in](help/myenergi/login.md)
+- [Tesla](help/tesla/index.md)
+    - [Logging in](help/tesla/login.md)
 
 # More
 

@@ -501,6 +501,15 @@ fn mapping_path() -> anyhow::Result<PathBuf> {
     Ok(std::env::home_dir().ok_or_else(|| anyhow!("Unable to find the home directory"))?.join(MAPPING_FILE))
 }
 
+/// The modules whose data can be redacted. The others are left out of a redacted profile, as what identifies you in
+/// their data, and the secrets in their profiles, are not known here yet.
+const REDACTABLE_MODULES: [&str; 1] = ["octopus"];
+
+/// Whether the module's data can be redacted, see REDACTABLE_MODULES.
+pub fn is_redactable(module_id: &str) -> bool {
+    REDACTABLE_MODULES.contains(&module_id)
+}
+
 /// Copies the cached data of the profile from to a new, offline, profile to, redacted, see the module documentation.
 /// Prints what it does, for --redact.
 pub fn redact_profile(from: &str, to: &str) -> anyhow::Result<()> {
@@ -522,7 +531,10 @@ pub fn redact_profile(from: &str, to: &str) -> anyhow::Result<()> {
     let mut mapping = Mapping::load(mapping_path()?)?;
     let patterns = Patterns::new();
     let cache_dir = MarcoSparkoContext::get_cache_dir_path()?;
-    let module_ids: Vec<&String> = source.modules.keys().collect();
+    let module_ids: Vec<&String> = source.modules.keys().filter(|module_id| is_redactable(module_id)).collect();
+    for module_id in source.modules.keys().filter(|module_id| !is_redactable(module_id)) {
+        println!("Leaving out {module_id}, whose data cannot be redacted yet");
+    }
 
     // Find the identifiers which are not in the mapping yet, and make up replacements for them.
     let mut sources = Vec::new();

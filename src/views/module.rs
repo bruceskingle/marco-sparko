@@ -2,9 +2,10 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use dioxus_free_icons::{Icon, icons::ld_icons::{LdPanelLeftClose, LdPanelLeftOpen}};
 
 use crate::{MarcoSparkoContext, ModuleRegistrations, ModuleFactory, PageInfo};
+
+use super::sidebar::SidebarLayout;
 
 // Simple HTML escaper
 fn escape_html(input: &str) -> String {
@@ -62,8 +63,20 @@ fn get_page(module: &Box<dyn crate::Module + Send>, path: &Vec<String>, page_lis
 
 }
 
+/// The page of the module, re-created when it is another module's, as the router keeps the component when only the
+/// module_id of the route changes, and ModulePage only builds its module once. It is a list of one, as Dioxus only
+/// uses keys in lists.
 #[component]
 pub fn Module(module_id: String) -> Element {
+    rsx! {
+        for module_id in [module_id] {
+            ModulePage { key: "{module_id}", module_id }
+        }
+    }
+}
+
+#[component]
+fn ModulePage(module_id: String) -> Element {
     let mut path_signal = use_signal(|| vec!(String::from("")));
     let path = (&*path_signal.read()).clone();
 
@@ -73,11 +86,6 @@ pub fn Module(module_id: String) -> Element {
     let opt_context = &*context_signal.read();
     let context = opt_context.as_ref().unwrap();
     let module_registrations = use_context::<ModuleRegistrations>();
-
-    // Signal for sidebar visibility
-    let mut sidebar_open = use_signal(|| true);
-    // Hidden while a screenshot is taken, unless the shot is about it, see screenshots.rs.
-    let sidebar_shown = *sidebar_open.read() && !crate::screenshots::PAGE_LIST_HIDDEN();
 
     let mut call_construct_module_signal = use_signal::<bool>(|| true);
     let mut construct_module_action: Action<(ModuleRegistrations, Arc<MarcoSparkoContext>, String), Arc<dyn crate::ModuleFactory + Send>> = use_action( move |module_registrations: ModuleRegistrations, marco_sparko_context: std::sync::Arc<crate::MarcoSparkoContext>, module_id: String|  async move { module_registrations.module_factory(&module_id, &marco_sparko_context).await});
@@ -132,14 +140,6 @@ pub fn Module(module_id: String) -> Element {
                     let (active_page_id, content) = get_page(&module, &path, &page_list);
 
 
-                    // Toggle sidebar
-                    let toggle_sidebar = {
-                        let b = !sidebar_shown;
-                        move |_| {
-                            sidebar_open.set(b);
-                        }
-                    };
-
                     let body = match content {
                         Ok(element) => rsx!(
                             div { class: "filler", {element} }
@@ -155,43 +155,11 @@ pub fn Module(module_id: String) -> Element {
                     };
 
                     rsx! {
-                        // Main container
-                        div { class: "container",
-                            // Sidebar, which when hidden is a narrow strip with just the button to show it again.
-                            nav {
-                                class: format_args!("sidebar {}", if sidebar_shown { "open" } else { "closed" }),
-                                aria_label: "secondary navigation",
-
-                                button {
-                                    class: "sidebar-toggle",
-                                    r#type: "button",
-                                    title: if sidebar_shown { "Hide the page list" } else { "Show the page list" },
-                                    onclick: toggle_sidebar,
-                                    if sidebar_shown {
-                                        Icon { icon: LdPanelLeftClose, width: 18, height: 18 }
-                                    }
-                                    else {
-                                        Icon { icon: LdPanelLeftOpen, width: 18, height: 18 }
-                                    }
-                                }
-                                div { class: "sidebar-inner",
-                                    for page_info in page_list.clone() {
-                                        div {
-                                            class: format_args!(
-                                                "sidebar-item {}",
-                                                if active_page_id == page_info.path { "active" } else { "inactive" },
-                                            ),
-                                            onclick: move |_| { path_signal.set(vec![String::from(page_info.path)]) },
-                                            "{page_info.label}"
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Main content
-                            main { class: "content",
-                                {body}
-                            }
+                        SidebarLayout {
+                            pages: page_list,
+                            active: active_page_id,
+                            on_select: move |page: &'static str| path_signal.set(vec![String::from(page)]),
+                            {body}
                         }
                     }
                 }

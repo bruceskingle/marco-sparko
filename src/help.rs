@@ -57,6 +57,10 @@ static PAGES: &[HelpPage] = help_pages![
     "octopus/electricity.md",
     "octopus/ev-charging.md",
     "octopus/charging-sessions.md",
+    "myenergi/index.md",
+    "myenergi/login.md",
+    "tesla/index.md",
+    "tesla/login.md",
 ];
 
 macro_rules! help_icons {

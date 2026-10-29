@@ -171,7 +171,8 @@ fn load_profile_data(from: &str) -> anyhow::Result<()> {
 
     let usual_cache = usual.join(crate::CACHE_DIRECTORY_NAME);
     let cache = crate::MarcoSparkoContext::get_cache_dir_path()?;
-    for module_id in source.modules.keys() {
+    // Only the modules which a redacted profile can have, see redact::is_redactable.
+    for module_id in source.modules.keys().filter(|module_id| crate::redact::is_redactable(module_id)) {
         let target = cache.join(format!("{active}-{module_id}"));
         if target.exists() {
             std::fs::remove_dir_all(&target)?;
@@ -185,6 +186,7 @@ fn load_profile_data(from: &str) -> anyhow::Result<()> {
         .unwrap_or_default();
     profiles.retain(|profile| !profile_names_equal(&profile.name, &active));
     let modules = source.modules.iter()
+        .filter(|(module_id, _)| crate::redact::is_redactable(module_id))
         .map(|(module_id, module)| {
             let mut module = module.clone();
             if let Some(module) = module.as_object_mut() {

@@ -1,0 +1,25 @@
+# As boards/cyd in sparko-embedded-std, but with a bigger main task stack, as the scheduler runs the HTTPS requests to
+# the Tesla gateway in it.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# Increase a bit these stack sizes as they are also a bit too small by default
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=4096
+
+# You might have to increase this further if you spawn your own Rust threads
+# that allocate large stack variables; or better yet - use
+# `std::thread::Builder::new().stack_size(XXX)` for spawning
+CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=16384
+
+CONFIG_MBEDTLS_TLS_ENABLED=y
+CONFIG_ESP_TLS_USING_MBEDTLS=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+
+# The Tesla gateway's certificate is one it made itself, so it cannot be checked. These only skip the check for
+# connections given no CA, i.e. only the gateway's: one given the certificate bundle is still checked.
+# TODO: pin the gateway's certificate instead, as marco-sparko should too.
+CONFIG_ESP_TLS_INSECURE=y
+CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y
+
+# Enable multicast support for mDNS
+CONFIG_LWIP_IGMP=y

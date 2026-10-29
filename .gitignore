@@ -5,3 +5,5 @@ docs/scratch.md
 **/.DS_Store
 pack.temp.dmg
 *.rsrc
+/capture/target
+/capture/.embuild

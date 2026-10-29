@@ -61,6 +61,7 @@ pub fn App() -> Element {
     // The app only ends when the user quits it, by closing the main window or with Quit.
     dioxus::desktop::use_wry_event_handler(|event, _| {
         if let dioxus::desktop::tao::event::Event::LoopDestroyed = event {
+            crate::polling::record_quit();
             crate::log_info!("Quit by user");
         }
     });
@@ -77,6 +78,8 @@ pub fn App() -> Element {
     use_context_provider::<Signal<Option<Arc<MarcoSparkoContext>>>>(move || context_signal);
 
     use_context_provider::<ModuleRegistrations>(move || ModuleRegistrations::new(verbose));
+
+    use_context_provider::<crate::polling::PollStatuses>(|| Signal::new(Default::default()));
 
     // let window_icon =dioxus_desktop::tao::window::Icon::from_file(&std::path::Path::new("icons/icon.ico")).unwrap();
     // window.set_window_icon(window_icon);
@@ -146,6 +149,15 @@ pub fn App() -> Element {
             document::Link { rel: "stylesheet", href: MAIN_CSS }
 
             Router::<Route> {}
+
+            // A list of one, keyed by the context, so that a new profile's modules are polled, as Dioxus only uses
+            // keys in lists.
+            for context in context_signal.read().iter().cloned() {
+                crate::polling::Poller {
+                    key: "{Arc::as_ptr(&context):p}",
+                    context: crate::util::SharedProp(context),
+                }
+            }
         }
     }
 }
