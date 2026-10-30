@@ -76,7 +76,7 @@ impl std::fmt::Debug for OctopusArgs {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub api_key:  Option<String>,

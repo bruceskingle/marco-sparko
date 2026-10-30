@@ -84,7 +84,7 @@ pub fn MeasurementsPage(props: MeasurementsPageProps) -> Element {
         None => rsx! {
             div { "Loading Meter Points for account {context.account_id}..." }
         },
-        Some(Err(error)) => Err(anyhow!("Failed to load Meter Points: {error:?}"))?,
+        Some(Err(error)) => Err(anyhow!("Failed to load Meter Points: {error:#}"))?,
         Some(Ok(meter_point_list)) => {
 
             // Are we looking at a device? Its path is device, its ID, modelled or measured, and the meter point to
@@ -772,7 +772,7 @@ fn MeasurementsDetail(props: MeasurementsDetailProps) -> Element {
                     }
                 }
             },
-            None => Err(anyhow!("Failed to load measurements for meter {}: {error:?}", props.mpan))?,
+            None => Err(anyhow!("Failed to load measurements for meter {}: {error:#}", props.mpan))?,
         },
         Some(Ok(consumption)) => {
             let content = match props.view {

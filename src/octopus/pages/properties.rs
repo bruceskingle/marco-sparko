@@ -29,7 +29,7 @@ pub fn PropertiesPage(props: PropertiesPageProps) -> Element {
         None => rsx! {
             div { "Loading Properties for account {context.account_id}..." }
         },
-        Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:?}"))?,
+        Some(Err(error)) => Err(anyhow!("Failed to load properties: {error:#}"))?,
         Some(Ok(property_list)) => {
 
             // Are we looking at one bill?

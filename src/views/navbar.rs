@@ -327,7 +327,10 @@ pub fn Navbar() -> Element {
 
         div { class: "app-body",
             div { class: "app-page",
-                Outlet::<Route> {}
+                ErrorBoundary {
+                    handle_error: |errors: ErrorContext| rsx! { PageError { errors } },
+                    Outlet::<Route> {}
+                }
             }
             if show_help {
                 HelpPanel {
@@ -348,3 +351,18 @@ pub fn Navbar() -> Element {
     }
 }
 
+/// What the page area shows instead of a page which fails, e.g. as its data could not be loaded, so that the rest of the
+/// app, e.g. the navigation bar, can still be used, until another page is chosen, which clears it.
+#[component]
+fn PageError(errors: ErrorContext) -> Element {
+    let route = use_route::<Route>();
+    let failed_on = use_hook(|| route.clone());
+    let error = errors.error().map(|error| format!("{error:#}")).unwrap_or_default();
+    use_hook(|| crate::log_error!("{error}"));
+    use_effect(use_reactive!(|route| if route != failed_on {
+        errors.clear_errors();
+    }));
+    rsx! {
+        p { class: "error", "This page could not be shown: {error}" }
+    }
+}

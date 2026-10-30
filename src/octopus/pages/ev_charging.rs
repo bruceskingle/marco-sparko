@@ -30,7 +30,7 @@ pub fn EvChargingPage(props: EvChargingPageProps) -> Element {
         None => rsx! {
             p { "Loading devices..." }
         },
-        Some(Err(error)) => Err(anyhow!("Failed to load devices: {error:?}"))?,
+        Some(Err(error)) => Err(anyhow!("Failed to load devices: {error:#}"))?,
         Some(Ok(device_list)) => {
             let chargers: Vec<SmartDevice> = device_list.devices.iter().filter(|device| device.charging.is_some()).cloned().collect();
 

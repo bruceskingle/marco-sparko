@@ -55,7 +55,8 @@ where
             .open(&path)?;
         let _guard = file.lock()?;
         let modified = file.metadata()?.modified()?;
-        let mut refresh =  if let Some(refresh_after) = refresh_after {
+        // An offline profile cannot refresh, so it always reads what is cached, however old.
+        let mut refresh =  if let Some(refresh_after) = refresh_after && !config.offline {
             SystemTime::now()
                 .duration_since(modified)
                 .map(|age| age > refresh_after)

@@ -18,11 +18,7 @@ impl PartialEq for AccountPageProps {
             .map(|account| &account.number_)
             .eq(other.accounts.iter().map(|account| &account.number_))
             && self.selected_account_id == other.selected_account_id
-            && self.profile.api_key == other.profile.api_key
-            && self.profile.billing_timezone == other.profile.billing_timezone
-            && self.profile.account_number == other.profile.account_number
-            && self.profile.api_host == other.profile.api_host
-            && self.profile.init == other.profile.init
+            && self.profile == other.profile
             && self.profile_name == other.profile_name
     }
 }
