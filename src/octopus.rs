@@ -32,7 +32,7 @@ use async_trait::async_trait;
 use dioxus::prelude::*;
 
 use context::{OctopusContext, OctopusRoot};
-use pages::{BillsPage, ElectricityPage, EvChargingPage, MeasurementsPage, PropertiesPage};
+use pages::{AccountPage, BillsPage, ElectricityPage, EvChargingPage, MeasurementsPage, PropertiesPage};
 use serde::{Deserialize, Serialize};
 
 use time_tz::timezones;
@@ -81,6 +81,8 @@ impl std::fmt::Debug for OctopusArgs {
 pub struct Profile {
     pub api_key:  Option<String>,
     pub billing_timezone: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_number: Option<String>,
     /// The host name of the API, e.g. api.octopus.energy
     #[serde(default = "default_api_host")]
     pub api_host: String,
@@ -95,6 +97,7 @@ impl std::fmt::Debug for Profile {
         f.debug_struct("Profile")
             .field("api_key", &redacted(&self.api_key))
             .field("billing_timezone", &self.billing_timezone)
+            .field("account_number", &self.account_number)
             .field("api_host", &self.api_host)
             .field("init", &self.init)
             .finish()
@@ -116,6 +119,7 @@ impl Profile {
         Profile {
             api_key: None,
             billing_timezone: Some("Europe/London".to_string()),
+            account_number: None,
             api_host: "api.oegb-kraken.energy".to_string(),
             init: true,
         }
@@ -125,6 +129,8 @@ impl Profile {
 pub struct OctopusModule{
     octopus_args: OctopusArgs,
     account_manager: ViewerDataSet,
+    profile: Profile,
+    profile_name: String,
     /// Shared with the pages, see OctopusRoot.
     context: Arc<OctopusContext>,
 }
@@ -154,13 +160,17 @@ impl std::fmt::Debug for LoginForm {
 
 impl OctopusModule {
     async fn new(octopus_args: OctopusArgs, cache_config: Arc<CacheConfig>, profile: Profile, 
-        request_manager: Arc<RequestManager>, _verbose: bool) -> anyhow::Result<OctopusModule> {   
+        profile_name: String, request_manager: Arc<RequestManager>, _verbose: bool) -> anyhow::Result<OctopusModule> {
 
         let billing_timezone = Self::get_billing_timezone(&profile);
-        let account_manager = ViewerDataSet::new(&cache_config, &*request_manager).await?;
+        let account_manager = ViewerDataSet::new(
+            &cache_config,
+            &*request_manager,
+            profile.account_number.as_deref(),
+        ).await?;
 
         let context = Arc::new(OctopusContext {
-            account_id: account_manager.get_default_account_id().to_string(),
+            account_id: account_manager.get_selected_account_id().to_string(),
             billing_timezone,
             cache_config,
             request_manager,
@@ -169,6 +179,8 @@ impl OctopusModule {
         Ok(OctopusModule {
             octopus_args,
             account_manager,
+            profile,
+            profile_name,
             context,
         })
     }
@@ -399,9 +411,13 @@ impl Module for OctopusModule {
             },
             "account" => {
                 let account_user = &self.account_manager.data_set.data.viewer_;
-                // let x = account_user.full_name_;
-                let api_key = if let Some(api_key) = &account_user.live_secret_key_ {api_key} else {""};
                 rsx! {
+                    AccountPage {
+                        accounts: account_user.accounts_.clone(),
+                        selected_account_id: self.context.account_id.clone(),
+                        profile: self.profile.clone(),
+                        profile_name: self.profile_name.clone(),
+                    }
                     table { class: "display",
                         tr {
                             th { class: "row-header", "ID" }
@@ -413,7 +429,7 @@ impl Module for OctopusModule {
                         }
                         tr {
                             th { class: "row-header", "API Key" }
-                            td { "{api_key}" }
+                            td { {account_user.live_secret_key_.as_deref().unwrap_or("")} }
                         }
                     
                     }
@@ -489,7 +505,7 @@ impl OctopusModuleFactory {
         let authenticated_request_manager = Arc::new(logging_caller::LoggingCaller(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?));
        
         let client = OctopusModule::new(self.octopus_args.clone(), self.cache_config.clone(), self.profile.clone(), 
-            authenticated_request_manager, self.verbose
+            self.context.profile.active_profile.name.clone(), authenticated_request_manager, self.verbose
         ).await?;
 
         if self.profile.init {
