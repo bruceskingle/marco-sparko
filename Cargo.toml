@@ -50,6 +50,10 @@ rand = "0.9"
 # Pinning a capture device's self-signed certificate, see capture_device.rs, the same rustls as reqwest's.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 sha2 = "0.10"
+hmac = "0.12"
+# A capture device's poll schedule, the same cron specs as the device's, see capture_device.rs.
+croner = "3.0.1"
+chrono = "0.4"
 # HTTP for the modules whose APIs are not GraphQL, the same version and features as sparko_graphql uses
 reqwest = { version = "0.12.7", default-features = false, features = ["json", "rustls-tls", "charset", "http2", "macos-system-configuration"] }
 # The digest authentication of the myenergi API

@@ -26,8 +26,8 @@ then in the TeslaCapture section:
   too.
 - **tesla_schedule**: optional, when to poll, a cron spec with seconds first, `0 */5 * * * *` (every 5 minutes) if
   empty.
-- **tesla_capacity**: optional, how many samples to keep, 144 (12 hours at 5 minutes) if empty. The log shows the free
-  heap after each poll.
+- **tesla_capacity**: optional, how many samples to keep in RAM, 48 (4 hours at 5 minutes) if empty. The SD card
+  keeps the rest. The log shows the free heap after each poll.
 
 The config page never shows the password, and it is not written to the log: leave it empty to keep the saved one.
 The page has no login though, so anyone on the network can change the settings, including tesla_host, which would

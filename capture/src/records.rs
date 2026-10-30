@@ -5,14 +5,12 @@
 //! and the latest in RAM as typed values, as the CYD has no room for many of those.
 
 use std::collections::VecDeque;
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Deserialize;
-use log::warn;
 use serde_json::json;
+
+use crate::day_files::DayFiles;
 
 /// The gateway's endpoints which are polled, after /api/, see marco-sparko's src/tesla/snapshot.rs LIVE. status and
 /// system_status are left out, as the app does not use them in samples and system_status is the largest response.
@@ -175,7 +173,8 @@ impl Record {
         }
     }
 
-    /// The record as the app's snapshots are, with captured_by, to say where it came from.
+    /// The record as the app's snapshots are, with captured_by, to say which device it came from, see
+    /// device::captured_by, and the firmware.
     pub fn to_json(&self, captured_by: &str) -> serde_json::Value {
         let responses: serde_json::Map<String, serde_json::Value> = ENDPOINTS
             .iter()
@@ -193,6 +192,7 @@ impl Record {
             "requested": format_time(self.requested),
             "received": format_time(self.received),
             "capturedBy": captured_by,
+            "firmware": crate::device::FIRMWARE,
             "responses": responses,
         })
     }
@@ -208,67 +208,35 @@ pub struct LastPoll {
     pub error: Option<String>,
 }
 
-/// How many days of records are given when the app does not say since when, see Store::write_since, so that a full card
-/// is not sent all at once.
-const DAYS_WITHOUT_SINCE: i64 = 2;
-
-/// The records, kept on the SD card if there is one, a file a day, e.g. /sd/capture/tesla/2026-10-29.jsonl, each record
-/// a line, in the form the app saves, see Record::to_json, written as it is taken, so that they survive the device
-/// restarting. The latest, up to capacity, are also kept in RAM, oldest first, for the screen, and for the app if there
-/// is no card.
+/// The records, kept on the SD card, see DayFiles, and the latest, up to capacity, in RAM too, oldest first, as typed
+/// values, for the screen, and for the app if there is no card.
 pub struct Store {
     records: VecDeque<Record>,
     capacity: usize,
     last_poll: Option<LastPoll>,
-    /// Changed whenever anything else is, so the screen only redraws when it must.
-    generation: u32,
-    /// The directory of the files, if there is an SD card.
-    dir: Option<PathBuf>,
-    /// Why the records are only in RAM, if they are, e.g. there is no SD card.
-    storage_problem: Option<String>,
+    files: DayFiles,
     /// What took the records, in each one's capturedBy.
-    captured_by: &'static str,
+    captured_by: String,
 }
 
 impl Store {
-    /// dir is where the files are kept, or why there is nowhere, see Esp32Platform::sd_card.
-    pub fn new(capacity: usize, dir: Result<PathBuf, String>, captured_by: &'static str) -> Store {
-        let (dir, storage_problem) = match dir {
-            Ok(dir) => (Some(dir), None),
-            Err(problem) => (None, Some(problem)),
-        };
-        Store {
-            records: VecDeque::with_capacity(capacity),
-            capacity,
-            last_poll: None,
-            generation: 0,
-            dir,
-            storage_problem,
-            captured_by,
-        }
+    pub fn new(capacity: usize, files: DayFiles, captured_by: String) -> Store {
+        Store { records: VecDeque::with_capacity(capacity), capacity, last_poll: None, files, captured_by }
     }
 
     pub fn add(&mut self, record: Record) {
-        if let Some(dir) = &self.dir {
-            match append(dir, &record, self.captured_by) {
-                Ok(()) => self.storage_problem = None,
-                Err(error) => {
-                    warn!("Unable to save the record on the SD card, {error:#}");
-                    self.storage_problem = Some(format!("{error:#}"));
-                }
-            }
-        }
-        if self.records.len() == self.capacity {
+        self.files.append(record.time(), &record.to_json(&self.captured_by));
+        // Only the latest, for the screen, while the card keeps them, so that RAM is not used for nothing.
+        let capacity = if self.files.usable().is_some() { 1 } else { self.capacity };
+        while self.records.len() >= capacity {
             self.records.pop_front();
         }
         self.last_poll = Some(LastPoll { time: record.received, error: None });
         self.records.push_back(record);
-        self.generation = self.generation.wrapping_add(1);
     }
 
     pub fn failed(&mut self, time: DateTime<Utc>, error: String) {
         self.last_poll = Some(LastPoll { time, error: Some(error) });
-        self.generation = self.generation.wrapping_add(1);
     }
 
     pub fn latest(&self) -> Option<&Record> {
@@ -279,10 +247,6 @@ impl Store {
         self.last_poll.as_ref()
     }
 
-    pub fn generation(&self) -> u32 {
-        self.generation
-    }
-
     pub fn len(&self) -> usize {
         self.records.len()
     }
@@ -291,18 +255,8 @@ impl Store {
         self.capacity
     }
 
-    /// Where the records are kept, for the app: sd, or ram if there is no card or it failed, see storage_problem.
-    pub fn storage(&self) -> &'static str {
-        if self.dir.is_some() && self.storage_problem.is_none() { "sd" } else { "ram" }
-    }
-
-    pub fn storage_problem(&self) -> Option<&str> {
-        self.storage_problem.as_deref()
-    }
-
-    /// The directory of the files, if they can be used.
-    pub fn files(&self) -> Option<PathBuf> {
-        self.dir.clone().filter(|_| self.storage_problem.is_none())
+    pub fn files(&self) -> &DayFiles {
+        &self.files
     }
 
     /// The records in RAM of times after since, if given, oldest first.
@@ -310,77 +264,7 @@ impl Store {
         self.records.iter().filter(move |record| since.is_none_or(|since| record.time() > since))
     }
 
-    pub fn captured_by(&self) -> &'static str {
-        self.captured_by
+    pub fn captured_by(&self) -> &str {
+        &self.captured_by
     }
-}
-
-fn append(dir: &Path, record: &Record, captured_by: &str) -> anyhow::Result<()> {
-    use anyhow::Context;
-
-    std::fs::create_dir_all(dir).with_context(|| format!("making {}", dir.display()))?;
-    let path = dir.join(format!("{}.jsonl", record.time().format("%Y-%m-%d")));
-    let mut line = serde_json::to_vec(&record.to_json(captured_by))?;
-    line.push(b'\n');
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .with_context(|| format!("opening {}", path.display()))?;
-    file.write_all(&line).with_context(|| format!("writing {}", path.display()))?;
-    // So that it is on the card, not only in a buffer, if the power fails.
-    file.sync_all().with_context(|| format!("syncing {}", path.display()))?;
-    Ok(())
-}
-
-/// Writes, with write, the records in the files in dir of times after since, oldest first, each a line, as they are
-/// in the files, or of the last DAYS_WITHOUT_SINCE days if since is None, returning how many. The files are read a
-/// line at a time, as a few days of records would not fit in the RAM.
-pub fn write_files_since(
-    dir: &Path,
-    since: Option<DateTime<Utc>>,
-    write: &mut dyn FnMut(&[u8]) -> anyhow::Result<()>,
-) -> anyhow::Result<usize> {
-    #[derive(Deserialize)]
-    struct Times {
-        slot: Option<String>,
-        requested: Option<String>,
-    }
-
-    let since = since.unwrap_or_else(|| Utc::now() - chrono::TimeDelta::days(DAYS_WITHOUT_SINCE));
-    let first_day = since.format("%Y-%m-%d").to_string();
-    let mut days: Vec<String> = match std::fs::read_dir(dir).map_err(|error| (error.kind(), error)) {
-        Ok(entries) => entries
-            .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
-            .filter_map(|name| name.strip_suffix(".jsonl").map(String::from))
-            .filter(|day| *day >= first_day)
-            .collect(),
-        // None yet.
-        Err((std::io::ErrorKind::NotFound, _)) => Vec::new(),
-        Err((_, error)) => return Err(anyhow::Error::from(error).context(format!("listing {}", dir.display()))),
-    };
-    days.sort();
-
-    let mut count = 0;
-    for day in days {
-        use anyhow::Context;
-
-        let path = dir.join(format!("{day}.jsonl"));
-        let file = BufReader::new(File::open(&path).with_context(|| format!("opening {}", path.display()))?);
-        for line in file.split(b'\n') {
-            let line = line.with_context(|| format!("reading {}", path.display()))?;
-            // A line being written as it is read, or cut short by a power cut, is left out.
-            let Ok(times) = serde_json::from_slice::<Times>(&line) else { continue };
-            let time = times
-                .slot
-                .or(times.requested)
-                .and_then(|time| DateTime::parse_from_rfc3339(&time).ok())
-                .map(|time| time.with_timezone(&Utc));
-            if time.is_some_and(|time| time > since) {
-                write(&line)?;
-                count += 1;
-            }
-        }
-    }
-    Ok(count)
 }

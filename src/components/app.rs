@@ -147,6 +147,7 @@ pub fn App() -> Element {
             // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
             document::Link { rel: "icon", href: FAVICON }
             document::Link { rel: "stylesheet", href: MAIN_CSS }
+            crate::components::tooltips::Tooltips {}
 
             Router::<Route> {}
 

@@ -130,6 +130,10 @@ pub struct OctopusModule{
     context: Arc<OctopusContext>,
     /// The requests polling has made, see flex_poll.rs.
     call_budget: flex_poll::CallBudget,
+    charging_device: flex_poll::ChargingDevice,
+    /// The polls the profile's capture devices took, see poll.
+    capture: crate::capture_device::CaptureReader,
+    profile_name: String,
 }
 
 const MODULE_ID: &str = "octopus";
@@ -174,6 +178,10 @@ impl OctopusModule {
             account_manager,
             context,
             call_budget: flex_poll::CallBudget::default(),
+            charging_device: flex_poll::ChargingDevice::default(),
+            capture: crate::capture_device::CaptureReader::new("capture/octopus/records"),
+            // Set by OctopusModuleFactory::build.
+            profile_name: String::new(),
         })
     }
 
@@ -223,8 +231,21 @@ impl Module for OctopusModule {
         Some(flex_poll::POLL_INTERVAL)
     }
 
+    /// If any of the profile's capture devices polls Octopus's smart charging, reads the polls they took instead, so
+    /// that the app does not poll it too.
     async fn poll(&self, slot: Option<time::OffsetDateTime>) -> anyhow::Result<String> {
-        flex_poll::poll(&self.context, slot, &self.call_budget).await
+        let cache_config = &self.context.cache_config;
+        let devices = crate::capture_device::adopted_devices(&self.profile_name);
+        let since = flex_poll::latest(cache_config).and_then(|(time, _)| time);
+        if !cache_config.offline
+            && self.capture.read(&devices, since, &mut |record| flex_poll::save_if_new(cache_config, record), &mut |_| {}).await? {
+            return Ok(flex_poll::latest(cache_config).map(|(_, summary)| summary).unwrap_or_default());
+        }
+        flex_poll::poll(&self.context, slot, &self.call_budget, &self.charging_device).await
+    }
+
+    fn next_poll(&self, now: time::OffsetDateTime) -> Option<time::OffsetDateTime> {
+        self.capture.next_read(now, flex_poll::POLL_INTERVAL)
     }
 
     fn cli_debug(&self) -> Result<(), anyhow::Error> {
@@ -500,9 +521,10 @@ impl OctopusModuleFactory {
 
         let authenticated_request_manager = Arc::new(logging_caller::LoggingCaller(sparko_graphql::AuthenticatedRequestManager::new(self.request_manager.clone(), self.token_manager.clone())?));
        
-        let client = OctopusModule::new(self.octopus_args.clone(), self.cache_config.clone(), self.profile.clone(), 
+        let mut client = OctopusModule::new(self.octopus_args.clone(), self.cache_config.clone(), self.profile.clone(),
             authenticated_request_manager, self.verbose
         ).await?;
+        client.profile_name = self.context.profile.active_profile.name.clone();
 
         if self.profile.init {
             crate::profile::update_profile(&self.context.profile.active_profile.name, MODULE_ID, &self.profile)?;

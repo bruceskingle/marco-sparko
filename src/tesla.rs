@@ -3,7 +3,6 @@
 //!
 //! For now it only takes snapshots into the cache and shows the latest, to see what the data is like.
 
-mod capture;
 mod local;
 mod snapshot;
 
@@ -18,7 +17,6 @@ use crate::cache_browser::CacheBrowser;
 use crate::util::SharedProp;
 use crate::{CacheConfig, InitRequested, MarcoSparkoContext, Module, ModuleFactory, ModuleRegistration, PageInfo};
 
-use capture::CaptureClient;
 use local::{LocalClient, PasswordRejected};
 use snapshot::Meter;
 
@@ -71,7 +69,10 @@ struct StoredToken {
 /// What the pages of the module share.
 pub struct TeslaContext {
     client: LocalClient,
-    capture: CaptureClient,
+    /// The Powerwall samples the profile's capture devices took, see TeslaContext::take_snapshot.
+    capture: crate::capture_device::CaptureReader,
+    /// Where they, and the app's own, are saved.
+    snapshots: snapshot::Snapshots,
     cache_config: Arc<CacheConfig>,
     context: Arc<MarcoSparkoContext>,
     profile: Mutex<Profile>,
@@ -106,7 +107,10 @@ impl TeslaContext {
     async fn take_snapshot(&self, slot: Option<time::OffsetDateTime>, progress: &mut dyn FnMut(String)) -> anyhow::Result<()> {
         self.reload_profile();
         let devices = crate::capture_device::adopted_devices(&self.context.profile.active_profile.name);
-        if self.capture.read(&devices, &self.cache_config, progress).await? {
+        // Those after the latest snapshot, the first time, and only into an online profile, see snapshot::take.
+        let since = snapshot::latest(&self.cache_config).as_ref().and_then(snapshot::time_of);
+        let save = &mut |record: &serde_json::Value| self.snapshots.save(&self.cache_config, record);
+        if !self.cache_config.offline && self.capture.read(&devices, since, save, progress).await? {
             return Ok(());
         }
         let din = self.profile.lock().unwrap().din.clone();
@@ -126,7 +130,7 @@ impl TeslaContext {
                 self.save_profile(profile)?;
             }
         }
-        let result = snapshot::take(&self.client, &self.cache_config, slot, progress).await;
+        let result = snapshot::take(&self.client, &self.cache_config, &self.snapshots, slot, progress).await;
         if let Some(token) = self.client.token() {
             self.context.update_cache(MODULE_ID, &StoredToken { token })?;
         }
@@ -186,6 +190,10 @@ impl Module for TeslaModule {
 
     fn poll_interval(&self) -> Option<std::time::Duration> {
         Some(POLL_INTERVAL)
+    }
+
+    fn next_poll(&self, now: time::OffsetDateTime) -> Option<time::OffsetDateTime> {
+        self.context.capture.next_read(now, POLL_INTERVAL)
     }
 
     async fn poll(&self, slot: Option<time::OffsetDateTime>) -> anyhow::Result<String> {
@@ -546,7 +554,8 @@ impl ModuleFactory for TeslaModuleFactory {
         Ok(Box::new(TeslaModule {
             context: Arc::new(TeslaContext {
                 client,
-                capture: CaptureClient::new(),
+                capture: crate::capture_device::CaptureReader::new("capture/tesla/records"),
+                snapshots: snapshot::Snapshots::default(),
                 cache_config: self.cache_config.clone(),
                 context: self.context.clone(),
                 profile: Mutex::new(self.profile.clone()),

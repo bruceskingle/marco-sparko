@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use dioxus::prelude::*;
+use crate::components::error_text::ErrorText;
 use dioxus_free_icons::{Icon, icons::ld_icons::LdRefreshCw};
 use time_tz::Tz;
 
@@ -194,7 +195,7 @@ pub fn ChargingSessions(account_id: String, device_id: String, device_name: Stri
     let content = match &*sessions_resource.read() {
         // The loading dialog is over the page.
         None => rsx! {},
-        Some(Err(error)) => rsx! { div { class: "error", "Failed to load charging sessions: {error}" } },
+        Some(Err(error)) => rsx! { div { class: "error", ErrorText { error: format!("{error:#}"), message: "Failed to load charging sessions" } } },
         Some(Ok(sessions)) if sessions.is_empty() => rsx! { p { "No charging sessions in this period" } },
         Some(Ok(sessions)) => {
             let shown: Vec<&ChargingSession> = sessions.iter().filter(|session| session.shown(is_visible)).collect();

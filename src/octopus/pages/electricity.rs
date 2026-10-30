@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use dioxus::prelude::*;
+use crate::components::error_text::ErrorText;
 use dioxus_free_icons::{Icon, icons::ld_icons::LdRefreshCw};
 use sparko_graphql::types::{Currency, DateTime};
 use time_tz::{OffsetDateTimeExt, Tz};
@@ -156,8 +157,8 @@ pub fn ElectricityPage(props: ElectricityPageProps) -> Element {
     let mut cheap = None;
     let mut intelligent = false;
     let (meter_points, properties) = match (&*meter_points_resource.read(), &*properties_resource.read()) {
-        (Some(Err(error)), _) => return rsx! { div { class: "error", "Failed to load the meter points: {error}" } },
-        (_, Some(Err(error))) => return rsx! { div { class: "error", "Failed to load the properties: {error}" } },
+        (Some(Err(error)), _) => return rsx! { div { class: "error", ErrorText { error: format!("{error:#}"), message: "Failed to load the meter points" } } },
+        (_, Some(Err(error))) => return rsx! { div { class: "error", ErrorText { error: format!("{error:#}"), message: "Failed to load the properties" } } },
         (Some(Ok(meter_points)), Some(Ok(properties))) => (
             meter_points.meter_points.iter()
                 .map(|meter_point| {
@@ -420,7 +421,7 @@ fn ElectricityGraph(account_id: String, import_mpan: String, export_mpan: Option
                     }
                 }
             },
-            None => rsx! { div { class: "error", "Failed to load the readings: {error}" } },
+            None => rsx! { div { class: "error", ErrorText { error: format!("{error:#}"), message: "Failed to load the readings" } } },
         },
         (Some(Ok(_)), Some(electricity)) if electricity.points.is_empty() => rsx! { p { "No readings in this period" } },
         (Some(Ok(_)), Some(electricity)) => match view() {

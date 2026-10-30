@@ -101,10 +101,11 @@ pub fn Navbar() -> Element {
                     "Home"
                 }
 
-                for module_id in (context.profile.active_profile.modules.clone().keys()) {
+                // By name, as on Home, as the profile's modules are in a HashMap, in no order.
+                for module_id in context.profile.active_profile.modules.keys().cloned().collect::<std::collections::BTreeSet<_>>() {
                     Link {
                         class: match &current_route {
-                            Route::Module { module_id: mid } if mid == module_id => "nav-item active",
+                            Route::Module { module_id: mid } if *mid == module_id => "nav-item active",
                             _ => "nav-item",
                         },
                         to: Route::Module {

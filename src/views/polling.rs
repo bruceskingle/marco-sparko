@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use time::macros::format_description;
 use time_tz::OffsetDateTimeExt;
 
+use crate::components::error_text::ErrorText;
 use crate::polling::{PollState, PollStatuses, poll_now, set_paused};
 
 /// The time in the computer's time zone, or UTC if it can not be found, e.g. 14:32:50
@@ -67,7 +68,7 @@ fn PollingTable(rows: Vec<(String, crate::polling::PollStatus)>, statuses: PollS
                     td {
                         match &status.last_result {
                             Some(Ok(summary)) => rsx! { "{summary}" },
-                            Some(Err(error)) => rsx! { span { class: "error", "{error}" } },
+                            Some(Err(error)) => rsx! { ErrorText { error: error.clone() } },
                             None => rsx! {},
                         }
                     }
@@ -78,9 +79,11 @@ fn PollingTable(rows: Vec<(String, crate::polling::PollStatus)>, statuses: PollS
                     }
                     td { class: "number", "{status.polls}" }
                     td { class: "number", "{status.failures}" }
-                    td {
-                        if matches!(status.state, PollState::Waiting | PollState::Paused) {
+                    td { class: "poll-buttons",
+                        // Shown, but disabled, while polling, so that the buttons do not jump about.
+                        if matches!(status.state, PollState::Waiting | PollState::Paused | PollState::Polling) {
                             button {
+                                disabled: status.state == PollState::Polling,
                                 onclick: {
                                     let module_id = module_id.clone();
                                     move |_| poll_now(statuses, &module_id)
@@ -88,8 +91,9 @@ fn PollingTable(rows: Vec<(String, crate::polling::PollStatus)>, statuses: PollS
                                 "Poll Now"
                             }
                         }
-                        if status.state == PollState::Waiting {
+                        if matches!(status.state, PollState::Waiting | PollState::Polling) {
                             button {
+                                disabled: status.state == PollState::Polling,
                                 onclick: {
                                     let module_id = module_id.clone();
                                     move |_| set_paused(statuses, &module_id, true)

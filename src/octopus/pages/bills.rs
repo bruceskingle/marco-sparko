@@ -120,6 +120,7 @@ fn BillWindow(props: BillWindowProps) -> Element {
 
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }
+        crate::components::tooltips::Tooltips {}
         ErrorBoundary {
             handle_error: |errors: ErrorContext| rsx! {
                 div { class: "error", "Failed to show the bill" }

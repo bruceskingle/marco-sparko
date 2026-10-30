@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use dioxus::prelude::*;
+use crate::components::error_text::ErrorText;
 use dioxus_free_icons::{Icon, icons::ld_icons::LdRefreshCw};
 use sparko_graphql::types::{Currency, DateTime};
 use time_tz::{OffsetDateTimeExt, Tz};
@@ -281,7 +282,7 @@ pub fn Telemetry(account_id: String, esme_id: String, cad_id: String, billing_ti
                     }
                 }
             },
-            None => rsx! { div { class: "error", "Failed to load the readings: {error}" } },
+            None => rsx! { div { class: "error", ErrorText { error: format!("{error:#}"), message: "Failed to load the readings" } } },
         },
         Some(Ok(readings)) if readings.is_empty() => rsx! {
             p { "No readings in this period, Octopus only has the last 30 days and older ones are only shown if they were saved." }

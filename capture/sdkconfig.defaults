@@ -1,6 +1,6 @@
 # As boards/cyd in sparko-embedded-std, but with a bigger main task stack, as the scheduler runs the HTTPS requests to
-# the Tesla gateway in it.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+# the Tesla gateway, myenergi and Octopus in it. At 16 KB, /api/memory showed at most about 10 KB used.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
 
 # Increase a bit these stack sizes as they are also a bit too small by default
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
@@ -36,3 +36,10 @@ CONFIG_LWIP_MAX_SOCKETS=16
 # Long file names on the SD card, e.g. 2026-10-29.jsonl, see records.rs.
 CONFIG_FATFS_LFN_HEAP=y
 CONFIG_FATFS_MAX_LFN=255
+
+# For the tasks' stack high water marks in /api/memory.
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+
+# 6 WiFi receive buffers reserved, rather than 10, about 1.6 KB each, as the RAM is needed for the HTTPS connections to
+# myenergi and Octopus, which check certificate chains.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6

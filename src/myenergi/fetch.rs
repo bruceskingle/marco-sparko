@@ -38,11 +38,32 @@ async fn fetch_status(client: &MyenergiClient, cache_config: &CacheConfig, slot:
         "received": received.format(rfc3339)?,
         "response": status,
     });
-    let time_of = slot.unwrap_or(requested);
+    write_json(&status_path(cache_config, slot.unwrap_or(requested))?, &saved)?;
+    Ok(status)
+}
+
+/// The cache file of the status of time, e.g. 2026/October/28#status-134000.
+fn status_path(cache_config: &CacheConfig, time_of: time::OffsetDateTime) -> anyhow::Result<std::path::PathBuf> {
     let time = time_of.time();
     let key = format!("{STATUS_KEY}-{:02}{:02}{:02}", time.hour(), time.minute(), time.second());
-    write_json(&cache_config.path_for_day(&key, &time_of.date().into())?, &saved)?;
-    Ok(status)
+    cache_config.path_for_day(&key, &time_of.date().into())
+}
+
+/// Saves a status taken elsewhere, e.g. by a capture device, in the same form as fetch_status, unless there is one for
+/// its time already, returning whether it was saved.
+pub fn save_status_if_new(cache_config: &CacheConfig, saved: &serde_json::Value) -> anyhow::Result<bool> {
+    let time = saved_time(saved).ok_or_else(|| anyhow!("the status has no time"))?;
+    let path = status_path(cache_config, time)?;
+    if path.exists() {
+        return Ok(false);
+    }
+    write_json(&path, saved)?;
+    Ok(true)
+}
+
+/// The time of the latest status in the cache.
+pub fn latest_status_time(cache_config: &CacheConfig) -> Option<time::OffsetDateTime> {
+    saved_time(&cache_config.latest_json(STATUS_KEY)?)
 }
 
 /// The status in a saved status, which is {"slot": ..., "requested": ..., "received": ..., "response": status}, see
@@ -170,12 +191,19 @@ fn recent_parts(now: time::OffsetDateTime) -> Vec<(time::OffsetDateTime, i64)> {
 /// the whole of yesterday once each new day, for records which arrived late. Returns what each zappi is doing, e.g.
 /// "zappi 12345678: car connected, 3.4 kWh added, 0.00 kW". The kWh added since the car was plugged in, che, are kept
 /// until it is plugged in again, so polling often enough catches every charging session's total.
+///
+/// If captured, a capture device has polled the status, see MyenergiModule::poll, so the latest saved is used instead
+/// of fetching it.
 pub async fn poll(client: &MyenergiClient, cache_config: &CacheConfig, slot: Option<time::OffsetDateTime>,
-    whole_days_fetched: &std::sync::Mutex<Option<Date>>) -> anyhow::Result<String> {
+    whole_days_fetched: &std::sync::Mutex<Option<Date>>, captured: bool) -> anyhow::Result<String> {
     if cache_config.offline {
         return Err(anyhow!("This profile is offline, so nothing can be fetched"));
     }
-    let status = fetch_status(client, cache_config, slot, &mut |_| {}).await?;
+    let latest = if captured { cache_config.latest_json(STATUS_KEY).map(|saved| saved_status(&saved).clone()) } else { None };
+    let status = match latest {
+        Some(status) => status,
+        None => fetch_status(client, cache_config, slot, &mut |_| {}).await?,
+    };
     let now = crate::clock::now_utc();
     let today = now.date();
     let last_fetched = *whole_days_fetched.lock().unwrap();
@@ -352,6 +380,8 @@ pub struct StatusSample {
     pub frequency: Option<f64>,
     /// The zappi's record of the minute the status is from, if it has been fetched, to compare them.
     pub minute: Option<MinuteSample>,
+    /// What took the status, e.g. a capture device's name, None if the app did, see capture_device.rs.
+    pub captured_by: Option<String>,
 }
 
 /// A zappi's record of a minute, see MyenergiClient::day, as the average power in W over the minute, to compare with a
@@ -432,6 +462,7 @@ impl StatusSample {
                     voltage: number("vol").map(|vol| vol / 10.0),
                     frequency: number("frq"),
                     minute: None,
+                    captured_by: None,
                 }
             })
             .collect()
@@ -446,10 +477,13 @@ pub fn status_samples(cache_config: &CacheConfig, limit: usize) -> Vec<StatusSam
         .filter_map(|path| CacheConfig::read_json(path))
         .flat_map(|saved| {
             let time = saved_time(&saved);
+            let captured_by = saved.get("capturedBy").and_then(|value| value.as_str()).map(String::from);
             StatusSample::from_status(saved_status(&saved)).into_iter()
-                .map(move |sample| StatusSample { time: time.or(sample.time), ..sample })
+                .map(move |sample| StatusSample { time: time.or(sample.time), captured_by: captured_by.clone(), ..sample })
         })
         .collect();
+    // By the times they are of, not when they were saved, as a capture device's are saved when it is read.
+    samples.sort_by(|a, b| b.time.cmp(&a.time));
 
     // Each zappi's records of each day, by the minute of the day, read once.
     let mut days: std::collections::HashMap<(String, Date), std::collections::HashMap<i64, serde_json::Value>> = Default::default();
@@ -517,6 +551,31 @@ mod tests {
                 Ct { positive: 1.0, negative: 0.0 },
             ],
         }));
+    }
+
+    #[test]
+    fn a_capture_device_status_is_a_sample() {
+        // As capture/src/myenergi.rs saves them: every device's serial number, and some of each zappi's fields.
+        let saved = serde_json::json!({
+            "slot": "2026-10-29T16:15:00.000000Z",
+            "requested": "2026-10-29T16:15:00.412000Z",
+            "received": "2026-10-29T16:15:02.106000Z",
+            "capturedBy": "marco-sparko-capture 0.1.0",
+            "response": [
+                {"eddi": []},
+                {"harvi": [{"sno": 12345678}]},
+                {"zappi": [{"sno": 20456041, "dat": "29-10-2026", "tim": "16:15:01", "pst": "B2", "sta": 1, "zmo": 3,
+                    "che": 0, "div": 0, "ectt2": "Grid", "ectp2": 120}]},
+            ],
+        });
+        assert_eq!(saved_time(&saved), time::OffsetDateTime::parse("2026-10-29T16:15:00Z", &time::format_description::well_known::Rfc3339).ok());
+        let samples = StatusSample::from_status(saved_status(&saved));
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].serial, "20456041");
+        assert_eq!(samples[0].plug, "waiting for the car");
+        assert_eq!(samples[0].cts[0], Some(120.0));
+        let devices: Vec<String> = Device::from_status(saved_status(&saved)).iter().map(|device| format!("{}{}", device.letter, device.serial)).collect();
+        assert_eq!(devices, ["H12345678", "Z20456041"]);
     }
 
     #[test]

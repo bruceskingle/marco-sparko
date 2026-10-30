@@ -7,5 +7,7 @@ pub mod child_windows;
 pub mod color_panel;
 pub mod date_range_picker;
 pub mod delete_profile;
+pub mod error_text;
 pub mod export;
 pub mod toggle_button;
+pub mod tooltips;

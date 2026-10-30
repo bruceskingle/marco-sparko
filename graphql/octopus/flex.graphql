@@ -37,3 +37,33 @@ query devicePreferences($accountNumber: String!) {
     }
   }
 }
+
+# Everything above, in one request, which is what polling makes once it knows the charging device, from an earlier
+# poll's devices, see octopus/flex_poll.rs, and what a capture device sends, see capture/src/octopus.rs.
+query flexPoll($accountNumber: String!, $deviceId: String!) {
+  devices(accountNumber: $accountNumber) {
+    id
+    __typename
+    preferences {
+      __typename
+      mode
+      targetType
+      isChargingDurationCapped
+    }
+  }
+  flexPlannedDispatches(deviceId: $deviceId) {
+    start
+    end
+    type
+    energyAddedKwh
+  }
+  completedDispatches(accountNumber: $accountNumber) {
+    start
+    end
+    delta
+    meta {
+      source
+      location
+    }
+  }
+}

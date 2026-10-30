@@ -6,7 +6,6 @@
 //! - A rejected password is removed from the config, so it is not tried again, even after a restart, as repeated
 //!   failures lock out the customer login, for every program.
 
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -28,8 +27,12 @@ use sparko_embedded_std::platform::PlatformInitializer;
 use sparko_embedded_std::task::scheduler::ScheduledTask;
 use sparko_esp_idf::{Esp32Platform, Esp32PlatformInitializer, Feature};
 
-use crate::records::{self, ENDPOINTS, Record, Response, Store, format_time};
-use crate::screen::Screen;
+use crate::connections::KeptConnection;
+use crate::day_files::{self, DayFiles};
+use crate::device::{Device, captured_by};
+use crate::slots::Slots;
+use crate::records::{ENDPOINTS, Record, Response, Store, format_time};
+use crate::screen::{Line, Panel};
 
 /// The feature's name, which is also its NVS namespace, so at most 15 characters.
 const FEATURE_NAME: &str = "TeslaCapture";
@@ -37,11 +40,15 @@ const FEATURE_NAME: &str = "TeslaCapture";
 /// The name of the password in the config, see forget_password.
 const PASSWORD: &str = "tesla_password";
 
-/// Every 5 minutes, on the minute, as the app polls, see marco-sparko's src/polling.rs.
-const DEFAULT_SCHEDULE: &str = "0 */5 * * * *";
+/// Every 10 seconds, on the 5 minute slots the app polls on too, see marco-sparko's src/polling.rs, which the gateway, on
+/// the home network, can easily answer, as the connection to it is kept between polls, see PollTask::fetch. The power
+/// at that resolution is what the Octopus Home Mini's telemetry has, for comparison.
+const DEFAULT_SCHEDULE: &str = "*/10 * * * * *";
 
-/// 12 hours of 5 minute samples, which should fit the CYD's RAM, see the free heap in the log after each poll.
-const DEFAULT_CAPACITY: i32 = 144;
+/// 4 hours of 5 minute samples, about 250 bytes each in RAM, for the screen, and for the app if there is no SD card,
+/// which keeps the rest. More fit, but myenergi's HTTPS connection needs the RAM, see the free heap in the log after
+/// each poll.
+const DEFAULT_CAPACITY: i32 = 48;
 
 /// How long to wait before logging in again after the gateway said there had been too many attempts.
 const LOCKOUT_WAIT: TimeDelta = TimeDelta::minutes(30);
@@ -52,26 +59,39 @@ const MAX_BODY: usize = 16 * 1024;
 /// The config's names must differ from every other feature's, as the config page's form has one field for each name,
 /// and at most 15 characters, as they are NVS keys.
 #[derive(FeatureConfig)]
+#[config(label = "Tesla Powerwall")]
 pub struct TeslaConfig {
     /// The gateway's address on the home network.
-    #[config(len = 64)]
+    #[config(len = 64, label = "Tesla Gateway Hostname or IP Address")]
     tesla_host: String,
     /// The email of the gateway's customer login.
-    #[config(len = 64)]
+    #[config(len = 64, label = "Tesla Gateway Customer Email")]
     tesla_email: String,
     /// Optional, so that the config is still valid when a rejected one is removed.
-    #[config(len = 64, secret)]
+    #[config(len = 64, secret, label = "Tesla Gateway Customer Password")]
     tesla_password: Option<String>,
+    #[config(label = "Tesla Poll Schedule (cron, seconds first; every 10 seconds if empty)")]
     tesla_schedule: Option<Cron>,
     /// How many samples are kept, see DEFAULT_CAPACITY.
+    #[config(label = "Tesla Samples Kept in RAM (48 if empty)")]
     tesla_capacity: Option<i32>,
 }
 
-pub struct TeslaCapture {}
+/// Where its lines go on the screen, first.
+const PANEL_ORDER: u8 = 0;
+
+/// The meters, as named by the gateway, and as shown on the screen.
+const METERS: &[(&str, &str)] = &[("site", "Grid"), ("solar", "Solar"), ("battery", "Battery"), ("load", "House")];
+
+pub struct TeslaCapture {
+    panel: Arc<Panel>,
+    /// The connection to the gateway, kept between polls, see PollTask::fetch.
+    gateway: KeptConnection,
+}
 
 impl TeslaCapture {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(panel: Arc<Panel>, gateway: KeptConnection) -> Self {
+        Self { panel, gateway }
     }
 }
 
@@ -97,8 +117,8 @@ impl Feature for TeslaCapture {
             .unwrap_or_else(|| DEFAULT_SCHEDULE.to_string());
         let capacity = config.tesla_capacity.filter(|capacity| *capacity > 0).unwrap_or(DEFAULT_CAPACITY);
         let dir = sparko.sd_card().map(|mount_point| std::path::Path::new(mount_point).join("capture").join("tesla"));
-        let store = Arc::new(Mutex::new(Store::new(capacity as usize, dir, CAPTURED_BY)));
-        let device = Arc::new(Device::new());
+        let store = Arc::new(Mutex::new(Store::new(capacity as usize, DayFiles::new(dir), captured_by(sparko))));
+        let device = Arc::new(Device::new(&schedule_spec));
 
         let mut poll = PollTask {
             gateway: Gateway {
@@ -109,135 +129,79 @@ impl Feature for TeslaCapture {
                 no_login_until: None,
             },
             store: store.clone(),
-            schedule: Cron::from_str(&schedule_spec)?,
-            next_slot: Utc::now(),
+            panel: self.panel.clone(),
+            slots: Slots::new(&schedule_spec)?,
+            client: self.gateway.clone(),
         };
-        poll.next_slot = poll.schedule.find_next_occurrence(&Utc::now(), false)?;
 
-        initializer.add_task(Box::new(Screen::new(&sparko.display_manager, store.clone())?), "*/2 * * * * *")?;
+        self.panel.set(PANEL_ORDER, panel_lines(&store.lock().unwrap()));
+        self.panel.start(sparko, initializer)?;
 
         // A first poll now, as the app does, so there is something to show without waiting for the first slot.
         poll.poll(sparko, None);
         initializer.add_task(Box::new(poll), &schedule_spec)?;
 
-        // Only on the API, which once the device has been adopted needs the app's key, as the records say when the
-        // house is empty.
-        if let Some(api_server) = sparko.api_server.as_mut() {
-            api_server.on("/api/capture/tesla/records", Method::Get, move |request| {
-                serve_records(request, &store, &device)
-            })?;
-        }
+        // Only on the API, which once the device has been adopted needs the app's key, or a request signed with it, as
+        // the records say when the house is empty.
+        sparko.api_get("/api/capture/tesla/records", move |request| {
+            serve_records(request, &store, &device)
+        })?;
 
         Ok(())
     }
 }
 
-/// The records since the time in the request's since parameter, see since, and the device's details, as
-/// {"device": {...}, "records": [...]}: from the SD card if there is one, see records::write_files_since, otherwise
-/// those in RAM.
+/// The records since the time in the request's since parameter, and the device's details, see day_files::respond.
 fn serve_records(
     request: esp_idf_svc::http::server::Request<&mut esp_idf_svc::http::server::EspHttpConnection<'_>>,
     store: &Mutex<Store>,
     device: &Device,
 ) -> anyhow::Result<()> {
-    let since = since(request.uri());
-    let mut response = request.into_response(200, None, &[("Content-Type", "application/json")])?;
-    // Written a record at a time, as all of them would not fit in the RAM as one piece of JSON.
     let (files, device_json) = {
         let store = store.lock().unwrap();
-        (store.files(), device.to_json(&store))
+        (store.files().usable(), device.to_json(store.files(), store.len(), store.capacity()))
     };
-    response.write_all(b"{\"device\":")?;
-    response.write_all(&serde_json::to_vec(&device_json)?)?;
-    response.write_all(b",\"records\":[")?;
-    let mut first = true;
-    let mut write = |record: &[u8]| -> anyhow::Result<()> {
-        if !first {
-            response.write_all(b",")?;
+    // Not holding the store while the files are read, so that polling carries on while a few days are read.
+    day_files::respond(request, &device_json, files, |since, write| {
+        let store = store.lock().unwrap();
+        store.since(since).try_for_each(|record| write(&serde_json::to_vec(&record.to_json(store.captured_by()))?))
+    })
+}
+
+/// What the screen shows: the power of each of the gateway's meters, the battery's charge and backup reserve, and when
+/// the gateway was last polled, or why that failed.
+fn panel_lines(store: &Store) -> Vec<Line> {
+    let mut lines = Vec::new();
+    if let Some(record) = store.latest() {
+        for (name, label) in METERS {
+            if let Some(meter) = record.meter(name) {
+                lines.push((format!("{label:<8}{:>7.2} kW", meter.instant_power / 1000.0), false));
+            }
         }
-        first = false;
-        response.write_all(record)?;
-        Ok(())
-    };
-    let result = match files {
-        // Not holding the store, so that polling carries on while a few days are read.
-        Some(dir) => records::write_files_since(&dir, since, &mut write).map(|_| ()),
-        None => {
-            let store = store.lock().unwrap();
-            store.since(since).try_for_each(|record| write(&serde_json::to_vec(&record.to_json(store.captured_by()))?))
-        }
-    };
-    response.write_all(b"]")?;
-    // Those before it have been sent, so the app can still save them, and see why there are no more.
-    if let Err(error) = result {
-        warn!("Unable to read the records, {error:#}");
-        response.write_all(b",\"recordsError\":")?;
-        response.write_all(&serde_json::to_vec(&format!("{error:#}"))?)?;
+        // As the gateway says them, which the Tesla app shows less the 5% it keeps in reserve.
+        let charge = match record.response("system_status/soe") {
+            Some(Response::Soe { percentage: Some(percentage) }) => format!("{percentage:.0}%"),
+            _ => "?".to_string(),
+        };
+        let reserve = match record.response("operation") {
+            Some(Response::Operation { backup_reserve_percent: Some(reserve), .. }) => format!("{reserve:.0}%"),
+            _ => "?".to_string(),
+        };
+        lines.push((format!("Charge {charge}  min {reserve}"), false));
     }
-    response.write_all(b"}")?;
-    Ok(())
-}
-
-/// The since parameter of the query string, an RFC 3339 time, e.g. ?since=2026-10-29T07:30:00Z
-fn since(uri: &str) -> Option<DateTime<Utc>> {
-    let (_, query) = uri.split_once('?')?;
-    url::form_urlencoded::parse(query.as_bytes())
-        .find(|(name, _)| name == "since")
-        .and_then(|(_, value)| DateTime::parse_from_rfc3339(&value).ok())
-        .map(|time| time.with_timezone(&Utc))
-}
-
-/// What took the records, in each one's capturedBy.
-const CAPTURED_BY: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
-
-/// What the app is told about the device with the records.
-struct Device {
-    /// When the device last started, and why, e.g. Brownout, which shows power dips.
-    boot_time: DateTime<Utc>,
-    reset_reason: &'static str,
-}
-
-impl Device {
-    fn new() -> Device {
-        let up_time = TimeDelta::microseconds(unsafe { esp_idf_sys::esp_timer_get_time() });
-        Device {
-            boot_time: Utc::now() - up_time,
-            reset_reason: reset_reason(),
+    match store.last_poll() {
+        None => lines.push(("Waiting for first poll".to_string(), false)),
+        Some(poll) => {
+            let time = poll.time.with_timezone(&chrono::Local).format("%H:%M");
+            match (&poll.error, store.files().problem()) {
+                (None, None) => lines.push((format!("Polled {time}"), false)),
+                // e.g. no SD card, so the records will be lost when the device restarts.
+                (None, Some(_)) => lines.push((format!("Polled {time}, no SD"), true)),
+                (Some(error), _) => lines.push((format!("{time} {error}"), true)),
+            }
         }
     }
-
-    fn to_json(&self, store: &Store) -> serde_json::Value {
-        json!({
-            "name": env!("CARGO_PKG_NAME"),
-            "version": env!("CARGO_PKG_VERSION"),
-            "now": format_time(Utc::now()),
-            "bootTime": format_time(self.boot_time),
-            "resetReason": self.reset_reason,
-            "storage": store.storage(),
-            "storageProblem": store.storage_problem(),
-            "recordsInRam": store.len(),
-            "ramCapacity": store.capacity(),
-            "freeHeap": unsafe { esp_idf_sys::esp_get_free_heap_size() },
-            "minimumFreeHeap": unsafe { esp_idf_sys::esp_get_minimum_free_heap_size() },
-        })
-    }
-}
-
-fn reset_reason() -> &'static str {
-    #[allow(non_upper_case_globals)]
-    match unsafe { esp_idf_sys::esp_reset_reason() } {
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_POWERON => "PowerOn",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_EXT => "ExternalPin",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_SW => "Software",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_PANIC => "Panic",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_INT_WDT => "InterruptWatchdog",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_TASK_WDT => "TaskWatchdog",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_WDT => "OtherWatchdog",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_DEEPSLEEP => "DeepSleep",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_BROWNOUT => "Brownout",
-        esp_idf_sys::esp_reset_reason_t_ESP_RST_SDIO => "Sdio",
-        _ => "Unknown",
-    }
+    lines
 }
 
 /// The gateway did not accept the email and password, which must not be tried again until they are changed.
@@ -322,7 +286,7 @@ impl Gateway {
     }
 
     fn send_get(&self, client: &mut Client<EspHttpConnection>, endpoint: &str) -> anyhow::Result<(u16, Vec<u8>)> {
-        info!("Tesla gateway GET {endpoint}");
+        log::debug!("Tesla gateway GET {endpoint}");
         let authorization = format!("Bearer {}", self.token.as_deref().unwrap_or_default());
         let headers = [("Authorization", authorization.as_str())];
         let url = self.url(endpoint);
@@ -371,14 +335,17 @@ fn summary(body: &[u8]) -> String {
 struct PollTask {
     gateway: Gateway,
     store: Arc<Mutex<Store>>,
-    /// The schedule this task was added with, to know which slot each run is for, see slot.
-    schedule: Cron,
-    next_slot: DateTime<Utc>,
+    panel: Arc<Panel>,
+    slots: Slots,
+    /// The connection to the gateway, kept between polls, so that each is a few requests, not a new HTTPS
+    /// connection, which takes a second and most of the RAM which is free. None until the first, after it failed, or
+    /// after a poll which needed the RAM closed it, see KeptConnection::release.
+    client: KeptConnection,
 }
 
 impl ScheduledTask<Esp32Platform> for PollTask {
     fn run(&mut self, sparko: &mut Esp32Platform) -> anyhow::Result<()> {
-        let slot = self.slot()?;
+        let slot = self.slots.current()?;
         self.poll(sparko, slot);
         Ok(())
     }
@@ -389,18 +356,6 @@ impl ScheduledTask<Esp32Platform> for PollTask {
 }
 
 impl PollTask {
-    /// The slot this run is for, the latest time of the schedule which has passed, as the scheduler runs a task at
-    /// or a little after its time, later if another task held it up.
-    fn slot(&mut self) -> anyhow::Result<Option<DateTime<Utc>>> {
-        let now = Utc::now();
-        let mut slot = None;
-        while self.next_slot <= now {
-            slot = Some(self.next_slot);
-            self.next_slot = self.schedule.find_next_occurrence(&self.next_slot, false)?;
-        }
-        Ok(slot)
-    }
-
     /// Polls the gateway, saving the record, or the error if the gateway could not be reached, for the screen.
     fn poll(&mut self, sparko: &mut Esp32Platform, slot: Option<DateTime<Utc>>) {
         let requested = Utc::now();
@@ -424,24 +379,44 @@ impl PollTask {
                 store.failed(requested, format!("{error:#}"));
             }
         }
+        self.panel.set(PANEL_ORDER, panel_lines(&store));
     }
 
     /// Requests each of the ENDPOINTS in turn, on one connection, logging in first if there is no token.
+    /// On the connection kept from the last poll, if there is one, and if that fails, e.g. as the gateway has closed it,
+    /// once more on a new one.
     fn fetch(&mut self, slot: Option<DateTime<Utc>>, requested: DateTime<Utc>) -> anyhow::Result<Record> {
+        if let Some(mut client) = self.client.take() {
+            match self.fetch_on(&mut client, slot, requested) {
+                Ok(record) => {
+                    self.client.keep(client);
+                    return Ok(record);
+                }
+                Err(error) if error.is::<PasswordRejected>() => return Err(error),
+                Err(error) => info!("The kept connection to the Tesla gateway failed, connecting again, {error:#}"),
+            }
+        }
         let mut client = Client::wrap(EspHttpConnection::new(&Configuration {
             timeout: Some(Duration::from_secs(10)),
             ..Default::default()
         })?);
+        let record = self.fetch_on(&mut client, slot, requested)?;
+        self.client.keep(client);
+        Ok(record)
+    }
+
+    fn fetch_on(&mut self, client: &mut Client<EspHttpConnection>, slot: Option<DateTime<Utc>>, requested: DateTime<Utc>)
+        -> anyhow::Result<Record> {
         let mut logged_in = false;
         if self.gateway.token.is_none() {
             logged_in = true;
-            self.gateway.login(&mut client)?;
+            self.gateway.login(client)?;
         }
         let mut responses = Vec::with_capacity(ENDPOINTS.len());
         for endpoint in ENDPOINTS {
             let response = self
                 .gateway
-                .get(&mut client, endpoint, &mut logged_in)
+                .get(client, endpoint, &mut logged_in)
                 .and_then(|body| Response::parse(endpoint, &body));
             match response {
                 Ok(response) => responses.push(Ok(response)),

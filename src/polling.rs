@@ -127,7 +127,7 @@ pub type PollStatuses = Signal<BTreeMap<String, PollStatus>>;
 /// The first time after now which is a whole number of intervals since midnight UTC, e.g. 10:05:00 after 10:03:12
 /// every 5 minutes, so that every poller's samples are at the same times, which with intervals which divide an hour
 /// are on the hour and half hour too, as Octopus's are. A poll at the start, or asked for, does not move them.
-fn next_slot(now: OffsetDateTime, interval: Duration) -> OffsetDateTime {
+pub fn next_slot(now: OffsetDateTime, interval: Duration) -> OffsetDateTime {
     let seconds = (interval.as_secs() as i64).max(1);
     let next = (now.unix_timestamp().div_euclid(seconds) + 1) * seconds;
     OffsetDateTime::from_unix_timestamp(next).unwrap_or(now + interval)
@@ -192,14 +192,18 @@ pub fn Poller(context: crate::util::SharedProp<MarcoSparkoContext>) -> Element {
                 }
             }
 
+            // The polls under way, each finishing on its own, so that a Poll Now of another module, or its next slot,
+            // does not wait for them, e.g. for a capture device which does not answer, see CaptureReader::read_device.
+            let mut in_flight = futures::stream::FuturesUnordered::new();
             loop {
                 if last_heartbeat.elapsed() >= HEARTBEAT {
                     log.record(serde_json::json!({ "event": "heartbeat" }));
                     last_heartbeat = std::time::Instant::now();
                 }
-                // The modules which are due, with the slot each is polled for, None if it is not a scheduled poll.
+                // The modules which are due, with the slot each is polled for, None if it is not a scheduled poll,
+                // started together, so that the readings of different devices are of as nearly the same moment as they
+                // can be. Not those already polling, which are not Waiting, and which poll_now refuses.
                 let now = crate::clock::now_utc();
-                let mut due = Vec::new();
                 for (module_id, module) in &modules {
                     let mut statuses = statuses.write();
                     let Some(status) = statuses.get_mut(module_id) else { continue };
@@ -212,62 +216,57 @@ pub fn Poller(context: crate::util::SharedProp<MarcoSparkoContext>) -> Element {
                     let was_paused = status.state == PollState::Paused;
                     status.state = PollState::Polling;
                     status.poll_now = false;
-                    due.push((module_id, module, slot, was_paused));
-                }
-                if due.is_empty() {
-                    tokio::time::sleep(TICK).await;
-                    continue;
+                    in_flight.push(async move {
+                        let requested = crate::clock::now_utc();
+                        let result = module.poll(slot).await;
+                        (module_id, module, slot, was_paused, result, requested, crate::clock::now_utc())
+                    });
                 }
 
-                // Together, so that the readings of different devices are of as nearly the same moment as they can be.
-                let results = futures::future::join_all(due.iter().map(|(_, module, slot, _)| async move {
-                    let requested = crate::clock::now_utc();
-                    let result = module.poll(*slot).await;
-                    (result, requested, crate::clock::now_utc())
-                })).await;
-
+                let finished = tokio::select! {
+                    Some(finished) = futures::StreamExt::next(&mut in_flight), if !in_flight.is_empty() => finished,
+                    _ = tokio::time::sleep(TICK) => continue,
+                };
+                let (module_id, module, slot, was_paused, result, requested, received) = finished;
                 let now = crate::clock::now_utc();
-                for ((module_id, _, slot, was_paused), (result, requested, received)) in due.into_iter().zip(results) {
-                    let result = result.map_err(|error| format!("{error:#}"));
-                    let rfc3339 = |time: OffsetDateTime| time.format(&time::format_description::well_known::Rfc3339).unwrap_or_default();
-                    log.record(serde_json::json!({
-                        "event": "poll",
-                        "module": module_id,
-                        "slot": slot.map(rfc3339),
-                        "requested": rfc3339(requested),
-                        "received": rfc3339(received),
-                        "ok": result.is_ok(),
-                        "result": match &result { Ok(summary) => summary, Err(error) => error },
-                    }));
-                    match &result {
-                        Ok(summary) => crate::log_info!("Polled {module_id}: {summary}"),
-                        Err(error) => crate::log_error!("Polling {module_id} failed: {error}"),
-                    }
-                    if let Some(status) = statuses.write().get_mut(module_id) {
-                        status.polls += 1;
-                        status.last_time = Some(now);
-                        if result.is_ok() {
-                            status.failures_in_a_row = 0;
-                        }
-                        else {
-                            status.failures += 1;
-                            status.failures_in_a_row += 1;
-                        }
-                        status.last_result = Some(result);
-                        status.next_time = status.interval.map(|interval| next_slot(now, interval));
-                        status.state = if was_paused {
-                            PollState::Paused
-                        }
-                        else if status.failures_in_a_row >= MAX_FAILURES {
-                            crate::log_warning!("Paused polling {module_id} after {MAX_FAILURES} failures in a row");
-                            PollState::Paused
-                        }
-                        else {
-                            PollState::Waiting
-                        };
-                    }
+                let result = result.map_err(|error| format!("{error:#}"));
+                let rfc3339 = |time: OffsetDateTime| time.format(&time::format_description::well_known::Rfc3339).unwrap_or_default();
+                log.record(serde_json::json!({
+                    "event": "poll",
+                    "module": module_id,
+                    "slot": slot.map(rfc3339),
+                    "requested": rfc3339(requested),
+                    "received": rfc3339(received),
+                    "ok": result.is_ok(),
+                    "result": match &result { Ok(summary) => summary, Err(error) => error },
+                }));
+                match &result {
+                    Ok(summary) => crate::log_info!("Polled {module_id}: {summary}"),
+                    Err(error) => crate::log_error!("Polling {module_id} failed: {error}"),
                 }
-                tokio::time::sleep(TICK).await;
+                if let Some(status) = statuses.write().get_mut(module_id) {
+                    status.polls += 1;
+                    status.last_time = Some(now);
+                    if result.is_ok() {
+                        status.failures_in_a_row = 0;
+                    }
+                    else {
+                        status.failures += 1;
+                        status.failures_in_a_row += 1;
+                    }
+                    status.last_result = Some(result);
+                    status.next_time = module.next_poll(now).or_else(|| status.interval.map(|interval| next_slot(now, interval)));
+                    status.state = if was_paused {
+                        PollState::Paused
+                    }
+                    else if status.failures_in_a_row >= MAX_FAILURES {
+                        crate::log_warning!("Paused polling {module_id} after {MAX_FAILURES} failures in a row");
+                        PollState::Paused
+                    }
+                    else {
+                        PollState::Waiting
+                    };
+                }
             }
         }
     });

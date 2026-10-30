@@ -1,8 +1,13 @@
 # Capture Devices
 
 Capture devices are small always-on ESP32 boards with a screen, such as a CYD, which fetch data while this computer
-sleeps, e.g. the Powerwall's every 5 minutes, and show the latest on their screens. The app reads what they fetched when
+sleeps, e.g. the Powerwall's and the zappi's every 5 minutes, and show the latest on their screens. The app reads what they fetched when
 it next runs. **Devices** in Home's page list shows them.
+
+A capture device needs a **micro SD card**, formatted FAT32, which is where it keeps what it fetches, a file a day,
+until the app reads it, and its log of when and why it started. Without one it only keeps the last few of each in its
+memory, which are lost if it restarts, and knows only why it last started. The Powerwall's readings every 10 seconds
+take about 9 MB a day, so an 8 GB card holds over two years.
 
 ## Adopting a device
 
@@ -11,7 +16,8 @@ your Wi-Fi. Once it is on the Wi-Fi, adopt it here:
 
 1. Enter its IP address under **Add a Capture Device**, and click **Find**. The app shows what the device is.
 2. Click **Show Pairing Code**. The device shows a 6 digit code on its screen for 2 minutes.
-3. Type the code and click **Adopt**.
+3. Type the code and click **Adopt**. The app then reads what the device has taken that it does not have yet, as
+   its modules poll straight away, see Polling in Home.
 
 The screen also shows the start of the device's certificate, which should be the same as the **Certificate** the app
 shows. If it is not, something else on the network may be pretending to be the device, so do not adopt it.
@@ -24,8 +30,13 @@ Wi-Fi settings on it.
 
 - **Settings** shows each of the device's features, with its settings. Change them and click **Save**, then
   **Restart Now**, as they take effect when the device restarts. Passwords are never shown, only whether they are set:
-  type a new one to replace it, or **Clear Password** to remove an optional one.
-- **Refresh** asks the device again what it is, and **Restart** restarts it.
+  type a new one to replace it, or **Clear Password** to remove an optional one. **Fill in from this profile** fills in what the
+  profile already knows for a feature, e.g. the Tesla gateway's login or the myenergi and Octopus API keys, to check
+  before saving.
+- The card shows what the device is, how long it has been running, and why it last started, and checks every 30
+  seconds that it can be reached. **Restarts** counts how often it started in the last 7 days, by kind, crashes,
+  watchdog resets and power dips in red, as they are trouble. Click the count for the list, with when each was.
+- **Refresh** asks the device again what it is, and **Restart** restarts it, when it can be reached.
 - **Release** gives the device back to its own /config page, and removes it from this profile.
 - **Forget** only removes it from this profile, e.g. if it no longer works. It stays adopted until its **BOOT** button
   is held down for 5 seconds, which releases it.

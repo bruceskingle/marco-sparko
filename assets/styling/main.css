@@ -255,13 +255,76 @@ th.row-header {
     font-weight: normal;
 }
 
+/* A message about something which failed, in the invalid style, with any detail as a tooltip, see ErrorText. */
 .error {
     margin-top: 12px;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px dashed rgba(0,0,0,0.06);
-    background: red;
-    color: yellow;
+    color: var(--invalid);
+    font-weight: bold;
+}
+
+/* A device's starts, on its card, see DeviceCard. */
+table.device-starts {
+    margin-top: 6px;
+    font-size: 13px;
+}
+
+table.device-starts td {
+    padding: 2px 10px 2px 0;
+}
+
+/* A tooltip shown at once when clicked, see tooltips.js. */
+.tooltip-popup {
+    position: fixed;
+    z-index: 1000;
+    padding: 8px 10px;
+    width: max-content;
+    max-width: 40em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-weight: normal;
+    font-size: 14px;
+    color: #e6edf3;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* A column heading which sorts the table when clicked, with arrows rather than a tooltip, see CLAUDE.md. Add
+   sorted-ascending or sorted-descending to the one the table is sorted by. */
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+th.sortable::after {
+    content: " \2195";
+    color: var(--muted);
+}
+
+th.sortable.sorted-ascending::after {
+    content: " \2191";
+    color: var(--accent);
+}
+
+th.sortable.sorted-descending::after {
+    content: " \2193";
+    color: var(--accent);
+}
+
+/* Has a tooltip, as a dotted underline, as browsers show abbreviations, and links are underlined, so that it can be
+   seen, and clicking it shows it at once, see tooltips.js. Not things which do something else when clicked, which can
+   already be seen to: controls, links, and the like, the same as tooltips.js's CLICKABLE. */
+[title]:not(button):not(input):not(select):not(textarea):not(a):not(option):not(.link):not(.export-file-name):not(.help-resize):not(.log-resize):not(th.sortable) {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+    cursor: help;
+}
+
+/* Space between the Poll Now, Pause and Resume buttons, which are side by side, or one above another if the column is
+   narrow. */
+td.poll-buttons button {
+    margin: 4px;
 }
 
 /* Form input styling */
@@ -341,6 +404,16 @@ button:hover {
     background-color: #353540;
     color: #d0d0d0;
     border-color: var(--accent);
+}
+
+/* Every disabled button, unless styled otherwise: faded, and not lit up by hovering. */
+button:disabled,
+button:disabled:hover {
+    background-color: #2a2a2f;
+    color: var(--muted);
+    border-color: #404045;
+    opacity: 0.5;
+    cursor: default;
 }
 
 /* Heading styles */
@@ -1124,7 +1197,7 @@ button.danger:disabled {
 
 .device-setting {
     display: grid;
-    grid-template-columns: 12em auto auto 1fr;
+    grid-template-columns: 20em auto auto 1fr;
     align-items: center;
     gap: 8px;
     margin: 6px 0;

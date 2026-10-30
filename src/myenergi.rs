@@ -81,6 +81,9 @@ pub struct MyenergiModule {
     context: Arc<MyenergiContext>,
     /// The day poll last fetched whole days on, see fetch::poll.
     whole_days_fetched: std::sync::Mutex<Option<time::Date>>,
+    /// The statuses the profile's capture devices took, see poll.
+    capture: crate::capture_device::CaptureReader,
+    profile_name: String,
 }
 
 /// How often the status is polled.
@@ -127,8 +130,18 @@ impl Module for MyenergiModule {
         Some(POLL_INTERVAL)
     }
 
+    fn next_poll(&self, now: time::OffsetDateTime) -> Option<time::OffsetDateTime> {
+        self.capture.next_read(now, POLL_INTERVAL)
+    }
+
+    /// If any of the profile's capture devices polls the status, reads the statuses they took instead, so that the app
+    /// does not poll it too, but still fetches the minute records, which myenergi keeps.
     async fn poll(&self, slot: Option<time::OffsetDateTime>) -> anyhow::Result<String> {
-        fetch::poll(&self.context.client, &self.context.cache_config, slot, &self.whole_days_fetched).await
+        let cache_config = &self.context.cache_config;
+        let devices = crate::capture_device::adopted_devices(&self.profile_name);
+        let captured = !cache_config.offline && self.capture.read(&devices, fetch::latest_status_time(cache_config),
+            &mut |record| fetch::save_status_if_new(cache_config, record), &mut |_| {}).await?;
+        fetch::poll(&self.context.client, cache_config, slot, &self.whole_days_fetched, captured).await
     }
 
     fn cli_debug(&self) -> anyhow::Result<()> {
@@ -265,7 +278,7 @@ fn SamplesPage(context: SharedProp<MyenergiContext>) -> Element {
     rsx! {
         h1 { "Samples" }
         p {
-            "The zappi's latest {SAMPLES_SHOWN} statuses, newest first, at the time each poll was scheduled for, each followed by the zappi's own record of the minute it was in, as the average power over the minute, if that day has been fetched. Power is in kW. Charge Added is the kWh added since the car was plugged in, which is kept until it is plugged in again."
+            "The zappi's latest {SAMPLES_SHOWN} statuses, newest first, at the time each poll was scheduled for, each followed by the zappi's own record of the minute it was in, as the average power over the minute, if that day has been fetched. Power is in kW. Charge Added is the kWh added since the car was plugged in, which is kept until it is plugged in again. Source is what took the status: the app, or a capture device."
         }
         table { class: "display",
             tr {
@@ -283,6 +296,7 @@ fn SamplesPage(context: SharedProp<MyenergiContext>) -> Element {
                 }
                 th { "Voltage V" }
                 th { "Frequency Hz" }
+                th { "Source" }
             }
             for sample in samples {
                 StatusRow { sample: sample.clone() }
@@ -313,6 +327,7 @@ fn StatusRow(sample: fetch::StatusSample) -> Element {
             }
             td { class: "number", {number(sample.voltage, 1)} }
             td { class: "number", {number(sample.frequency, 2)} }
+            td { {sample.captured_by.clone().unwrap_or_else(|| "App".to_string())} }
         }
     }
 }
@@ -486,6 +501,8 @@ impl ModuleFactory for MyenergiModuleFactory {
         Ok(Box::new(MyenergiModule {
             context: Arc::new(MyenergiContext { client, cache_config: self.cache_config.clone() }),
             whole_days_fetched: std::sync::Mutex::new(None),
+            capture: crate::capture_device::CaptureReader::new("capture/myenergi/records"),
+            profile_name: self.context.profile.active_profile.name.clone(),
         }))
     }
 }

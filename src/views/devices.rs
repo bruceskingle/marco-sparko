@@ -9,10 +9,48 @@ use serde_json::{Map, Value, json};
 
 use crate::MarcoSparkoContext;
 use crate::capture_device::{self, DeviceClient, DeviceProfile, FoundDevice};
+use crate::components::error_text::ErrorText;
 use crate::profile::Settings as ProfileSettings;
 
 /// A setting changed on the page but not yet saved, by feature and setting name.
 type Edits = BTreeMap<(String, String), Value>;
+
+/// The settings of a device's features which the profile's modules know, as (feature, module, [(setting, the module
+/// profile's field)]), see FeatureSettings' Fill In.
+const FROM_PROFILE: &[(&str, &str, &[(&str, &str)])] = &[
+    ("TeslaCapture", "tesla", &[("tesla_host", "gatewayHost"), ("tesla_email", "email"), ("tesla_password", "password")]),
+    ("MyenergiCapture", "myenergi", &[("myenergi_hub", "hubSerial"), ("myenergi_key", "apiKey")]),
+    ("OctopusCapture", "octopus", &[("octopus_key", "apiKey")]),
+];
+
+/// What the profile's module knows of a device feature's settings, see FROM_PROFILE, as edits.
+fn from_profile(profile_name: &str, feature: &str) -> Edits {
+    let Some((_, module, fields)) = FROM_PROFILE.iter().find(|(name, _, _)| *name == feature) else {
+        return Edits::new();
+    };
+    let profile = crate::profile::fetch_active_profile(&Some(profile_name.to_string())).ok();
+    let module_profile = profile.as_ref().and_then(|profile| profile.active_profile.modules.get(*module));
+    let mut edits: Edits = fields.iter()
+        .filter_map(|(setting, field)| {
+            let value = module_profile?.get(*field)?.as_str()?;
+            Some(((feature.to_string(), setting.to_string()), json!(value)))
+        })
+        .collect();
+    // The account the Octopus module uses, its default, the first of its cached viewer's, see ViewerDataSet.
+    if feature == "OctopusCapture" {
+        let viewer = crate::MarcoSparkoContext::get_cache_dir_path().ok()
+            .map(|dir| dir.join(format!("{profile_name}-octopus")).join("#Viewer"))
+            .and_then(|path| crate::cache::CacheConfig::read_json(&path));
+        if let Some(account) = viewer.as_ref().and_then(|viewer| viewer["viewer"]["accounts"][0]["number"].as_str()) {
+            edits.insert((feature.to_string(), "octopus_account".to_string()), json!(account));
+        }
+    }
+    edits
+}
+
+/// The modules which read capture devices, see capture_device::CaptureReader, which are polled as soon as a device is
+/// adopted, so that the app has what it took straight away.
+const READING_MODULES: &[&str] = &["tesla", "myenergi", "octopus"];
 
 /// Saves the profile's devices, in the profile and for the pages which show them.
 fn save_devices(profile_name: &str, settings: &mut Signal<ProfileSettings>, devices: Vec<DeviceProfile>) -> Result<(), String> {
@@ -26,6 +64,87 @@ fn status_line(status: Option<Result<String, String>>) -> Element {
         Some(Ok(message)) => rsx! { p { class: "ok", "{message}" } },
         Some(Err(message)) => rsx! { p { class: "invalid", "{message}" } },
         None => rsx! {},
+    }
+}
+
+/// How often each device card asks its device what it is, see DeviceCard.
+const HEARTBEAT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// How many days of a device's starts are summarised, see restarts.
+const RESTART_DAYS: i64 = 7;
+
+/// A device's starts in the last RESTART_DAYS, see restarts.
+#[derive(Debug, PartialEq)]
+struct Restarts {
+    count: usize,
+    /// How many of each kind, e.g. 1 crash, in the order of KINDS, and whether that kind is trouble.
+    kinds: Vec<(String, bool)>,
+    /// How many more there were, which the device could not log, which show as jumps in their numbers, see
+    /// capture_device::Start::count.
+    not_logged: u32,
+    /// Each, newest first: when, in the computer's time zone, its number, what it was after, see started_after,
+    /// whether that is trouble, and how many before it were not logged.
+    list: Vec<(String, Option<u32>, String, bool, u32)>,
+}
+
+/// The kinds of start, by reset reason, as a noun and its plural, for the summary, see restarts.
+const KINDS: [(&[&str], &str, &str); 7] = [
+    (&["Panic"], "crash", "crashes"),
+    (&["InterruptWatchdog", "TaskWatchdog", "OtherWatchdog"], "watchdog reset", "watchdog resets"),
+    (&["Brownout"], "power dip", "power dips"),
+    (&["Software"], "restart", "restarts"),
+    (&["PowerOn"], "switch-on", "switch-ons"),
+    (&["ExternalPin"], "reset button press", "reset button presses"),
+    (&["DeepSleep"], "wake from sleep", "wakes from sleep"),
+];
+
+/// A device's starts in the last RESTART_DAYS before now.
+fn restarts(starts: &capture_device::Starts, now: chrono::DateTime<chrono::Utc>) -> Restarts {
+    let from = now - chrono::TimeDelta::days(RESTART_DAYS);
+    let recent: Vec<(chrono::DateTime<chrono::Utc>, &capture_device::Start)> = starts.starts.iter()
+        .filter_map(|start| Some((chrono::DateTime::parse_from_rfc3339(&start.time).ok()?.to_utc(), start)))
+        .filter(|(time, _)| *time >= from)
+        .collect();
+    // Not logged before each, from the jump in their numbers.
+    let gaps: Vec<u32> = std::iter::once(0)
+        .chain(recent.windows(2).map(|pair| match (pair[0].1.count, pair[1].1.count) {
+            (Some(before), Some(after)) => after.saturating_sub(before).saturating_sub(1),
+            _ => 0,
+        }))
+        .collect();
+    let mut kinds = Vec::new();
+    for (reasons, one, many) in KINDS {
+        let n = recent.iter().filter(|(_, start)| reasons.contains(&start.reason.as_str())).count();
+        if n > 0 {
+            kinds.push((format!("{n} {}", if n == 1 { one } else { many }), started_after(reasons[0]).1));
+        }
+    }
+    let other = recent.iter().filter(|(_, start)| !KINDS.iter().any(|(reasons, _, _)| reasons.contains(&start.reason.as_str()))).count();
+    if other > 0 {
+        kinds.push((format!("{other} other"), true));
+    }
+    let list = recent.iter().zip(&gaps).rev()
+        .map(|((time, start), gap)| {
+            let (text, trouble) = started_after(&start.reason);
+            (time.with_timezone(&chrono::Local).format("%a %-d %b %H:%M:%S").to_string(), start.count, text, trouble, *gap)
+        })
+        .collect();
+    Restarts { count: recent.len(), kinds, not_logged: gaps.iter().sum(), list }
+}
+
+/// What a device's reset reason, see DeviceInfo::reset_reason, means, and whether it is trouble, e.g. a crash, rather
+/// than being switched on or restarted.
+fn started_after(reason: &str) -> (String, bool) {
+    match reason {
+        "PowerOn" => ("After being switched on".to_string(), false),
+        "Software" => ("After being restarted".to_string(), false),
+        "ExternalPin" => ("After its reset button was pressed".to_string(), false),
+        "DeepSleep" => ("After waking from deep sleep".to_string(), false),
+        "Panic" => ("After a crash (panic)".to_string(), true),
+        "InterruptWatchdog" | "TaskWatchdog" | "OtherWatchdog" =>
+            (format!("After it stopped responding ({reason})"), true),
+        "Brownout" => ("After a dip in its power supply (brownout)".to_string(), true),
+        _ => (format!("After {reason}"), true),
     }
 }
 
@@ -70,15 +189,44 @@ fn DeviceCard(device: DeviceProfile, profile_name: String) -> Element {
     let mut status = use_signal(|| None::<Result<String, String>>);
     let mut busy = use_signal(|| false);
     let mut show_settings = use_signal(|| false);
+    // The list of the device's starts, see restarts.
+    let mut show_starts = use_signal(|| false);
     // Release or Forget waiting for Yes or No.
     let mut confirming = use_signal(|| None::<&'static str>);
 
-    let info = use_resource({
+    // Devices with firmware from before /api/starts say nothing, so nothing is shown.
+    let mut starts = use_resource({
         let device = device.clone();
         move || {
             let device = device.clone();
             generation();
-            async move { DeviceClient::for_device(&device)?.info().await }
+            async move { DeviceClient::for_device(&device)?.starts().await }
+        }
+    });
+
+    let mut info = use_resource({
+        let device = device.clone();
+        move || {
+            let device = device.clone();
+            generation();
+            async move {
+                let result = async { DeviceClient::for_device(&device)?.info().await }.await;
+                if let Err(error) = &result {
+                    crate::log_warning!("The capture device {} at {} is not reachable, {error:#}", device.id, device.address);
+                }
+                result
+            }
+        }
+    });
+
+    // A heartbeat, so that the card shows whether the device is on the network now, not only when the page opened,
+    // or Refresh was pressed: what it says it is, over plain HTTP, which costs it little, see DeviceClient::info, and
+    // its starts, which show if it restarted. The last of each is shown until the next arrives.
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(HEARTBEAT).await;
+            info.restart();
+            starts.restart();
         }
     });
 
@@ -99,6 +247,8 @@ fn DeviceCard(device: DeviceProfile, profile_name: String) -> Element {
             let device = device.clone();
             spawn(async move {
                 busy.set(true);
+                // The last action's message, which this replaces.
+                status.set(None);
                 let result = async { DeviceClient::for_device(&device)?.restart().await }.await;
                 status.set(Some(match result {
                     Ok(()) => Ok("Restarting, it takes about 20 seconds".to_string()),
@@ -119,6 +269,8 @@ fn DeviceCard(device: DeviceProfile, profile_name: String) -> Element {
             spawn(async move {
                 if action == Some("release") {
                     busy.set(true);
+                    // The last action's message, which this replaces.
+                    status.set(None);
                     let result = async { DeviceClient::for_device(&device)?.release().await }.await;
                     busy.set(false);
                     if let Err(error) = result {
@@ -139,13 +291,63 @@ fn DeviceCard(device: DeviceProfile, profile_name: String) -> Element {
                 tr { th { "Address" } td { "{device.address}" } }
                 match &*info.read() {
                     None => rsx! { tr { th { "State" } td { "Connecting..." } } },
-                    Some(Err(error)) => rsx! { tr { th { "State" } td { class: "invalid", {format!("Not reachable, {error:#}")} } } },
+                    // The reason is in the log too, see info.
+                    Some(Err(error)) => rsx! { tr { th { "State" } td { ErrorText { error: format!("{error:#}"), message: "Not reachable" } } } },
                     Some(Ok(info)) => rsx! {
+                        if let Some(hostname) = &info.hostname {
+                            tr { th { "Name" } td { "{hostname}" } }
+                        }
                         tr { th { "Board" } td { "{info.board}" } }
                         tr { th { "Firmware" } td { "{info.firmware.name} {info.firmware.version} on {info.platform.name} {info.platform.version}" } }
                         tr { th { "Running for" } td { {up_time(info.up_time_seconds)} } }
+                        if let Some(reason) = &info.reset_reason {
+                            {
+                                let (text, trouble) = started_after(reason);
+                                rsx! { tr { th { "Last started" } td { class: if trouble { "invalid" }, "{text}" } } }
+                            }
+                        }
+                        if let Some(Ok(starts)) = &*starts.read() {
+                            {
+                                let restarts = restarts(starts, chrono::Utc::now());
+                                let problem = starts.problem.clone();
+                                rsx! { tr { th { "Restarts" } td {
+                                    div {
+                                        // Shows or hides the list.
+                                        span { class: "link", onclick: move |_| show_starts.toggle(),
+                                            "{restarts.count} in the last {RESTART_DAYS} days"
+                                        }
+                                        for (i, (kind, trouble)) in restarts.kinds.iter().enumerate() {
+                                            {if i == 0 { ": " } else { ", " }}
+                                            span { class: if *trouble { "invalid" }, "{kind}" }
+                                        }
+                                        if restarts.not_logged > 0 {
+                                            ", and {restarts.not_logged} more not logged"
+                                        }
+                                        if let Some(problem) = problem {
+                                            ", only the last is known, {problem}"
+                                        }
+                                    }
+                                    if show_starts() {
+                                        table { class: "device-starts",
+                                            for (time, count, text, trouble, gap) in restarts.list {
+                                                tr { class: if trouble { "invalid" },
+                                                    td { "{time}" }
+                                                    td { class: "number", {count.map(|count| format!("#{count}")).unwrap_or_default()} }
+                                                    td { "{text}" }
+                                                }
+                                                if gap > 0 {
+                                                    tr { td { colspan: 3, class: "derived",
+                                                        {format!("{gap} {} not logged", if gap == 1 { "start" } else { "starts" })}
+                                                    } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } } }
+                            }
+                        }
                         tr { th { "Features" } td {
-                            {info.features.iter().map(|feature| format!("{}{}", feature.name, if feature.enabled { "" } else { " (off)" })).collect::<Vec<_>>().join(", ")}
+                            {info.features.iter().map(|feature| format!("{}{}", feature.label.as_ref().unwrap_or(&feature.name), if feature.enabled { "" } else { " (off)" })).collect::<Vec<_>>().join(", ")}
                         } }
                         if !info.adopted {
                             tr { th { "State" } td { class: "invalid", "No longer adopted, its BOOT button may have been held. Forget it, then adopt it again." } }
@@ -155,8 +357,9 @@ fn DeviceCard(device: DeviceProfile, profile_name: String) -> Element {
             }
             div { class: "settings-buttons",
                 button { r#type: "button", disabled: busy(), onclick: move |_| show_settings.set(!show_settings()), if show_settings() { "Hide Settings" } else { "Settings" } }
-                button { r#type: "button", disabled: busy(), onclick: move |_| generation += 1, "Refresh" }
-                button { r#type: "button", disabled: busy(), onclick: restart, "Restart" }
+                button { r#type: "button", disabled: busy(), onclick: move |_| { status.set(None); generation += 1; }, "Refresh" }
+                // Only while the device answers, as otherwise it cannot be asked.
+                button { r#type: "button", disabled: busy() || !matches!(&*info.read(), Some(Ok(_))), onclick: restart, "Restart" }
                 button { r#type: "button", disabled: busy(), onclick: move |_| confirming.set(Some("release")), "Release" }
                 button { r#type: "button", disabled: busy(), onclick: move |_| confirming.set(Some("forget")), "Forget" }
             }
@@ -188,6 +391,7 @@ fn DeviceCard(device: DeviceProfile, profile_name: String) -> Element {
 #[component]
 fn AddDevice(profile_name: String) -> Element {
     let mut settings = use_context::<Signal<ProfileSettings>>();
+    let poll_statuses = try_use_context::<crate::polling::PollStatuses>();
     let mut address = use_signal(String::new);
     let mut found = use_signal(|| None::<FoundDevice>);
     let mut pairing = use_signal(|| false);
@@ -222,6 +426,8 @@ fn AddDevice(profile_name: String) -> Element {
         spawn(async move {
             let Some(device) = found() else { return };
             busy.set(true);
+            // The last action's message, which this replaces.
+            status.set(None);
             match capture_device::start_pairing(&device).await {
                 Ok(time) => {
                     pairing.set(true);
@@ -239,6 +445,8 @@ fn AddDevice(profile_name: String) -> Element {
         spawn(async move {
             let Some(device) = found() else { return };
             busy.set(true);
+            // The last action's message, which this replaces.
+            status.set(None);
             match capture_device::adopt(&device, &code()).await {
                 Ok(adopted) => {
                     let mut devices = settings.read().capture_devices.clone();
@@ -248,6 +456,11 @@ fn AddDevice(profile_name: String) -> Element {
                         Ok(()) => {
                             // Its card, which appears above, says so.
                             status.set(None);
+                            if let Some(statuses) = poll_statuses {
+                                for module_id in READING_MODULES {
+                                    crate::polling::poll_now(statuses, module_id);
+                                }
+                            }
                             found.set(None);
                             pairing.set(false);
                             address.set(String::new());
@@ -358,6 +571,8 @@ fn DeviceSettings(device: DeviceProfile) -> Element {
             let device = device.clone();
             spawn(async move {
                 busy.set(true);
+                // The last action's message, which this replaces.
+                status.set(None);
                 let update = json!({ "features": features });
                 let result = async { DeviceClient::for_device(&device)?.update_config(&update).await }.await;
                 match result {
@@ -381,6 +596,8 @@ fn DeviceSettings(device: DeviceProfile) -> Element {
             let device = device.clone();
             spawn(async move {
                 busy.set(true);
+                // The last action's message, which this replaces.
+                status.set(None);
                 let result = async { DeviceClient::for_device(&device)?.restart().await }.await;
                 match result {
                     Ok(()) => {
@@ -408,9 +625,8 @@ fn DeviceSettings(device: DeviceProfile) -> Element {
             div { class: "settings-buttons",
                 button { r#type: "button", disabled: busy(), onclick: save, "Save" }
                 button { r#type: "button", disabled: busy(), onclick: move |_| { edits.write().clear(); enabled_edits.write().clear(); status.set(None); }, "Undo Changes" }
-                if restart_needed() {
-                    button { r#type: "button", disabled: busy(), onclick: restart, "Restart Now" }
-                }
+                // Saved settings take effect when the device restarts.
+                button { r#type: "button", disabled: busy(), onclick: restart, if restart_needed() { "Restart Now" } else { "Restart" } }
             }
             {status_line(status())}
         }
@@ -420,14 +636,19 @@ fn DeviceSettings(device: DeviceProfile) -> Element {
 /// One feature's settings, with whether it is enabled.
 #[component]
 fn FeatureSettings(feature: Value, edits: Signal<Edits>, enabled_edits: Signal<BTreeMap<String, bool>>) -> Element {
+    let context_signal = use_context::<Signal<Option<Arc<MarcoSparkoContext>>>>();
+    let profile_name = context_signal.read().as_ref().map(|context| context.profile.active_profile.name.clone()).unwrap_or_default();
     let name = feature["name"].as_str().unwrap_or_default().to_string();
+    let fillable = FROM_PROFILE.iter().any(|(feature, _, _)| *feature == name);
+    // What the device says to show it as, e.g. Tesla Powerwall, otherwise its name.
+    let title = feature["label"].as_str().map(String::from).unwrap_or_else(|| name.clone());
     let required = feature["enabled"] == json!("required");
     let enabled = enabled_edits.read().get(&name).copied().unwrap_or_else(|| feature["enabled"] == json!(true));
     let settings = feature["settings"].as_array().cloned().unwrap_or_default();
 
     rsx! {
         fieldset { class: "device-feature",
-            legend { "{name}" }
+            legend { "{title}" }
             if required {
                 p { class: "note", "Always enabled" }
             } else {
@@ -443,6 +664,19 @@ fn FeatureSettings(feature: Value, edits: Signal<Edits>, enabled_edits: Signal<B
                     }
                 }
             }
+            if fillable {
+                div { class: "settings-buttons",
+                    button {
+                        r#type: "button",
+                        title: "Fill in the settings this profile's modules know, e.g. the API key, to check, then Save",
+                        onclick: {
+                            let name = name.clone();
+                            move |_| edits.write().extend(from_profile(&profile_name, &name))
+                        },
+                        "Fill in from this profile"
+                    }
+                }
+            }
             for setting in settings {
                 SettingField { key: "{setting[\"name\"]}", feature: name.clone(), setting, edits }
             }
@@ -455,6 +689,8 @@ fn FeatureSettings(feature: Value, edits: Signal<Edits>, enabled_edits: Signal<B
 #[component]
 fn SettingField(feature: String, setting: Value, edits: Signal<Edits>) -> Element {
     let name = setting["name"].as_str().unwrap_or_default().to_string();
+    // What the device says to show it as, e.g. WiFi Password, otherwise its name.
+    let label = setting["label"].as_str().map(String::from).unwrap_or_else(|| name.clone());
     let kind = setting["type"].as_str().unwrap_or_default().to_string();
     let required = setting["required"].as_bool().unwrap_or_default();
     let secret = setting["secret"].as_bool().unwrap_or_default();
@@ -486,7 +722,7 @@ fn SettingField(feature: String, setting: Value, edits: Signal<Edits>) -> Elemen
 
     rsx! {
         label { class: if changed { "device-setting changed" } else { "device-setting" },
-            span { "{name}" }
+            span { "{label}" }
             match kind.as_str() {
                 "bool" => rsx! {
                     input {
@@ -559,5 +795,33 @@ fn SettingField(feature: String, setting: Value, edits: Signal<Edits>) -> Elemen
                 },
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restarts_counts_the_last_week_by_kind_and_those_not_logged() {
+        let start = |time: &str, reason: &str, count| capture_device::Start { time: time.to_string(), reason: reason.to_string(), count: Some(count) };
+        let starts = capture_device::Starts {
+            count: Some(9),
+            starts: vec![
+                start("2026-10-20T10:00:00Z", "PowerOn", 3),
+                start("2026-10-29T18:36:10Z", "PowerOn", 5),
+                start("2026-10-30T06:00:33Z", "Panic", 6),
+                start("2026-10-30T06:50:00Z", "Software", 9),
+            ],
+            problem: None,
+        };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-10-30T07:00:00Z").unwrap().to_utc();
+        let restarts = restarts(&starts, now);
+        assert_eq!(restarts.count, 3);
+        assert_eq!(restarts.kinds, vec![("1 crash".to_string(), true), ("1 restart".to_string(), false), ("1 switch-on".to_string(), false)]);
+        assert_eq!(restarts.not_logged, 2);
+        // Newest first, with the 2 not logged before the last.
+        assert_eq!(restarts.list.iter().map(|(_, count, _, trouble, gap)| (*count, *trouble, *gap)).collect::<Vec<_>>(),
+            vec![(Some(9), false, 2), (Some(6), true, 0), (Some(5), false, 0)]);
     }
 }

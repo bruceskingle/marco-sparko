@@ -273,6 +273,11 @@ pub trait Module {
     async fn poll(&self, _slot: Option<time::OffsetDateTime>) -> anyhow::Result<String> {
         Err(anyhow!("{} is not polled", self.module_id()))
     }
+    /// When to poll next, after now, if not on the next slot of poll_interval, e.g. soon after a capture device which
+    /// does the polling has polled, see capture_device::CaptureReader::next_read.
+    fn next_poll(&self, _now: time::OffsetDateTime) -> Option<time::OffsetDateTime> {
+        None
+    }
 }
 
 #[async_trait]
