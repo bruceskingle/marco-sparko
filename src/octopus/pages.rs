@@ -6,6 +6,7 @@
  */
 
 mod bills;
+mod account;
 mod properties;
 mod measurements;
 mod charging_sessions;
@@ -14,6 +15,7 @@ mod telemetry;
 mod electricity;
 
 pub use bills::BillsPage;
+pub use account::AccountPage;
 pub use properties::PropertiesPage;
 pub use measurements::MeasurementsPage;
 pub use ev_charging::EvChargingPage;
