@@ -590,7 +590,12 @@ pub fn redact_profile(from: &str, to: &str) -> anyhow::Result<()> {
         let mut file = private_file::create_private_file(path)?;
         std::io::Write::write_all(&mut file, text.as_bytes())?;
     }
-    crate::profile::save_redacted_profile(source, to, newest_file_time(&cache_dir, from, &module_ids))?;
+    // The modules' settings name identifiers too, e.g. the Octopus account to use, which must be the made up ones.
+    let mut redacted = source.clone();
+    for module in redacted.modules.values_mut() {
+        *module = serde_json::from_str(&replacer.replace(&module.to_string()))?;
+    }
+    crate::profile::save_redacted_profile(&redacted, to, newest_file_time(&cache_dir, from, &module_ids))?;
 
     println!("Redacted {file_count} files of profile {from} into profile {to}, which is offline.");
     report_added(&added, &mapping);

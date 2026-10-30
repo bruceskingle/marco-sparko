@@ -70,6 +70,15 @@ pub struct StackedBarSeries {
     pub color: String,
 }
 
+/// A dashed line drawn over the bars, e.g. another estimate of one of the series, to compare with it, with a value for
+/// each point, None where it has none, in the same units as their values, named in the legend and the tooltip.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StackedBarLine {
+    pub label: String,
+    pub color: String,
+    pub values: Vec<Option<f64>>,
+}
+
 #[derive(Clone, PartialEq)]
 pub struct StackedBarPoint {
     pub start: i64,
@@ -298,6 +307,8 @@ pub fn StackedBarGraph(
     /// Bands under the graph, e.g. for each day, in place of the x axis labels of the bars, for when the bars are not
     /// periods which are easy to label, e.g. charging sessions.
     #[props(default)] x_bands: Vec<XBand>,
+    /// A line over the bars, see StackedBarLine.
+    #[props(default)] line: Option<StackedBarLine>,
 ) -> Element {
     let mut hovered = use_signal::<Option<usize>>(|| None);
     // The series of the segment the mouse is over, with segment_tooltip.
@@ -340,8 +351,12 @@ pub fn StackedBarGraph(
     let stack = |point: &StackedBarPoint, positive: bool| point.values.iter()
         .filter(|value| (**value > 0.0) == positive)
         .sum::<f64>() * scale(point);
-    let max_value = points.iter().map(|point| stack(point, true)).fold(0.0, f64::max);
-    let min_value = points.iter().map(|point| stack(point, false)).fold(0.0, f64::min);
+    // The line's value for each point, as drawn, see scale.
+    let line_values: Vec<Option<f64>> = points.iter().enumerate()
+        .map(|(index, point)| line.as_ref().and_then(|line| line.values.get(index).copied().flatten()).map(|value| value * scale(point)))
+        .collect();
+    let max_value = points.iter().map(|point| stack(point, true)).chain(line_values.iter().flatten().copied()).fold(0.0, f64::max);
+    let min_value = points.iter().map(|point| stack(point, false)).chain(line_values.iter().flatten().copied()).fold(0.0, f64::min);
     let format_value = |value: f64| match mode {
         StackedBarMode::Units => format!("{value:.3} {unit}"),
         StackedBarMode::Cost => format_money(value, currency),
@@ -386,6 +401,23 @@ pub fn StackedBarGraph(
                 })
         })
         .collect();
+
+    // The line, a step across each bar it has a value for, joined to the next if that has one too.
+    let line_path: String = {
+        let mut path = String::new();
+        let mut joined = false;
+        for (point, value) in points.iter().zip(&line_values) {
+            match value {
+                Some(value) => {
+                    let line_y = y(*value);
+                    path += &format!("{}{:.1} {line_y:.1} L{:.1} {line_y:.1} ", if joined { "L" } else { "M" }, x(point.start), x(point.end));
+                    joined = true;
+                },
+                None => joined = false,
+            }
+        }
+        path
+    };
 
     let y_ticks: Vec<(f64, String)> = (0..)
         // From a whole number of steps, so that zero is not a rounding error from it, e.g. -0.0.
@@ -434,14 +466,11 @@ pub fn StackedBarGraph(
             .collect()
     };
 
-    let legend: Vec<(f64, String, String)> = segment_names
-        .iter()
-        .filter(|_| legend)
-        .enumerate()
-        .map(|(index, (label, color))| {
-            (LEFT + index as f64 * 145.0, label.clone(), color.clone())
-        })
-        .collect();
+    // The legend, above the graph, as HTML, so that it wraps onto more lines if the labels need them: the series', then
+    // the line's, as a short dashed line.
+    let legend_entries: Vec<(String, String)> = if legend { segment_names.clone() } else { Vec::new() };
+    let line_legend = line.as_ref().filter(|_| legend && !line_path.is_empty())
+        .map(|line| (line.label.clone(), line.color.clone()));
 
     // A column over each bar, the full height of the graph, which shows its tooltip when the mouse is over it and can
     // be double clicked or dragged across, and the start and end of each bar.
@@ -468,7 +497,7 @@ pub fn StackedBarGraph(
             .clamp(LEFT, (width - TOOLTIP_WIDTH - RIGHT).max(LEFT));
             // The label, colour and value of each segment, leaving out those which are zero, or with segment_tooltip just
             // the one the mouse is over, if it is over one.
-            let rows: Vec<(String, String, String)> = point.values
+            let mut rows: Vec<(String, String, String)> = point.values
                 .iter()
                 .copied()
                 .zip(&segment_names)
@@ -476,6 +505,9 @@ pub fn StackedBarGraph(
                 .filter(|(series, (value, _))| *value != 0.0 && (!segment_tooltip || hovered_series() == Some(*series)))
                 .map(|(_, (value, (label, color)))| (label.clone(), color.clone(), format_value(value)))
                 .collect();
+            if let Some((line, value)) = line.as_ref().zip(line.as_ref().and_then(|line| line.values.get(index).copied().flatten())) {
+                rows.push((line.label.clone(), line.color.clone(), format_value(value)));
+            }
             (tooltip_x, point.period_label.clone(), rows, format_value(totals[index]))
         })
     });
@@ -538,6 +570,22 @@ pub fn StackedBarGraph(
     };
 
     rsx! {
+        if !legend_entries.is_empty() || line_legend.is_some() {
+            div { class: "stacked-legend",
+                for (label, color) in legend_entries {
+                    span { class: "stacked-legend-item",
+                        span { class: "stacked-legend-key", style: "background: {color};" }
+                        "{label}"
+                    }
+                }
+                if let Some((label, color)) = line_legend {
+                    span { class: "stacked-legend-item",
+                        span { class: "stacked-legend-line", style: "border-top-color: {color};" }
+                        "{label}"
+                    }
+                }
+            }
+        }
         // The frame is measured, not the svg, because some versions of WebKit, e.g. on an Intel Mac, give the size of
         // what is drawn in an svg as its size, which is a little smaller than the svg, so each resize shrank the graph.
         div { class: "graph-frame",
@@ -574,10 +622,6 @@ pub fn StackedBarGraph(
                 // The units of the y axis labels, above them in the row of the legend.
                 // From the left edge, as with a period, e.g. kWh/10s, it can be wider than the labels under it.
                 text { class: "stacked-axis-label", x: 4.0, y: 24.0, text_anchor: "start", "{y_unit}" }
-                for (legend_x, label, color) in legend {
-                    rect { class: "stacked-legend-swatch", fill: "{color}", x: legend_x, y: 15.0, width: 10.0, height: 10.0 }
-                    text { class: "stacked-axis-label", x: legend_x + 15.0, y: 24.0, "{label}" }
-                }
                 // A gap of a pixel each side shows where one band ends and the next starts.
                 for (index, (band_x, band_width, label)) in bands.into_iter().enumerate() {
                     g { key: "{index}",
@@ -598,6 +642,9 @@ pub fn StackedBarGraph(
                             height: bh,
                         }
                     }
+                }
+                if !line_path.is_empty() {
+                    path { class: "stacked-line", stroke: line.as_ref().map(|line| line.color.clone()).unwrap_or_default(), d: "{line_path}" }
                 }
                 for (index, column_x, column_width) in columns {
                     rect {

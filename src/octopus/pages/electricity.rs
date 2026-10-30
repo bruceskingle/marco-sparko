@@ -1,6 +1,7 @@
 //! The electricity imported and exported, as a table or a graph with import above zero split into the rates it is
-//! billed at, and export below zero, combined from the meters' half hourly readings and the Home Mini's readings every
-//! 10 seconds, see electricity.rs.
+//! billed at, and export below zero, combined from the meters' half hourly readings, the Home Mini's readings every
+//! 10 seconds, and the Tesla gateway's registers, which split it into what it was used for, see electricity.rs, with
+//! Octopus's split of the car's import as a line over the bars, to compare.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,14 +20,14 @@ use crate::components::toggle_button::ToggleButton;
 use crate::data_set::CancelToken;
 use crate::octopus::category_filter::{CategoryFilter, CategoryFilterMenu, CategoryValues};
 use crate::octopus::context::OctopusContext;
-use crate::octopus::electricity::{self, CheapTimes, EXPORT_LABEL, is_intelligent, Electricity, ElectricityPoint, Estimate, MeterHalfHour};
+use crate::octopus::electricity::{self, CheapTimes, EXPORT_LABEL, OCTOPUS_EV_LABEL, is_intelligent, Electricity, ElectricityPoint, Estimate, MeterHalfHour};
 use crate::octopus::graphql::ElectricityDirection;
 use crate::octopus::graphql::meter::active_meter_points_with_agreements::ElectricityTariffType;
 use crate::octopus::measurements::MeasurementsDataSet;
 use crate::octopus::meter_point::MeterPointDataSet;
 use crate::octopus::property::PropertyDataSet;
 use crate::octopus::smart_device::SmartDeviceDataSet;
-use crate::octopus::stacked_bar_graph::{BarClick, BarMenuItem, MAX_BARS, StackedBarGraph, StackedBarMode, StackedBarPoint, StackedBarSeries, day_bands, time_tick_label};
+use crate::octopus::stacked_bar_graph::{BarClick, BarMenuItem, MAX_BARS, StackedBarGraph, StackedBarLine, StackedBarMode, StackedBarPoint, StackedBarSeries, day_bands, time_tick_label};
 use crate::octopus::telemetry::{self, TelemetryPeriod, TelemetryReading};
 use super::measurements::graphql_error_descriptions;
 
@@ -104,13 +105,23 @@ impl std::fmt::Display for ElectricityMode {
     }
 }
 
-/// Where a point's energy is from, for its tooltip and the table.
-fn source(point: &ElectricityPoint) -> &'static str {
-    match (point.home_mini, point.meter) {
-        (true, true) => "Home Mini and meter",
-        (true, false) => "Home Mini",
-        _ => "Meter",
+/// Where a point's energy is from, for its tooltip and the table, e.g. Home Mini and Tesla.
+fn source(point: &ElectricityPoint) -> String {
+    let sources: Vec<&str> = [(point.home_mini, "Home Mini"), (point.tesla, "Tesla"), (point.meter, "meter")].into_iter()
+        .filter_map(|(is, name)| is.then_some(name))
+        .collect();
+    match sources.as_slice() {
+        [] => String::new(),
+        [one] => String::from(*one),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     }
+}
+
+/// The car's import measured and as Octopus split it, in kWh, over the points' half hours which have both, see
+/// ElectricityPoint::ev_comparison, None if none have.
+fn ev_comparison(points: &[ElectricityPoint]) -> Option<(f64, f64)> {
+    points.iter().filter_map(|point| point.ev_comparison)
+        .reduce(|(measured, octopus), (more_measured, more_octopus)| (measured + more_measured, octopus + more_octopus))
 }
 
 /// The range of half hours containing the times from start to end, as unix timestamps, as ranges are in half hours.
@@ -236,6 +247,8 @@ struct Readings {
     home_mini_error: Option<String>,
     /// The car's charging power in W, measured from the meter's readings, if they have it charging.
     charging_watts: Option<f64>,
+    /// The Tesla gateway's registers, as a capture device saved them, see tesla/snapshot.rs, to split the import.
+    tesla: Vec<crate::tesla::snapshot::Registers>,
 }
 
 #[component]
@@ -301,6 +314,14 @@ fn ElectricityGraph(account_id: String, import_mpan: String, export_mpan: Option
                 if reload_period.is_some() {
                     reload.set(None);
                 }
+                // The Tesla module's, of the same profile, if it has any, read from its files, which are large.
+                let tesla_cache = context.cache_config.sibling("tesla");
+                let (tesla_start, tesla_end) = (start.unix_timestamp() - 1800, end.unix_timestamp() + 1800);
+                let tesla = tokio::task::spawn_blocking(move || tesla_cache
+                        .map(|cache| crate::tesla::snapshot::registers(&cache, tesla_start, tesla_end))
+                        .unwrap_or_default())
+                    .await
+                    .unwrap_or_default();
                 // The half hours either side too, for whether the car was charging in them, see electricity::combine.
                 let (before, after) = (DateTime::from_unix_timestamp(start.unix_timestamp() - 1800)?, DateTime::from_unix_timestamp(end.unix_timestamp() + 1800)?);
                 // The car's charging power, from the most the meter has given the car in a half hour, which is what it
@@ -314,6 +335,7 @@ fn ElectricityGraph(account_id: String, import_mpan: String, export_mpan: Option
                     charging_watts: (charging_watts >= 1000.0).then_some(charging_watts),
                     home_mini,
                     home_mini_error,
+                    tesla,
                 }))
             }
         }
@@ -337,12 +359,17 @@ fn ElectricityGraph(account_id: String, import_mpan: String, export_mpan: Option
     let electricity = readings.as_ref().map(|readings| {
         // The charging power measured from the meter's readings, rather than the charger's rating, if it can be.
         let estimate = Estimate { charger_watts: readings.charging_watts.or(estimate.charger_watts), ..estimate.clone() };
-        electricity::combine(&readings.import, &readings.export, &readings.home_mini, start.unix_timestamp(), end.unix_timestamp(),
-            shown_period, &estimate, tz)
+        electricity::combine(&readings.import, &readings.export, &readings.home_mini, &readings.tesla, start.unix_timestamp(),
+            end.unix_timestamp(), shown_period, &estimate, tz)
     });
-    // The import labels and export, for the categories menu.
+    let comparison = electricity.as_ref().and_then(|electricity| ev_comparison(&electricity.points));
+    // The import labels and export, and Octopus's split of the car's import if there is any to compare, for the
+    // categories menu.
     let categories: Vec<String> = electricity.as_ref()
-        .map(|electricity| electricity.labels.iter().cloned().chain([String::from(EXPORT_LABEL)]).collect())
+        .map(|electricity| electricity.labels.iter().cloned()
+            .chain([String::from(EXPORT_LABEL)])
+            .chain(comparison.map(|_| String::from(OCTOPUS_EV_LABEL)))
+            .collect())
         .unwrap_or_default();
 
     let on_drill = move |(bar_start, bar_end): (i64, i64)| {
@@ -424,9 +451,17 @@ fn ElectricityGraph(account_id: String, import_mpan: String, export_mpan: Option
             None => rsx! { div { class: "error", ErrorText { error: format!("{error:#}"), message: "Failed to load the readings" } } },
         },
         (Some(Ok(_)), Some(electricity)) if electricity.points.is_empty() => rsx! { p { "No readings in this period" } },
-        (Some(Ok(_)), Some(electricity)) => match view() {
-            ElectricityView::Table => electricity_table(electricity, tz),
-            ElectricityView::Graph => electricity_graph(electricity, &start, &end, shown_period, mode(), &filter.read(), tz, on_drill, on_zoom, menu),
+        (Some(Ok(_)), Some(electricity)) => rsx! {
+            match view() {
+                ElectricityView::Table => electricity_table(electricity, tz),
+                ElectricityView::Graph => electricity_graph(electricity, &start, &end, shown_period, mode(), &filter.read(), tz, on_drill, on_zoom, menu),
+            }
+            if let Some((measured, octopus)) = comparison {
+                p { class: "derived",
+                    "The car, where it was measured and Octopus has split the half hours: measured {measured:.2} kWh, Octopus {octopus:.2} kWh, "
+                    {format!("difference {:+.2} kWh ({:+.1}%)", octopus - measured, if measured > 0.0 { (octopus - measured) / measured * 100.0 } else { 0.0 })}
+                }
+            }
         },
         (Some(Ok(_)), None) => rsx! {},
     };
@@ -540,7 +575,7 @@ fn too_many(count: usize) -> Element {
 fn points_export(electricity: &Electricity, tz: &'static Tz) -> ExportTable {
     let mut columns = vec![String::from("Start"), String::from("End")];
     columns.extend(electricity.labels.iter().map(|label| format!("{label} (kWh)")));
-    columns.extend([format!("{EXPORT_LABEL} (kWh)"), String::from("Source")]);
+    columns.extend([format!("{EXPORT_LABEL} (kWh)"), format!("{OCTOPUS_EV_LABEL} (kWh)"), String::from("Source")]);
     ExportTable {
         columns,
         rows: electricity.points.iter()
@@ -548,7 +583,8 @@ fn points_export(electricity: &Electricity, tz: &'static Tz) -> ExportTable {
                 let mut row = vec![ExportValue::unix_time(point.start, tz), ExportValue::unix_time(point.end, tz)];
                 row.extend(point.import.iter().map(|kwh| ExportValue::number(*kwh)));
                 row.push(ExportValue::number(point.export));
-                row.push(ExportValue::Text(String::from(source(point))));
+                row.push(point.ev_comparison.map(|(_, octopus)| ExportValue::number(octopus)).unwrap_or(ExportValue::Text(String::new())));
+                row.push(ExportValue::Text(source(point)));
                 row
             })
             .collect(),
@@ -565,7 +601,7 @@ fn electricity_table(electricity: &Electricity, tz: &'static Tz) -> Element {
     let local = |timestamp: i64| time::OffsetDateTime::from_unix_timestamp(timestamp).map(|time| time.to_timezone(tz)).ok();
 
     let mut previous_date = String::new();
-    let rows: Vec<(String, String, String, Vec<String>, String, &'static str)> = electricity.points.iter()
+    let rows: Vec<(String, String, String, Vec<String>, String, String, String)> = electricity.points.iter()
         .map(|point| {
             let (start, end) = (local(point.start), local(point.end));
             let date = start.map(|start| start.format(&date_format).unwrap_or_default()).unwrap_or_default();
@@ -577,6 +613,7 @@ fn electricity_table(electricity: &Electricity, tz: &'static Tz) -> Element {
                 end.map(|end| end.format(&time_format).unwrap_or_default()).unwrap_or_default(),
                 point.import.iter().map(|kwh| format!("{kwh:.3}")).collect(),
                 format!("{:.3}", point.export),
+                point.ev_comparison.map(|(_, octopus)| format!("{octopus:.3}")).unwrap_or_default(),
                 source(point),
             )
         })
@@ -596,9 +633,10 @@ fn electricity_table(electricity: &Electricity, tz: &'static Tz) -> Element {
                     th { class: "quantity", "{label}" br {} "(kWh)" }
                 }
                 th { class: "quantity", "{EXPORT_LABEL}" br {} "(kWh)" }
+                th { class: "quantity", "{OCTOPUS_EV_LABEL}" br {} "(kWh)" }
                 th { "Source" }
             }
-            for (date, start, end, import, export, source) in rows {
+            for (date, start, end, import, export, octopus_ev, source) in rows {
                 tr {
                     td { "{date}" }
                     td { "{start}" }
@@ -607,6 +645,7 @@ fn electricity_table(electricity: &Electricity, tz: &'static Tz) -> Element {
                         td { class: "numeric", "{kwh}" }
                     }
                     td { class: "numeric", "{export}" }
+                    td { class: "numeric derived", "{octopus_ev}" }
                     td { "{source}" }
                 }
             }
@@ -618,6 +657,7 @@ fn electricity_table(electricity: &Electricity, tz: &'static Tz) -> Element {
                     td { class: "numeric derived", "{total}" }
                 }
                 td { class: "numeric derived", "{total_export}" }
+                td { class: "numeric derived", {ev_comparison(&electricity.points).map(|(_, octopus)| format!("{octopus:.3}")).unwrap_or_default()} }
                 td {}
             }
         }
@@ -654,6 +694,18 @@ fn electricity_graph(electricity: &Electricity, start: &DateTime, end: &DateTime
         .chain([(String::from(EXPORT_LABEL), values.iter().map(|(_, export)| -export).collect())])
         .collect();
     let shown: Vec<CategoryValues> = filter.apply(categories, points.len(), false);
+    // Octopus's split of the car's import, as a line, if it is shown, see CategoryFilterMenu.
+    let line_style = filter.styles(&[String::from(OCTOPUS_EV_LABEL)]).remove(0);
+    let line = (line_style.visible && points.iter().any(|point| point.ev_comparison.is_some())).then(|| StackedBarLine {
+        label: String::from(OCTOPUS_EV_LABEL),
+        color: line_style.color,
+        values: points.iter()
+            .map(|point| point.ev_comparison.map(|(_, octopus)| match mode {
+                ElectricityMode::Energy => octopus,
+                ElectricityMode::Power => octopus / ((point.end - point.start).max(1) as f64 / 3600.0),
+            }))
+            .collect(),
+    });
 
     let bars: Vec<StackedBarPoint> = points.iter()
         .enumerate()
@@ -709,6 +761,7 @@ fn electricity_graph(electricity: &Electricity, start: &DateTime, end: &DateTime
             on_zoom: (end.unix_timestamp() - start.unix_timestamp() > HALF_HOUR).then(|| EventHandler::new(on_zoom)),
             menu,
             x_bands,
+            line,
         }
     }
 }

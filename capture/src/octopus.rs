@@ -107,7 +107,8 @@ impl OctopusCapture {
 impl Feature for OctopusCapture {
     type Config = OctopusConfig;
 
-    fn init(&self, _initializer: &mut Esp32PlatformInitializer) -> anyhow::Result<FeatureDescriptor> {
+    fn init(&self, initializer: &mut Esp32PlatformInitializer) -> anyhow::Result<FeatureDescriptor> {
+        self.panel.start(initializer)?;
         Ok(FeatureDescriptor { name: FEATURE_NAME.to_string(), config: OctopusConfig::to_config_spec()? })
     }
 
@@ -143,7 +144,6 @@ impl Feature for OctopusCapture {
             slots: Slots::new(&schedule_spec)?,
             captured_by: captured_by(sparko),
         };
-        self.panel.start(sparko, initializer)?;
         // A first poll now, as the app does, so there is something to show without waiting for the first slot.
         poll.poll(None);
         initializer.add_task(Box::new(poll), &schedule_spec)?;

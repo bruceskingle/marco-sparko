@@ -72,7 +72,7 @@ pub fn BillsPage(props: BillsPageProps) -> Element {
         None => rsx! {
             div { "Loading Bills for account {context.account_id}..." }
         },
-        Some(Err(error)) => Err(anyhow!("Failed to load bills: {error:?}"))?,
+        Some(Err(error)) => Err(anyhow!("Failed to load bills: {error:#}"))?,
         Some(Ok(bills)) => {
             rsx! {
                 table {
@@ -206,7 +206,7 @@ fn BillDetail(props: BillDetailProps) -> Element {
         None => rsx! {
             {format!("Loading transactions for bill {}...", props.bill_id)}
         },
-        Some(Err(error)) => Err(anyhow!("Failed to load transactions for bill {}: {error:?}", props.bill_id))?,
+        Some(Err(error)) => Err(anyhow!("Failed to load transactions for bill {}: {error:#}", props.bill_id))?,
         Some(Ok(bill_transactions)) => bill.gui_display(bill_transactions),
     }
 }

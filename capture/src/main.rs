@@ -1,7 +1,8 @@
 //! A Capture Device: an ESP32 which polls what Marco Sparko needs while the computer it runs on sleeps, keeps it, and
 //! gives it to the app, which reads it from the device's /api/capture/... pages: the Tesla gateway, see tesla.rs,
 //! myenergi's zappi, see myenergi.rs, and Octopus's smart charging, see octopus.rs, on a CYD, whose screen shows the
-//! clock with the latest numbers below it.
+//! clock with the latest numbers below it, or a Waveshare ESP32-C6-Touch-LCD-1.47, whose small screen shows only the
+//! numbers, see board.
 
 mod connections;
 mod day_files;
@@ -13,23 +14,24 @@ mod screen;
 mod slots;
 mod tesla;
 
-use embedded_graphics::prelude::{Point, Size};
-use embedded_graphics::primitives::Rectangle;
-use sparko_embedded_std::DisplayOrientation;
 use sparko_esp_idf::Esp32Platform;
-use sparko_esp_idf::features::analog_clock::AnalogClock;
 
-/// The clock takes the top of the screen, and the numbers the rest, 8 lines, see screen.rs.
-pub const CLOCK_HEIGHT: u32 = 160;
+/// What differs between the boards: the screen's orientation, and how much of the top of it the clock takes, the
+/// numbers having the rest, see screen.rs.
+#[cfg(feature = "cyd")]
+mod board {
+    use embedded_graphics::prelude::{Point, Size};
+    use embedded_graphics::primitives::Rectangle;
+    use sparko_embedded_std::DisplayOrientation;
+    use sparko_esp_idf::Esp32PlatformBuilder;
+    use sparko_esp_idf::features::analog_clock::AnalogClock;
 
-fn main() -> anyhow::Result<()> {
-    let (builder, _remainder) = Esp32Platform::builder()?;
-    let panel = screen::Panel::new();
-    // The Tesla gateway's, kept between polls, which the internet polls close for the RAM.
-    let gateway = connections::KeptConnection::default();
+    /// 240 by 320, 8 lines of numbers under the clock.
+    pub const ORIENTATION: DisplayOrientation = DisplayOrientation::Rotate0;
+    pub const CLOCK_HEIGHT: u32 = 160;
 
-    let sparko_esp32 = builder
-        .with_feature(Box::new(
+    pub fn with_clock(builder: Esp32PlatformBuilder) -> anyhow::Result<Esp32PlatformBuilder> {
+        builder.with_feature(Box::new(
             AnalogClock::builder()
                 .with_layout(|bounding_box: &Rectangle| {
                     Rectangle::new(
@@ -38,11 +40,37 @@ fn main() -> anyhow::Result<()> {
                     )
                 })
                 .build()?,
-        ))?
+        ))
+    }
+}
+
+#[cfg(feature = "waveshare-c6-touch")]
+mod board {
+    use sparko_embedded_std::DisplayOrientation;
+    use sparko_esp_idf::Esp32PlatformBuilder;
+
+    /// 320 by 172, too small for the clock too, so 8 lines of numbers, as the board's example is.
+    pub const ORIENTATION: DisplayOrientation = DisplayOrientation::Rotate270;
+    pub const CLOCK_HEIGHT: u32 = 0;
+
+    pub fn with_clock(builder: Esp32PlatformBuilder) -> anyhow::Result<Esp32PlatformBuilder> {
+        Ok(builder)
+    }
+}
+
+pub use board::CLOCK_HEIGHT;
+
+fn main() -> anyhow::Result<()> {
+    let (builder, _remainder) = Esp32Platform::builder()?;
+    let panel = screen::Panel::new();
+    // The Tesla gateway's, kept between polls, which the internet polls close for the RAM.
+    let gateway = connections::KeptConnection::default();
+
+    let sparko_esp32 = board::with_clock(builder)?
         .with_feature(Box::new(tesla::TeslaCapture::new(panel.clone(), gateway.clone())))?
         .with_feature(Box::new(myenergi::MyenergiCapture::new(panel.clone(), gateway.clone())))?
         .with_feature(Box::new(octopus::OctopusCapture::new(panel.clone(), gateway)))?
-        .with_display_orientation(DisplayOrientation::Rotate0)?
+        .with_display_orientation(board::ORIENTATION)?
         .with_firmware(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
         .build()?;
 

@@ -17,15 +17,24 @@ const TOTAL_COLOR: &str = "#f5f5f5";
 /// The labels of the current home and EV rates with their default colours, in the order they are shown, then those of
 /// the Electricity page, see electricity.rs. Readings may have other labels, e.g. older readings have time of use
 /// buckets, which come after these.
-pub const KNOWN_LABELS: [(&str, &str); 8] = [
+pub const KNOWN_LABELS: [(&str, &str); 15] = [
     ("Home Low Rate", "#46ee43"),
     ("Home Standard Rate", "#f6671f"),
     ("EV Low Rate", "#271cff"),
     ("EV Standard Rate", "#f72525"),
+    // The Powerwalls charging from the grid, where it is measured, see electricity::measured_split, in purple as in the
+    // user's Home Assistant.
+    ("Battery Low Rate", "#9b51e0"),
+    ("Battery Standard Rate", "#d946ef"),
     (super::electricity::LOW_ESTIMATED_LABEL, "#a6f5a4"),
     (super::electricity::STANDARD_ESTIMATED_LABEL, "#fab48f"),
+    ("EV Low Rate (estimated)", "#8f8aff"),
+    ("EV Standard Rate (estimated)", "#fa8f8f"),
+    ("Battery Low Rate (estimated)", "#c9a7f2"),
+    ("Battery Standard Rate (estimated)", "#f0abfc"),
     (super::electricity::UNMETERED_LABEL, "#8a8a99"),
     (super::electricity::EXPORT_LABEL, "#f59e0b"),
+    (super::electricity::OCTOPUS_EV_LABEL, "#ffffff"),
 ];
 
 /// Default colours for labels which are not in KNOWN_LABELS, used in turn.

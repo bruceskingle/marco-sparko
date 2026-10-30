@@ -262,6 +262,14 @@ th.row-header {
     font-weight: bold;
 }
 
+/* A line over a stacked bar graph, e.g. Octopus's EV split, see StackedBarLine. Not in the way of the bars' mouse. */
+.stacked-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    pointer-events: none;
+}
+
 /* A device's starts, on its card, see DeviceCard. */
 table.device-starts {
     margin-top: 6px;
@@ -935,6 +943,35 @@ button.danger:disabled {
 }
 
 .stacked-consumption-graph .stacked-bar,
+/* The legend above a stacked bar graph, which wraps onto more lines if it needs them. */
+.stacked-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding: 0 0 4px 60px;
+    font-size: 12px;
+    color: #c4c4ce;
+}
+
+.stacked-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.stacked-legend-key {
+    width: 10px;
+    height: 10px;
+    border: 0.5px solid rgba(0, 0, 0, 0.45);
+}
+
+/* A line's key, dashed like the line, see .stacked-line. */
+.stacked-legend-line {
+    width: 16px;
+    border-top: 2px dashed;
+}
+
 .stacked-consumption-graph .stacked-legend-swatch {
     stroke: rgba(0, 0, 0, 0.45);
     stroke-width: 0.5;
@@ -1569,4 +1606,13 @@ body:has(.app-layout){
 tr.minute-row td {
     opacity: 0.6;
     font-style: italic;
+}
+
+/* The Octopus account to use, on the account page, see octopus/pages/account.rs. */
+.account-select {
+    min-width: 20em;
+}
+
+.account-select + .note {
+    margin: 6px 0 0;
 }

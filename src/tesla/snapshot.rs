@@ -306,6 +306,98 @@ pub fn samples(cache_config: &CacheConfig, limit: usize) -> Vec<Sample> {
     snapshots.iter().take(limit).map(Sample::from_snapshot).collect()
 }
 
+/// The gateway's energy registers at a moment, in Wh, which only ever go up, so that the energy between two moments is
+/// their difference, for the Electricity page, see octopus/electricity.rs.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Registers {
+    /// When the gateway last read its meters, as a unix timestamp in seconds.
+    pub time: f64,
+    /// Imported from the grid through the gateway's site meter, which the zappi is outside of.
+    pub site_imported: f64,
+    /// Into the Powerwalls.
+    pub battery_imported: f64,
+    /// Made by the solar panels.
+    pub solar_exported: f64,
+    /// Used by the house.
+    pub load_imported: f64,
+    /// The power through the site meter from the grid, into the Powerwalls, and from the solar panels, in W, as the
+    /// gateway measured it, which is steadier than the registers' changes over a few seconds, see
+    /// octopus/electricity.rs's measured_split.
+    pub site_power: f64,
+    pub battery_power: f64,
+    pub solar_power: f64,
+}
+
+/// The registers of the snapshots in the day files from start to end, unix timestamps, in time order, see Registers.
+/// Only the day files, as snapshots in files of their own are minutes apart, too far apart to be used.
+pub fn registers(cache_config: &CacheConfig, start: i64, end: i64) -> Vec<Registers> {
+    // Only what is needed, as there are thousands a day.
+    #[derive(serde::Deserialize)]
+    struct Line {
+        responses: Option<Responses>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Responses {
+        #[serde(rename = "meters/aggregates")]
+        aggregates: Option<Aggregates>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Aggregates {
+        site: Option<Meter>,
+        battery: Option<Meter>,
+        solar: Option<Meter>,
+        load: Option<Meter>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Meter {
+        energy_imported: f64,
+        energy_exported: f64,
+        instant_power: f64,
+        last_communication_time: Option<String>,
+    }
+
+    let (Ok(first), Ok(last)) = (OffsetDateTime::from_unix_timestamp(start), OffsetDateTime::from_unix_timestamp(end)) else {
+        return Vec::new();
+    };
+    let mut registers = Vec::new();
+    let mut day = first.date();
+    while day <= last.date() {
+        for line in read_lines(&cache_config.existing_path_for_day(DAY_KEY, &day.into())) {
+            let Some(aggregates) = serde_json::from_str::<Line>(&line).ok().and_then(|line| line.responses?.aggregates) else {
+                continue;
+            };
+            let (Some(site), Some(battery), Some(solar), Some(load)) = (aggregates.site, aggregates.battery, aggregates.solar, aggregates.load) else {
+                continue;
+            };
+            let Some(time) = site.last_communication_time.as_deref()
+                .and_then(|time| OffsetDateTime::parse(time, &Rfc3339).ok())
+                .map(|time| time.unix_timestamp_nanos() as f64 / 1e9)
+            else {
+                continue;
+            };
+            if (start as f64..=end as f64).contains(&time) {
+                registers.push(Registers {
+                    time,
+                    site_imported: site.energy_imported,
+                    battery_imported: battery.energy_imported,
+                    solar_exported: solar.energy_exported,
+                    load_imported: load.energy_imported,
+                    site_power: site.instant_power,
+                    // The gateway's is negative while they charge.
+                    battery_power: -battery.instant_power,
+                    solar_power: solar.instant_power,
+                });
+            }
+        }
+        let Some(next) = day.next_day() else { break };
+        day = next;
+    }
+    registers.sort_by(|a, b| a.time.total_cmp(&b.time));
+    // The same reading saved twice, e.g. by the app and a capture device, or the gateway not having read again.
+    registers.dedup_by(|a, b| a.time == b.time);
+    registers
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

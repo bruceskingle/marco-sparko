@@ -16,6 +16,14 @@
 //! On other tariffs charging outside the cheap times is at the standard rate. The car's share is not estimated. If the
 //! tariff's cheap times are not known the import is UNMETERED_LABEL.
 //!
+//! Where the Tesla gateway's registers were captured through a half hour too, every few seconds by a capture device, see
+//! tesla/snapshot.rs, the half hour's import is split by what it was used for instead, see measured_split: the car's is
+//! the Home Mini's import less the gateway's, as the zappi is outside the gateway's meter, the Powerwalls' what they took
+//! in less what the solar panels made, and the rest the house's, each in the rates of the meter's labels. That is
+//! measured, unlike the meter's EV labels, which Octopus models, e.g. as the same energy every half hour of a charge,
+//! which is kept for each point to compare, see ElectricityPoint::ev_comparison. Over a night of charging the car's was
+//! within 0.2% of the zappi's own total.
+//!
 //! The thresholds for seeing the car charging, CHARGING_POWER_SHARE and CHARGING_READINGS, were chosen from one
 //! household's readings, with a 7 kW charger, on Intelligent Octopus Go: over 855 half hours of October 2026 the
 //! estimate agreed with the meter for all but 9, each of which were either a little charging at a low power or a short
@@ -24,6 +32,8 @@
 use std::collections::BTreeMap;
 
 use time_tz::{OffsetDateTimeExt, Tz};
+
+use crate::tesla::snapshot::Registers;
 
 use super::measurements::order_labels;
 use super::telemetry::{self, READING_SECONDS, TelemetryPeriod, TelemetryPoint, TelemetryReading};
@@ -34,11 +44,27 @@ pub const LOW_ESTIMATED_LABEL: &str = "Home Low Rate (estimated)";
 pub const STANDARD_ESTIMATED_LABEL: &str = "Home Standard Rate (estimated)";
 pub const UNMETERED_LABEL: &str = "Not yet metered";
 pub const EXPORT_LABEL: &str = "Export";
+/// What the import was used for, the start of each label of the measured split, see measured_split, e.g. EV Low Rate.
+const HOUSE: &str = "Home";
+const EV: &str = "EV";
+const BATTERY: &str = "Battery";
+/// Octopus's EV share, as a line over the bars, see ElectricityPoint::ev_comparison.
+pub const OCTOPUS_EV_LABEL: &str = "Octopus's EV split";
 
 const HALF_HOUR: i64 = 1800;
 /// A half hour has all of its Home Mini readings if none of them, nor its start or end, are further apart than this.
 /// The meter reads about every 10.3 seconds, so about one 10 second slot in 35 has no reading.
 const MAX_READING_GAP: i64 = 60;
+
+/// A half hour is measured, see measured_split, if the gateway's registers were read at least this often through it, in
+/// seconds. A capture device reads them every 10 seconds.
+const MAX_REGISTERS_GAP: f64 = 60.0;
+/// Less of the car's or the Powerwalls' measured import than this in a half hour, in kWh, is the house's, as it is only
+/// the Home Mini and the gateway being read at slightly different moments, e.g. a few Wh in a half hour without either.
+const MEASUREMENT_NOISE: f64 = 0.02;
+/// A half hour with at least this much of the car's measured import, in kWh, had the car charging, for its estimated
+/// rate, see Estimate.
+const MEASURED_CHARGING: f64 = 0.1;
 
 /// A half hour is estimated to have had the car charging if at least this many readings are at its charging power.
 const CHARGING_READINGS: usize = 3;
@@ -143,9 +169,13 @@ pub struct ElectricityPoint {
     /// The Home Mini's average power, in W, net of export, for periods shorter than a half hour from its readings,
     /// which is steadier than their energy, as the readings are not exactly 10 seconds apart.
     pub demand: Option<f64>,
-    /// Whether any of it is from the Home Mini, and whether any is from the meters.
+    /// Whether any of it is from the Home Mini, whether any is split by the gateway's registers, and whether any is from
+    /// the meters.
     pub home_mini: bool,
+    pub tesla: bool,
     pub meter: bool,
+    /// The car's import in kWh, measured, and as Octopus split it, over the half hours which have both, for comparing.
+    pub ev_comparison: Option<(f64, f64)>,
 }
 
 /// The electricity in each period which has any, in time order, with the labels its import is split into.
@@ -165,7 +195,9 @@ struct Period {
     /// The Home Mini's average power, in W, for periods shorter than a half hour.
     demand: Option<f64>,
     home_mini: bool,
+    tesla: bool,
     meter: bool,
+    ev_comparison: Option<(f64, f64)>,
 }
 
 impl Period {
@@ -176,7 +208,12 @@ impl Period {
         }
         self.export += other.export;
         self.home_mini |= other.home_mini;
+        self.tesla |= other.tesla;
         self.meter |= other.meter;
+        self.ev_comparison = match (self.ev_comparison, other.ev_comparison) {
+            (Some((measured, octopus)), Some((other_measured, other_octopus))) => Some((measured + other_measured, octopus + other_octopus)),
+            (one, other) => one.or(other),
+        };
     }
 }
 
@@ -208,6 +245,11 @@ fn complete_half_hours(readings: &[TelemetryReading], start: i64, end: i64) -> V
     complete
 }
 
+/// Whether a label is of the car's import, e.g. EV Low Rate.
+fn is_ev(label: &str) -> bool {
+    label.starts_with(EV)
+}
+
 /// The import of each of a half hour's points, kwh, which are seconds long, split into the labels of the import meter's
 /// reading for it, units. The import is the Home Mini's, which is very close to the meter's, so the meter's proportions
 /// are used rather than its units. The car's share (labels EV ...) is placed as a block at the charger's power, if it is
@@ -217,7 +259,6 @@ fn split_half_hour(kwh: &[f64], seconds: &[i64], units: &BTreeMap<String, f64>, 
     -> Vec<BTreeMap<String, f64>>
 {
     let meter_total: f64 = units.values().sum();
-    let is_ev = |label: &str| label.starts_with("EV");
     let ev_units: f64 = units.iter().filter(|(label, _)| is_ev(label)).map(|(_, units)| units).sum();
     let home_units = meter_total - ev_units;
     let total: f64 = kwh.iter().sum();
@@ -315,6 +356,148 @@ fn shaped_by_power(mut points: Vec<TelemetryPoint>) -> Vec<TelemetryPoint> {
     points
 }
 
+/// The value of the register which field reads at time, between the readings either side of it, None if there is none
+/// within MAX_REGISTERS_GAP either side. registers are in time order.
+fn register_at(registers: &[Registers], time: f64, field: fn(&Registers) -> f64) -> Option<f64> {
+    let next = registers.partition_point(|registers| registers.time < time);
+    let (before, after) = (registers.get(next.checked_sub(1)?)?, registers.get(next)?);
+    let span = after.time - before.time;
+    if span > MAX_REGISTERS_GAP {
+        return None;
+    }
+    Some(if span > 0.0 { field(before) + (field(after) - field(before)) * (time - before.time) / span } else { field(after) })
+}
+
+/// The energy the register which field reads counted from start to end, in kWh, see register_at.
+fn register_kwh(registers: &[Registers], start: i64, end: i64, field: fn(&Registers) -> f64) -> Option<f64> {
+    Some((register_at(registers, end as f64, field)? - register_at(registers, start as f64, field)?) / 1000.0)
+}
+
+/// Whether the gateway's registers were read all through the half hour starting at half_hour, see MAX_REGISTERS_GAP.
+fn registers_complete(registers: &[Registers], half_hour: i64) -> bool {
+    let (start, end) = (half_hour as f64, (half_hour + HALF_HOUR) as f64);
+    let first = registers.partition_point(|registers| registers.time < start);
+    let last = registers.partition_point(|registers| registers.time <= end);
+    first > 0 && last < registers.len()
+        && registers[first - 1..=last].windows(2).all(|pair| pair[1].time - pair[0].time <= MAX_REGISTERS_GAP)
+}
+
+/// How many points the car's and the Powerwalls' power is smoothed over, see smoothed.
+const SMOOTHING: usize = 5;
+
+/// Each of the values, the power of a point, as the median of it and those either side of it, SMOOTHING in all, fewer at
+/// the ends, so that a load which is on for only a reading or two, which the Home Mini and the gateway, being read up to
+/// 10 seconds apart, see at different moments, is not taken for the car's or the Powerwalls', which only change
+/// slowly, and is the house's instead. Steps, e.g. the car starting, are kept.
+fn smoothed(values: &[f64]) -> Vec<f64> {
+    (0..values.len())
+        .map(|index| {
+            let mut window: Vec<f64> = values[index.saturating_sub(SMOOTHING / 2)..(index + SMOOTHING / 2 + 1).min(values.len())].to_vec();
+            window.sort_by(f64::total_cmp);
+            window[window.len() / 2]
+        })
+        .collect()
+}
+
+/// total shared between points in proportion to weights, or if they are all 0, to room, no point getting more than its
+/// room, what does not fit shared by those with room left.
+fn share(total: f64, weights: &[f64], room: &[f64]) -> Vec<f64> {
+    let weights = if weights.iter().sum::<f64>() > 0.0 { weights } else { room };
+    let sum: f64 = weights.iter().sum();
+    if sum <= 0.0 {
+        return vec![0.0; room.len()];
+    }
+    let mut shares: Vec<f64> = weights.iter().zip(room).map(|(weight, room)| (total * weight / sum).min(*room)).collect();
+    let left_over = total - shares.iter().sum::<f64>();
+    let space: f64 = room.iter().zip(&shares).map(|(room, share)| room - share).sum();
+    if left_over > 1e-12 && space > 0.0 {
+        for (share, room) in shares.iter_mut().zip(room) {
+            *share += left_over * (room - *share) / space;
+        }
+    }
+    shares
+}
+
+/// The average of the gateway's power readings which field reads from start to end, or if there are none, the nearest.
+fn power(registers: &[Registers], start: i64, end: i64, field: fn(&Registers) -> f64) -> Option<f64> {
+    let first = registers.partition_point(|registers| registers.time < start as f64);
+    let last = registers.partition_point(|registers| registers.time < end as f64);
+    if last > first {
+        return Some(registers[first..last].iter().map(field).sum::<f64>() / (last - first) as f64);
+    }
+    let middle = (start + end) as f64 / 2.0;
+    [first.checked_sub(1), Some(first)].into_iter().flatten()
+        .filter_map(|index| registers.get(index))
+        .min_by(|a, b| (a.time - middle).abs().total_cmp(&(b.time - middle).abs()))
+        .map(field)
+}
+
+/// What each of a half hour's points' import, kwh, from and to the times of bounds, with the Home Mini's average power,
+/// demand, was used for, as (the car, the Powerwalls, the house), from the gateway's registers, see the module comment,
+/// or None if they were not read all through it. Each is exact for the half hour, from its registers' readings at its
+/// start and end, and is shared between its points by the same differences of the power readings over each. Not of the
+/// registers' changes over each, which are as steady, as the Powerwalls charge at a steady power, but jump about by
+/// several hundred W over 10 seconds, as the Home Mini and the gateway are read at different moments.
+fn measured_split(kwh: &[f64], demand: &[Option<f64>], bounds: &[(i64, i64)], registers: &[Registers]) -> Option<Vec<(f64, f64, f64)>> {
+    let half_hour = bounds.first()?.0 - bounds.first()?.0.rem_euclid(HALF_HOUR);
+    if !registers_complete(registers, half_hour) {
+        return None;
+    }
+    let site = |start, end| register_kwh(registers, start, end, |registers| registers.site_imported);
+    // Into the Powerwalls from the grid, as what the solar panels made goes into them first.
+    let battery = |start, end| Some((register_kwh(registers, start, end, |registers| registers.battery_imported)?
+        - register_kwh(registers, start, end, |registers| registers.solar_exported)?).max(0.0));
+
+    let total: f64 = kwh.iter().sum();
+    let noise = |kwh: f64| if kwh < MEASUREMENT_NOISE { 0.0 } else { kwh };
+    let ev_total = noise((total - site(half_hour, half_hour + HALF_HOUR)?).clamp(0.0, total));
+    let battery_total = noise(battery(half_hour, half_hour + HALF_HOUR)?.min(total - ev_total));
+    // The power of each, in W, smoothed, then times its length, as a point's share is in proportion to its energy.
+    let seconds: Vec<f64> = bounds.iter().map(|(start, end)| (end - start) as f64).collect();
+    let ev_power: Vec<f64> = kwh.iter().zip(demand).zip(bounds).zip(&seconds)
+        .map(|(((kwh, demand), (start, end)), seconds)| {
+            let home_mini = demand.unwrap_or(kwh * 3_600_000.0 / seconds.max(1.0));
+            Some((home_mini - power(registers, *start, *end, |registers| registers.site_power)?).max(0.0))
+        })
+        .collect::<Option<_>>()?;
+    let ev_weights: Vec<f64> = smoothed(&ev_power).iter().zip(&seconds).map(|(power, seconds)| power * seconds).collect();
+    let ev = share(ev_total, &ev_weights, kwh);
+    let battery_power: Vec<f64> = bounds.iter()
+        .map(|(start, end)| Some((power(registers, *start, *end, |registers| registers.battery_power)?
+            - power(registers, *start, *end, |registers| registers.solar_power)?).max(0.0)))
+        .collect::<Option<_>>()?;
+    let battery_weights: Vec<f64> = smoothed(&battery_power).iter().zip(&seconds).map(|(power, seconds)| power * seconds).collect();
+    let room: Vec<f64> = kwh.iter().zip(&ev).map(|(kwh, ev)| (kwh - ev).max(0.0)).collect();
+    let battery = share(battery_total, &battery_weights, &room);
+    Some(kwh.iter().zip(ev).zip(battery).map(|((kwh, ev), battery)| (ev, battery, (kwh - ev - battery).max(0.0))).collect())
+}
+
+/// The rates of a meter's half hourly reading, e.g. Low Rate for Home Low Rate and EV Low Rate, with the share of its
+/// units at each, None if a label is not of the house or the car, e.g. a time of use bucket of an older reading.
+fn rates(units: &BTreeMap<String, f64>) -> Option<Vec<(String, f64)>> {
+    let total: f64 = units.values().sum();
+    let mut rates: BTreeMap<String, f64> = BTreeMap::new();
+    for (label, units) in units {
+        let rate = label.strip_prefix(&format!("{HOUSE} ")).or_else(|| label.strip_prefix(&format!("{EV} ")))?;
+        *rates.entry(rate.to_string()).or_default() += units / total;
+    }
+    Some(rates.into_iter().collect())
+}
+
+/// The labels of a point measured to have been used for (the car, the Powerwalls, the house), see measured_split, in
+/// the rates, with the share at each, and with suffix, e.g. (estimated), each kind as KIND RATE SUFFIX.
+fn measured_labels((ev, battery, house): (f64, f64, f64), rates: &[(String, f64)], suffix: &str) -> BTreeMap<String, f64> {
+    let mut labels = BTreeMap::new();
+    for (rate, share) in rates {
+        for (kind, kwh) in [(EV, ev), (BATTERY, battery), (HOUSE, house)] {
+            if kwh > 0.0 {
+                *labels.entry(format!("{kind} {rate}{suffix}")).or_default() += kwh * share;
+            }
+        }
+    }
+    labels
+}
+
 /// The start of each half hour, as unix timestamps, in which at least CHARGING_READINGS readings are at or above the
 /// charging power, in W.
 fn charging_half_hours(readings: &[TelemetryReading], watts: f64) -> std::collections::BTreeSet<i64> {
@@ -326,10 +509,10 @@ fn charging_half_hours(readings: &[TelemetryReading], watts: f64) -> std::collec
 }
 
 /// The electricity from start to end, as unix timestamps, in periods of period, from the import and export meters'
-/// half hours and the Home Mini's readings, see the module comment. Periods shorter than a half hour are only made from
+/// half hours, the Home Mini's readings and the Tesla gateway's registers, see the module comment. Periods shorter than a half hour are only made from
 /// the Home Mini's readings, half hours which only the meters have are shown as a half hour.
-pub fn combine(import: &[MeterHalfHour], export: &[MeterHalfHour], readings: &[TelemetryReading], start: i64, end: i64,
-    period: TelemetryPeriod, estimate: &Estimate, tz: &'static Tz) -> Electricity
+pub fn combine(import: &[MeterHalfHour], export: &[MeterHalfHour], readings: &[TelemetryReading], registers: &[Registers],
+    start: i64, end: i64, period: TelemetryPeriod, estimate: &Estimate, tz: &'static Tz) -> Electricity
 {
     let import_meter: BTreeMap<i64, &MeterHalfHour> = import.iter().map(|half_hour| (half_hour.start, half_hour)).collect();
     let export_meter: BTreeMap<i64, f64> = export.iter().map(|half_hour| (half_hour.start, half_hour.total())).collect();
@@ -338,17 +521,17 @@ pub fn combine(import: &[MeterHalfHour], export: &[MeterHalfHour], readings: &[T
         .map(|watts| charging_half_hours(readings, watts * CHARGING_POWER_SHARE))
         .unwrap_or_default();
     let charged = |half_hour: i64| import_meter.get(&half_hour)
-        .is_some_and(|reading| reading.units.iter().any(|(label, units)| label.starts_with("EV") && *units > 0.0));
+        .is_some_and(|reading| reading.units.iter().any(|(label, units)| is_ev(label) && *units > 0.0));
 
     // Whether the import in the half hour starting at half_hour, which the meter has no reading for, is estimated to be at
-    // the low rate, None if it can not be estimated.
-    let estimated_low = |half_hour: i64| -> Option<bool> {
+    // the low rate, None if it can not be estimated. measured_charging is whether the car was measured charging in it.
+    let estimated_low = |half_hour: i64, measured_charging: bool| -> Option<bool> {
         let cheap = estimate.cheap.as_ref()?;
         let minute = time::OffsetDateTime::from_unix_timestamp(half_hour)
             .map(|time| time.to_timezone(tz))
             .map(|time| time.hour() as i64 * 60 + time.minute() as i64)
             .unwrap_or_default();
-        Some(cheap.contains(minute) || (estimate.intelligent && charging.contains(&half_hour)))
+        Some(cheap.contains(minute) || (estimate.intelligent && (measured_charging || charging.contains(&half_hour))))
     };
 
     // The Home Mini's readings in the half hours it has them all for, in periods no longer than a half hour.
@@ -373,25 +556,55 @@ pub fn combine(import: &[MeterHalfHour], export: &[MeterHalfHour], readings: &[T
             (false, true) => Placement::End,
             (false, false) => Placement::Highest,
         };
-        let labels = match import_meter.get(&half_hour).filter(|reading| reading.total() > 0.0) {
-            Some(reading) => split_half_hour(&kwh, &seconds, &reading.units, estimate.charger_watts, placement),
-            None => {
-                let label = match estimated_low(half_hour) {
-                    Some(true) => LOW_ESTIMATED_LABEL,
-                    Some(false) => STANDARD_ESTIMATED_LABEL,
-                    None => UNMETERED_LABEL,
+        let bounds: Vec<(i64, i64)> = half_hour_points.iter().map(|point| (point.start, point.end)).collect();
+        let reading = import_meter.get(&half_hour).filter(|reading| reading.total() > 0.0);
+        let demand: Vec<Option<f64>> = half_hour_points.iter().map(|point| point.demand).collect();
+        let measured = measured_split(&kwh, &demand, &bounds, registers);
+        let measured_ev: f64 = measured.iter().flatten().map(|(ev, _, _)| ev).sum();
+        let reading_rates = reading.and_then(|reading| rates(&reading.units));
+        let (labels, octopus_ev): (Vec<BTreeMap<String, f64>>, Option<f64>) = match (reading, &measured, reading_rates) {
+            (Some(reading), Some(measured), Some(rates)) => (
+                measured.iter().map(|uses| measured_labels(*uses, &rates, "")).collect(),
+                Some(reading.units.iter().filter(|(label, _)| is_ev(label)).map(|(_, units)| units).sum()),
+            ),
+            (Some(reading), _, _) => (split_half_hour(&kwh, &seconds, &reading.units, estimate.charger_watts, placement), None),
+            (None, measured, _) => {
+                let low = estimated_low(half_hour, measured_ev >= MEASURED_CHARGING);
+                let labels = match (low, measured) {
+                    (Some(low), Some(measured)) => {
+                        let rate = [(String::from(if low { "Low Rate" } else { "Standard Rate" }), 1.0)];
+                        measured.iter().map(|uses| measured_labels(*uses, &rate, " (estimated)")).collect()
+                    },
+                    _ => {
+                        let label = match low {
+                            Some(true) => LOW_ESTIMATED_LABEL,
+                            Some(false) => STANDARD_ESTIMATED_LABEL,
+                            None => UNMETERED_LABEL,
+                        };
+                        kwh.iter().map(|kwh| BTreeMap::from([(String::from(label), *kwh)])).collect()
+                    },
                 };
-                kwh.iter().map(|kwh| BTreeMap::from([(String::from(label), *kwh)])).collect()
+                (labels, None)
             },
         };
-        parts.extend(half_hour_points.iter().zip(labels).map(|(point, import)| Period {
-            start: point.start,
-            end: point.end,
-            import,
-            export: point.export / 1000.0,
-            demand: point.demand,
-            home_mini: true,
-            meter: false,
+        let tesla = measured.is_some();
+        parts.extend(half_hour_points.iter().zip(labels).map(|(point, import)| {
+            // Octopus only has the half hour, so as much each second of it.
+            let ev_comparison = octopus_ev.map(|octopus| (
+                import.iter().filter(|(label, _)| is_ev(label)).map(|(_, kwh)| kwh).sum(),
+                octopus * (point.end - point.start) as f64 / HALF_HOUR as f64,
+            ));
+            Period {
+                start: point.start,
+                end: point.end,
+                import,
+                export: point.export / 1000.0,
+                demand: point.demand,
+                home_mini: true,
+                tesla,
+                meter: false,
+                ev_comparison,
+            }
         }));
     }
 
@@ -409,7 +622,9 @@ pub fn combine(import: &[MeterHalfHour], export: &[MeterHalfHour], readings: &[T
                     export: exported.copied().unwrap_or_default(),
                     demand: None,
                     home_mini: false,
+                    tesla: false,
                     meter: true,
+                    ev_comparison: None,
                 });
             }
         }
@@ -441,7 +656,9 @@ pub fn combine(import: &[MeterHalfHour], export: &[MeterHalfHour], readings: &[T
             export: period.export,
             demand: period.demand,
             home_mini: period.home_mini,
+            tesla: period.tesla,
             meter: period.meter,
+            ev_comparison: period.ev_comparison,
         })
         .collect();
     Electricity { labels, points }
@@ -452,7 +669,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{CheapTimes, EXPORT_LABEL, Estimate, LOW_ESTIMATED_LABEL, MeterHalfHour, Placement, STANDARD_ESTIMATED_LABEL,
-        UNMETERED_LABEL, combine, complete_half_hours, is_intelligent, shaped_by_power, split_half_hour};
+        UNMETERED_LABEL, combine, complete_half_hours, is_intelligent, measured_split, shaped_by_power, split_half_hour};
+    use crate::tesla::snapshot::Registers;
     use crate::octopus::telemetry::TelemetryPoint;
     use crate::octopus::telemetry::{TelemetryPeriod, TelemetryReading};
 
@@ -504,7 +722,7 @@ mod tests {
             half_hour(DAY + 1800, &[("Home Low Rate", 1.0), ("EV Low Rate", 3.0)]),
         ];
         let export = [half_hour(DAY, &[("GENERATION", 0.5)]), half_hour(DAY + 1800, &[("GENERATION", 0.25)])];
-        let electricity = combine(&import, &export, &all, DAY, DAY + 5400, TelemetryPeriod::HalfHour, &Estimate::default(), LONDON);
+        let electricity = combine(&import, &export, &all, &[], DAY, DAY + 5400, TelemetryPeriod::HalfHour, &Estimate::default(), LONDON);
         assert_eq!(electricity.labels, ["Home Low Rate", "Home Standard Rate", "EV Low Rate"]);
         let points = &electricity.points;
         assert_eq!(points.len(), 2);
@@ -520,7 +738,7 @@ mod tests {
     #[test]
     fn import_the_meter_has_not_read_yet_is_unmetered_and_shorter_periods_are_from_the_home_mini() {
         let all = readings(DAY - 10, DAY + 1800);
-        let electricity = combine(&[], &[], &all, DAY, DAY + 1800, TelemetryPeriod::TenMinutes, &Estimate::default(), LONDON);
+        let electricity = combine(&[], &[], &all, &[], DAY, DAY + 1800, TelemetryPeriod::TenMinutes, &Estimate::default(), LONDON);
         assert_eq!(electricity.labels, [UNMETERED_LABEL]);
         let starts: Vec<i64> = electricity.points.iter().map(|point| point.start).collect();
         assert_eq!(starts, [DAY, DAY + 600, DAY + 1200]);
@@ -532,7 +750,7 @@ mod tests {
     fn a_day_adds_the_home_mini_and_the_meters_half_hours_together() {
         let all = readings(DAY + 1790, DAY + 3600);
         let import = [half_hour(DAY, &[("Home Low Rate", 2.0)]), half_hour(DAY + 1800, &[("Home Low Rate", 9.0)])];
-        let electricity = combine(&import, &[], &all, DAY, DAY + 86400, TelemetryPeriod::Day, &Estimate::default(), LONDON);
+        let electricity = combine(&import, &[], &all, &[], DAY, DAY + 86400, TelemetryPeriod::Day, &Estimate::default(), LONDON);
         assert_eq!(electricity.points.len(), 1);
         let day = &electricity.points[0];
         assert_eq!((day.start, day.end), (DAY, DAY + 86400));
@@ -565,13 +783,13 @@ mod tests {
         for reading in all.iter_mut().filter(|reading| reading.read_at >= DAY + 6 * 3600) {
             reading.demand = Some(7000.0);
         }
-        let electricity = combine(&[], &[], &all, DAY + 5 * 3600, DAY + 6 * 3600 + 1800, TelemetryPeriod::HalfHour, &estimate, LONDON);
+        let electricity = combine(&[], &[], &all, &[], DAY + 5 * 3600, DAY + 6 * 3600 + 1800, TelemetryPeriod::HalfHour, &estimate, LONDON);
         assert_eq!(electricity.labels, [LOW_ESTIMATED_LABEL, STANDARD_ESTIMATED_LABEL]);
         let rates: Vec<Vec<bool>> = electricity.points.iter().map(|point| point.import.iter().map(|kwh| *kwh > 0.0).collect()).collect();
         assert_eq!(rates, [vec![true, false], vec![false, true], vec![true, false]]);
         // On a tariff which is not an Intelligent Octopus one, charging outside the cheap times is at the standard rate.
         let other = Estimate { intelligent: false, ..estimate };
-        let electricity = combine(&[], &[], &all, DAY + 5 * 3600, DAY + 6 * 3600 + 1800, TelemetryPeriod::HalfHour, &other, LONDON);
+        let electricity = combine(&[], &[], &all, &[], DAY + 5 * 3600, DAY + 6 * 3600 + 1800, TelemetryPeriod::HalfHour, &other, LONDON);
         let rates: Vec<Vec<bool>> = electricity.points.iter().map(|point| point.import.iter().map(|kwh| *kwh > 0.0).collect()).collect();
         assert_eq!(rates, [vec![true, false], vec![false, true], vec![false, true]]);
         assert!(is_intelligent("IOG-VAR-24-10-29") && is_intelligent("INTELLI-VAR-22-10-14") && !is_intelligent("GO-VAR-22-10-14"));
@@ -608,5 +826,71 @@ mod tests {
         // A half hour with a point without a power reading is left as it is.
         let unshaped = shaped_by_power(vec![point(DAY, 39.0, 14000.0), TelemetryPoint { demand: None, ..point(DAY + 10, 43.0, 0.0) }]);
         assert_eq!(unshaped.iter().map(|point| point.energy).collect::<Vec<_>>(), [39.0, 43.0]);
+    }
+
+    /// The gateway's registers every 10 seconds from start up to end, with the site importing site_watts, the
+    /// Powerwalls taking in battery_watts and the solar panels making nothing.
+    fn registers(start: i64, end: i64, site_watts: f64, battery_watts: f64) -> Vec<Registers> {
+        (start..=end).step_by(10)
+            .map(|time| {
+                let hours = (time - start) as f64 / 3600.0;
+                Registers {
+                    time: time as f64 + 0.3,
+                    site_imported: 1000.0 + site_watts * hours,
+                    battery_imported: 2000.0 + battery_watts * hours,
+                    solar_exported: 3000.0,
+                    load_imported: 4000.0,
+                    site_power: site_watts,
+                    battery_power: battery_watts,
+                    solar_power: 0.0,
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_car_is_the_home_minis_import_less_the_gateways_and_the_powerwalls_what_they_took_in() {
+        // A half hour of 10 second points, the Home Mini importing 14 kW, the gateway 7 kW, of which the Powerwalls 5 kW.
+        let bounds: Vec<(i64, i64)> = (0..180).map(|index| (DAY + index * 10, DAY + index * 10 + 10)).collect();
+        let kwh = vec![14000.0 * 10.0 / 3_600_000.0; 180];
+        let demand = vec![Some(14000.0); 180];
+        let split = measured_split(&kwh, &demand, &bounds, &registers(DAY - 20, DAY + 1820, 7000.0, 5000.0)).unwrap();
+        let total = |pick: fn(&(f64, f64, f64)) -> f64| split.iter().map(pick).sum::<f64>();
+        assert!((total(|uses| uses.0) - 3.5).abs() < 1e-6, "the car 7 kW for half an hour");
+        assert!((total(|uses| uses.1) - 2.5).abs() < 1e-6, "the Powerwalls 5 kW");
+        assert!((total(|uses| uses.2) - 1.0).abs() < 1e-6, "the house the rest, 2 kW");
+        assert!(split.iter().zip(&kwh).all(|(uses, kwh)| (uses.0 + uses.1 + uses.2 - kwh).abs() < 1e-9));
+        // Not measured if the registers were not read all through it.
+        let mut gappy = registers(DAY - 20, DAY + 1820, 7000.0, 5000.0);
+        gappy.retain(|registers| !(DAY as f64 + 600.0..DAY as f64 + 700.0).contains(&registers.time));
+        assert!(measured_split(&kwh, &demand, &bounds, &gappy).is_none());
+        // Shared by the steady power readings, so the same each point.
+        assert!(split.iter().all(|uses| (uses.0 - split[0].0).abs() < 1e-9 && (uses.1 - split[0].1).abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_blip_of_a_reading_or_two_is_smoothed_away_and_a_step_is_kept() {
+        use super::smoothed;
+        assert_eq!(smoothed(&[7.0, 7.0, 9.0, 7.0, 7.0, 7.0]), [7.0; 6]);
+        assert_eq!(smoothed(&[7.0, 7.0, 9.0, 5.0, 7.0, 7.0]), [7.0; 6]);
+        assert_eq!(smoothed(&[0.0, 0.0, 0.0, 7.0, 7.0, 7.0]), [0.0, 0.0, 0.0, 7.0, 7.0, 7.0]);
+    }
+
+    #[test]
+    fn a_measured_half_hour_is_labelled_by_use_at_the_meters_rate_with_octopuss_split_to_compare() {
+        // The Home Mini's 3.6 kW (1.8 kWh), the gateway's 1.8 kW, so the car 0.9 kWh, which Octopus put at 1.5 kWh.
+        let all = readings(DAY - 10, DAY + 1810);
+        let import = [half_hour(DAY, &[("Home Low Rate", 0.3), ("EV Low Rate", 1.5)])];
+        let electricity = combine(&import, &[], &all, &registers(DAY - 20, DAY + 1820, 1800.0, 0.0), DAY, DAY + 1800,
+            TelemetryPeriod::HalfHour, &Estimate::default(), LONDON);
+        assert_eq!(electricity.labels, ["Home Low Rate", "EV Low Rate"]);
+        let point = &electricity.points[0];
+        assert!((point.import[0] - 0.9).abs() < 1e-6 && (point.import[1] - 0.9).abs() < 1e-6, "{:?}", point.import);
+        assert!(point.tesla && point.home_mini);
+        let (measured, octopus) = point.ev_comparison.unwrap();
+        assert!((measured - 0.9).abs() < 1e-6 && (octopus - 1.5).abs() < 1e-9);
+        // Without the gateway's registers, the meter's split, and nothing to compare.
+        let electricity = combine(&import, &[], &all, &[], DAY, DAY + 1800, TelemetryPeriod::HalfHour, &Estimate::default(), LONDON);
+        assert!(!electricity.points[0].tesla && electricity.points[0].ev_comparison.is_none());
     }
 }

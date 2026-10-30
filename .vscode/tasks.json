@@ -4,23 +4,43 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			// Builds the capture device's firmware, see capture/README.md, flashes it to the ESP32 plugged in by USB,
-			// showing its progress, then shows the device's log. Ctrl+R restarts the device, Ctrl+C stops showing the
-			// log, the device runs on. 460800 baud is 4 times faster than espflash's default (921600 fails on the CYD),
-			// take --baud out if flashing fails. Stop Device: Log first, as it holds the port.
-			"label": "Device: Flash",
+			// Builds the capture device's firmware for a CYD, see capture/README.md, flashes it to the CYD plugged in by USB,
+			// whose port is /dev/cu.usbserial-*, its USB chip's, showing its progress, then shows the device's log. Ctrl+R
+			// restarts the device, Ctrl+C stops showing the log, the device runs on. 460800 baud is 4 times faster than
+			// espflash's default (921600 fails on the CYD), take --baud out if flashing fails. Stop Device: Log CYD first, as
+			// it holds the port.
+			"label": "Device: Flash CYD",
 			"type": "shell",
-			"command": "cargo build --release && espflash flash --baud 460800 --monitor target/xtensa-esp32-espidf/release/marco-sparko-capture",
+			"command": "cargo build --release && espflash flash --port \"$(ls /dev/cu.usbserial-* | head -1)\" --baud 460800 --monitor target/xtensa-esp32-espidf/release/marco-sparko-capture",
 			"options": { "cwd": "${workspaceFolder}/capture" },
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "focus": true, "panel": "dedicated" }
 		},
 		{
-			// Shows the log of the ESP32 plugged in by USB, without restarting it, see capture/log.py. Ctrl+C stops it,
-			// the device runs on. Not espflash monitor, which stops the device even with --no-reset.
-			"label": "Device: Log",
+			// As Device: Flash CYD, for a Waveshare ESP32-C6-Touch-LCD-1.47, an ESP32-C6, whose port is /dev/cu.usbmodem*,
+			// the chip's own USB.
+			"label": "Device: Flash Waveshare",
 			"type": "shell",
-			"command": "python3 log.py",
+			"command": "MCU=esp32c6 cargo build --release --target riscv32imac-esp-espidf --no-default-features --features waveshare-c6-touch && espflash flash --port \"$(ls /dev/cu.usbmodem* | head -1)\" --monitor target/riscv32imac-esp-espidf/release/marco-sparko-capture",
+			"options": { "cwd": "${workspaceFolder}/capture" },
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "focus": true, "panel": "dedicated" }
+		},
+		{
+			// Shows the log of the CYD plugged in by USB, without restarting it, see capture/log.py. Ctrl+C stops it, the
+			// device runs on. Not espflash monitor, which stops the device even with --no-reset.
+			"label": "Device: Log CYD",
+			"type": "shell",
+			"command": "python3 log.py \"$(ls /dev/cu.usbserial-* | head -1)\"",
+			"options": { "cwd": "${workspaceFolder}/capture" },
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "focus": true, "panel": "dedicated" }
+		},
+		{
+			// As Device: Log CYD, for the Waveshare.
+			"label": "Device: Log Waveshare",
+			"type": "shell",
+			"command": "python3 log.py \"$(ls /dev/cu.usbmodem* | head -1)\"",
 			"options": { "cwd": "${workspaceFolder}/capture" },
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "focus": true, "panel": "dedicated" }

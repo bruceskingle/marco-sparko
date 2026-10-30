@@ -4,7 +4,7 @@
 //! For now it only takes snapshots into the cache and shows the latest, to see what the data is like.
 
 mod local;
-mod snapshot;
+pub mod snapshot;
 
 use std::sync::{Arc, Mutex};
 

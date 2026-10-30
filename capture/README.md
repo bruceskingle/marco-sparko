@@ -1,19 +1,27 @@
 # Marco Sparko Capture Device
 
 Firmware for an ESP32 which polls what Marco Sparko needs while the computer it runs on sleeps, built on
-[sparko-embedded-std](../../sparko-embedded-std), which must be checked out next to this repo. For now it only polls
-the Tesla gateway, and only runs on a CYD (ESP32-2432S028R), whose screen shows a clock with the latest numbers below.
+[sparko-embedded-std](../../sparko-embedded-std), which must be checked out next to this repo. It polls the Tesla
+gateway, myenergi's zappi and Octopus's smart charging, and keeps what it gets on an SD card. It runs on:
+
+- a CYD (ESP32-2432S028R), whose screen shows a clock with the latest numbers below, the default;
+- a Waveshare ESP32-C6-Touch-LCD-1.47, an ESP32-C6, whose small screen shows only the numbers, with the
+  `waveshare-c6-touch` feature. Its SD card slot shares the display's SPI bus.
 
 ## Building and flashing
 
 From this directory, with the ESP Rust toolchain installed (see sparko-embedded-std):
 
-- `cargo build --release`
-- `cargo run --release` flashes a CYD plugged in by USB, and shows its log.
-- `python3 log.py` shows its log without restarting it (needs pyserial). Not `espflash monitor`, which restarts
-  it, or with `--no-reset` leaves it stopped in its bootloader.
+- `cargo build --release` for a CYD, and `cargo run --release` flashes the CYD plugged in by USB, and shows its log.
+- For the Waveshare, which is RISC-V: `MCU=esp32c6 cargo build --release --target riscv32imac-esp-espidf
+  --no-default-features --features waveshare-c6-touch`, then `espflash flash --port /dev/cu.usbmodem...
+  target/riscv32imac-esp-espidf/release/marco-sparko-capture`.
+- `python3 log.py [port]` shows a device's log without restarting it (needs pyserial). Not `espflash monitor`, which
+  restarts it, or with `--no-reset` leaves it stopped in its bootloader. The CYD's port is `/dev/cu.usbserial-*`, its
+  USB chip's, the Waveshare's `/dev/cu.usbmodem*`, the chip's own USB.
 
-In VS Code, Terminal > Run Task has **Device: Flash** and **Device: Log**.
+In VS Code, Terminal > Run Task has **Device: Flash CYD**, **Device: Flash Waveshare**, **Device: Log CYD** and
+**Device: Log Waveshare**, which find the port.
 
 ## Setting it up
 

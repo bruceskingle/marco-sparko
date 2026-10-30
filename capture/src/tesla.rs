@@ -98,7 +98,8 @@ impl TeslaCapture {
 impl Feature for TeslaCapture {
     type Config = TeslaConfig;
 
-    fn init(&self, _initializer: &mut Esp32PlatformInitializer) -> anyhow::Result<FeatureDescriptor> {
+    fn init(&self, initializer: &mut Esp32PlatformInitializer) -> anyhow::Result<FeatureDescriptor> {
+        self.panel.start(initializer)?;
         Ok(FeatureDescriptor {
             name: FEATURE_NAME.to_string(),
             config: TeslaConfig::to_config_spec()?,
@@ -135,7 +136,6 @@ impl Feature for TeslaCapture {
         };
 
         self.panel.set(PANEL_ORDER, panel_lines(&store.lock().unwrap()));
-        self.panel.start(sparko, initializer)?;
 
         // A first poll now, as the app does, so there is something to show without waiting for the first slot.
         poll.poll(sparko, None);

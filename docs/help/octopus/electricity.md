@@ -1,8 +1,8 @@
 # Electricity
 
-Where your electricity went, putting together the meters' half hourly readings, which are what you are billed for, and the [Home Mini's](home-mini.md) readings every 10 seconds, which show what happened within each half hour.
+Where your electricity went, putting together the meters' half hourly readings, which are what you are billed for, the [Home Mini's](home-mini.md) readings every 10 seconds, which show what happened within each half hour, and, where a [capture device](../devices.md) was reading your Tesla gateway, what it measured.
 
-- **Import** is split by the rate it was billed at, and between the house and the car, where Octopus says how much went to the car.
+- **Import** is split by the rate it was billed at, and by what it was used for: the house (**Home**), the car (**EV**) and, where it was measured, the Powerwalls charging from the grid (**Battery**).
 - **Export** is what was sent to the grid, shown below the line.
 - The **Source** column of the table says which readings each period came from.
 
@@ -12,4 +12,10 @@ On an Intelligent Octopus tariff, charging the car outside the cheap times is at
 
 Show it as a **Table** or **Graph**, see [using the graphs](../graphs.md). In the graph, **Energy** shows kWh and **Power** the average kW. Short periods, down to 10 seconds, use the Home Mini's readings where there are all of a half hour's.
 
-**How the car's share is drawn within a half hour is an estimate** and will be improved when better data is available.
+## Measured or Octopus's split
+
+Where the Tesla gateway was read all through a half hour, what the import was used for is **measured**: the car's is the Home Mini's import less the gateway's, as the zappi is outside the gateway's meter, the Powerwalls' is what they took in less what the solar panels made, and the rest is the house's. Over a night's charging the car's measured import was within 0.2% of the zappi's own total. The Source column says **Tesla** for these.
+
+Elsewhere, e.g. before a capture device was reading the gateway, the car's share is what Octopus says, from the meter's EV labels, drawn as a block at the charger's power within each half hour, which is an estimate.
+
+Octopus's split of the car's import is not measured: it is the same in every half hour of a charge. To compare, the graph draws **Octopus's EV split** as a dashed line over the bars, where the import was measured and the meters have the half hour, and says under the graph how much the car took, measured and as Octopus split it. Turn the line off in the categories menu. The table and the export have it as a column. The meters' readings arrive a few days later, so there is nothing to compare for the last few days.

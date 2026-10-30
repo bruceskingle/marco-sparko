@@ -5,8 +5,9 @@ edition = "2024"
 resolver = "2"
 description = "Firmware for an ESP32 Capture Device, which polls what Marco Sparko needs while the computer sleeps"
 
-# Firmware for a CYD (ESP32-2432S028R), built on ../../sparko-embedded-std, see README.md. It is its own Cargo project,
-# not part of marco-sparko's build: cd capture && cargo build --release
+# Firmware for a CYD (ESP32-2432S028R), or with the waveshare-c6-touch feature a Waveshare ESP32-C6-Touch-LCD-1.47,
+# built on ../../sparko-embedded-std, see README.md. It is its own Cargo project, not part of marco-sparko's build:
+# cd capture && cargo build --release, see README.md for the Waveshare.
 
 [[bin]]
 name = "marco-sparko-capture"
@@ -25,13 +26,20 @@ embedded-graphics = "0.8"
 md-5 = "0.10"
 
 sparko-embedded-std = { path = "../../sparko-embedded-std/libs/sparko-embedded-std" }
-sparko-esp-idf = { path = "../../sparko-embedded-std/libs/sparko-esp-idf", features = ["board-cyd", "sd-card"] }
+sparko-esp-idf = { path = "../../sparko-embedded-std/libs/sparko-esp-idf", features = ["sd-card"] }
 
 esp-idf-svc = { version = "0.52.1", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 # Remove `generic-queue-8` if you plan to use `embassy-time` WITH `embassy-executor`
 embassy-time = { version = "0.5", features = ["generic-queue-8"] }
 embedded-svc = "0.29.0"
 esp-idf-sys = { version = "0.37.2", features = ["binstart"] }
+
+# The board, exactly one: the CYD by default.
+[features]
+default = ["cyd"]
+cyd = ["sparko-esp-idf/board-cyd"]
+# The platform needs its IMU support, ahrs, for the board's motion sensor.
+waveshare-c6-touch = ["sparko-esp-idf/board-wave-esp32c6touch147", "sparko-esp-idf/ahrs"]
 
 [build-dependencies]
 embuild = "0.33"

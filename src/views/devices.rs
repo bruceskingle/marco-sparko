@@ -88,14 +88,15 @@ struct Restarts {
 }
 
 /// The kinds of start, by reset reason, as a noun and its plural, for the summary, see restarts.
-const KINDS: [(&[&str], &str, &str); 7] = [
-    (&["Panic"], "crash", "crashes"),
+const KINDS: [(&[&str], &str, &str); 8] = [
+    (&["Panic", "CpuLockup"], "crash", "crashes"),
     (&["InterruptWatchdog", "TaskWatchdog", "OtherWatchdog"], "watchdog reset", "watchdog resets"),
-    (&["Brownout"], "power dip", "power dips"),
+    (&["Brownout", "PowerGlitch"], "power dip", "power dips"),
     (&["Software"], "restart", "restarts"),
     (&["PowerOn"], "switch-on", "switch-ons"),
     (&["ExternalPin"], "reset button press", "reset button presses"),
     (&["DeepSleep"], "wake from sleep", "wakes from sleep"),
+    (&["Usb", "Jtag"], "reset over USB", "resets over USB"),
 ];
 
 /// A device's starts in the last RESTART_DAYS before now.
@@ -140,10 +141,12 @@ fn started_after(reason: &str) -> (String, bool) {
         "Software" => ("After being restarted".to_string(), false),
         "ExternalPin" => ("After its reset button was pressed".to_string(), false),
         "DeepSleep" => ("After waking from deep sleep".to_string(), false),
+        "Usb" | "Jtag" => ("After a reset over USB, e.g. being flashed".to_string(), false),
         "Panic" => ("After a crash (panic)".to_string(), true),
         "InterruptWatchdog" | "TaskWatchdog" | "OtherWatchdog" =>
             (format!("After it stopped responding ({reason})"), true),
-        "Brownout" => ("After a dip in its power supply (brownout)".to_string(), true),
+        "Brownout" | "PowerGlitch" => ("After a dip in its power supply (brownout)".to_string(), true),
+        "CpuLockup" => ("After a crash (CPU lockup)".to_string(), true),
         _ => (format!("After {reason}"), true),
     }
 }
