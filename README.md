@@ -1,4 +1,9 @@
 # marco-sparko
+
+**This repository has moved to [bruce-smart-home](https://github.com/bruceskingle/bruce-smart-home)**: from 0.5.0 the
+app is called Bruce's Smart Home. This one is kept, read only, for its history, the releases up to 0.4.4, and the user
+guide those versions link to.
+
 ### The Energy Explorer
 
 Marco Sparko is a desktop application for MacOS and Windows which provides a view of your Octopus Energy account.
